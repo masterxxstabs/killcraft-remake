@@ -44,6 +44,10 @@ chat. A direct-IP join screen comes first, then maybe a lobby.
 | Per-player economy | `player.coins`, `.score`, `.kills`, `.upgrade_levels` | each friend has their own money and upgrades (`game.coins` is the local player's) |
 | Kill credit | `enemy.hurt(..., attacker=player)` | the right player gets the score and coins |
 | Shared map data | maps are JSON; random arenas come from a seed | the host sends the map once when you join |
+| Allies belong to a player | `ally.owner`; `game.targets()` includes allies | each friend can hire their own survivors |
+| Revive by holding E | `game.update_revives(dt, input)` uses `input.use` | the same code will revive downed friends |
+| Quests listen to events | `quests.py` reacts to `enemy_killed` and shots | the host runs the quest; clients only see the effects |
+| Attachments and camos per weapon | `weapons.attach`, `weapons.camo` | a remote player's gun can be rebuilt from a small dict |
 
 ## Rules for new features
 
@@ -65,6 +69,6 @@ chat. A direct-IP join screen comes first, then maybe a lobby.
 - [ ] Snapshot encode / decode and interpolation of remote entities
 - [ ] Remote player models (the blocky character with the held gun)
 - [ ] One `Weapons` loadout per player (today `game.weapons` is the local player's)
-- [ ] Downed state and reviving team-mates instead of instant game over
+- [ ] Downed state for players (allies already have it) instead of instant game over
 - [ ] Shared shop between waves (each player buys with their own coins)
 - [ ] Scoreboard (Tab) and text chat

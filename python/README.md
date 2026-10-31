@@ -32,7 +32,10 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | WASD / arrow keys | move |
 | Mouse | look; left click to shoot (hold for automatic weapons) |
 | Right mouse | aim down sights (snipers zoom with a scope) |
-| Space / Shift | jump / sprint |
+| Space | jump; hold it against a ledge to climb up |
+| Shift | sprint (sprint at low cover to vault over it) |
+| C or Ctrl | crouch; press it while sprinting to slide |
+| E (hold) | use things, revive a downed ally |
 | 1–9 or mouse wheel | switch weapon |
 | R | reload |
 | Q | use your ability |
@@ -115,6 +118,32 @@ damage, fire rate, magazine size and reload speed (melee weapons get reach inste
 **Player** tab has the upgrades that affect everything: health, power, speed, regen, armor
 and more.
 
+### Customize your guns
+
+Open the shop, pick a gun you own and press **CUSTOMIZE**. Each gun has slots for:
+
+| Slot | Attachments |
+| --- | --- |
+| Optic | Red dot, Holographic sight, 4x Scope (zooms in when you aim) |
+| Muzzle | Suppressor (quiet shots, less recoil), Compensator (much less recoil) |
+| Underbarrel | Foregrip (steadier aim), Laser (tighter hip-fire) |
+| Magazine | Extended mag (50% more ammo, slightly slower reload) |
+
+You buy an attachment once per gun, then swap it on and off for free. Camos (Woodland,
+Desert, Arctic, Urban, Tiger, Crimson, Toxic, Galaxy, Gold) are bought once and work on
+every gun.
+
+### Allies
+
+The **ALLIES** tab in the shop hires survivors who follow you and shoot zombies:
+the Rookie (pistol), Gunner (AR-15), Medic (MP5, heals you when you're close) and Heavy
+(M249). You can have 3 at a time. When one goes down, stand next to them and hold **E**
+to get them back up. Everyone gets back up at the end of a wave. Their kills earn you coins.
+
+### Secrets
+
+Something is hidden on every map. If you hear whispering, look around...
+
 ## Real 3D gun models from Sketchfab
 
 Every weapon has a textured block model. You can swap any of them for a real 3D model from
@@ -181,6 +210,13 @@ the game folder, so it can't end up on GitHub.
 
 You can also drop your own `.glb`, `.gltf` or `.obj` file into `models/<weapon id>/`.
 
+## Multiplayer (coming later)
+
+Co-op with friends isn't playable yet, but the game is being built for it: every player,
+zombie and pickup has a network id, players are driven by input commands, coins and kills
+belong to each player, and zombies chase whoever is closest. See
+[MULTIPLAYER.md](MULTIPLAYER.md) for the plan and the rules new features follow.
+
 ## Updates
 
 On launch, the game checks GitHub for a newer version. If one exists, the main menu shows
@@ -214,6 +250,9 @@ Edit them, save, and start the game again. No build step is needed.
 | `blockhold/data/waves.py` | enemies per wave, which types appear, boss timing, special wave modifiers |
 | `blockhold/data/upgrades.py` | shop upgrades, prices, and what they do |
 | `blockhold/data/abilities.py` | the Q abilities (each is a small Python function) |
+| `blockhold/data/gun_models.py` | the detailed gun models, built from parts in code (see `gunsmith.py`) |
+| `blockhold/data/attachments.py` | attachments: price, slot and what they change |
+| `blockhold/data/allies.py` | hireable survivors: price, health, gun, look |
 
 For example, to add a new gun, copy one of the `dict(...)` entries in `weapons.py`, give it
 a new `id` and `name`, and change the numbers. It appears in the shop automatically, with its

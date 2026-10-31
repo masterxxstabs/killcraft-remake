@@ -552,9 +552,10 @@ class UI:
 
     CONTROLS = [
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
-         ('Jump', 'Space'), ('Sprint', 'Shift'), ('Reload', 'R')],
-        [('Ability', 'Q'), ('Switch weapon', '1-9 / wheel'), ('Shop', 'B'), ('Next wave', 'N'),
-         ('Pause', 'Esc'), ('Mute', 'M'), ('Fullscreen', 'F11'), ('Turn 3D model', 'F8 / F9')],
+         ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
+         ('Reload', 'R')],
+        [('Ability', 'Q'), ('Switch weapon', '1-9 / wheel'), ('Use / revive', 'Hold E'), ('Shop', 'B'),
+         ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute', 'M'), ('Fullscreen', 'F11'), ('Turn 3D model', 'F8 / F9')],
     ]
 
     def menu_controls(self, win, g):
@@ -568,7 +569,7 @@ class UI:
                     y -= 0.022
                 text(b, action, x, y, 1.05, INK)
                 text(b, key, x + 0.25, y + 0.002, 1.15, TEAL)
-                y -= 0.055
+                y -= 0.05
         win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
         win.bottom_right('PLAY', g.start_game)
 

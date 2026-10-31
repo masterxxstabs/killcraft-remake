@@ -3,6 +3,16 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.5.0
+- Movement: crouch (C / Ctrl), sprint-slide, climb up ledges, vault over low cover
+- All-new weapon sounds: layered gunshots per gun type, reload steps, shell casings, footsteps
+- Detailed semi-realistic gun models for 19 guns (the world stays blocky)
+- Weapon customization: optics, suppressors, compensators, foregrips, lasers, extended mags
+- 9 camos to unlock, from Woodland to Gold
+- Hire survivors in the new ALLIES shop tab; revive them with E when they go down
+- A secret is hidden on every map... listen for whispers
+- Groundwork for co-op multiplayer (see MULTIPLAYER.md)
+
 ## 1.4.0
 - Map editor! Build your own maps from the new MAPS tab
 - 38 low-poly assets: trees, shrubs, houses, cabins, ruins, towers, fences, props and more
