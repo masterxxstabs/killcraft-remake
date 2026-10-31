@@ -48,6 +48,7 @@ chat. A direct-IP join screen comes first, then maybe a lobby.
 | Revive by holding E | `game.update_revives(dt, input)` uses `input.use` | the same code will revive downed friends |
 | Quests listen to events | `quests.py` reacts to `enemy_killed` and shots | the host runs the quest; clients only see the effects |
 | Team power-ups | `game.powerups` (timers are team-wide, any player can pick one up) | the host runs them and sends `powerup_*` events |
+| Mining and crafting | `player.resources`; nodes have ids; `game.craft(recipe, player)` | each friend mines and crafts for themselves; the host runs the nodes |
 | Attachments and camos per weapon | `weapons.attach`, `weapons.camo` | a remote player's gun can be rebuilt from a small dict |
 
 ## Rules for new features

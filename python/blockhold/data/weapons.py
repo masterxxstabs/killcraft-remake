@@ -146,7 +146,7 @@ WEAPONS = [
     ),
     dict(
         id='axe', category='melee', name='Fire Axe', desc='Heavy swing that cleaves through up to 3 enemies.',
-        price=350, melee=True, damage=120, rate=1.1, range=3.0, cleave=3, knockback=9, length=0.7,
+        price=350, melee=True, damage=120, rate=1.1, range=3.0, cleave=3, knockback=9, gather=1.5, length=0.7,
         model=[
             ('wood', (0.04, 0.04, 0.6), (0, 0, 0.22)),
             ('grip', (0.048, 0.048, 0.13), (0, 0, -0.03)),
@@ -155,6 +155,20 @@ WEAPONS = [
             ('steel', (0.03, 0.06, 0.05), (0, -0.03, 0.48)),
         ],
         muzzle=(0, 0.1, 0.55),
+    ),
+    dict(
+        id='pickaxe', category='melee', name='Pickaxe', desc='Mines ore 2.5x faster than other melee weapons.',
+        price=120, melee=True, damage=55, rate=1.5, range=2.7, knockback=5, gather=2.5, length=0.6,
+        craft={'stone': 25},
+        model=[
+            ('wood', (0.04, 0.04, 0.58), (0, 0, 0.2)),
+            ('grip', (0.048, 0.048, 0.13), (0, 0, -0.04)),
+            ('steel', (0.045, 0.07, 0.06), (0, 0, 0.47)),
+            ('steel', (0.034, 0.3, 0.045), (0, 0.0, 0.47)),
+            ('blade', (0.026, 0.07, 0.035), (0, 0.18, 0.455)),
+            ('blade', (0.026, 0.07, 0.035), (0, -0.18, 0.455)),
+        ],
+        muzzle=(0, 0.1, 0.5),
     ),
     dict(
         id='rifle', category='rifle', name='Ranger Rifle', desc='Accurate automatic rifle. A great all-rounder.',

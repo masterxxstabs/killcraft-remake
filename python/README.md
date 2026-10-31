@@ -35,7 +35,7 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | Space | jump; hold it against a ledge to climb up |
 | Shift | sprint (sprint at low cover to vault over it) |
 | C or Ctrl | crouch; press it while sprinting to slide |
-| E (hold) | use things, revive a downed ally |
+| E | use a workbench (crafting); hold it to revive a downed ally |
 | 1–9 or mouse wheel | switch weapon |
 | R | reload |
 | Q | use your ability |
@@ -144,6 +144,34 @@ to get them back up. Everyone gets back up at the end of a wave. Their kills ear
 Allies also have your back: if your health runs out while one of them is still standing, you
 go **down** instead of dying. You can crawl and keep shooting while the closest ally runs over
 to revive you. If nobody gets to you within 25 seconds, or every ally is down too, it's game over.
+
+### Mining and crafting
+
+Rocks with ore in them (**ore nodes**) are spread around the map. Hit one with a melee weapon to
+mine it: every hit gives you some of its resources, and it breaks when it's empty. It grows back
+about a minute later. The **Pickaxe** mines 2.5x faster (craft it from 25 stone, or buy it).
+
+| Node | Gives |
+| --- | --- |
+| Stone | stone |
+| Iron ore | iron and some stone |
+| Copper ore | copper and some stone |
+| Crystal (rare, purple) | crystal and some stone |
+
+Your resources show above your weapon. Walk up to a **workbench** and press **E** to craft:
+
+- **Any gun in the game**, instead of buying it with coins. Better guns need more iron and
+  copper, and the energy weapons and heavy guns need crystal.
+- **Bandage** (heals 40), **Medkit** (full heal) and **Armor plating** (5% less damage, stacks to 40%).
+
+Workbenches work during waves too, but zombies don't wait while you craft. Random arenas get two
+benches (one near the start). Costs and node yields are in `blockhold/data/crafting.py` and
+`blockhold/data/resources.py`. A gun's cost is worked out from its price, or you can set it with
+a `craft=` field in `weapons.py`.
+
+**In your own maps:** the editor's **Mining** tab has the workbench and ore spawns (random,
+stone, iron, copper or crystal). If a map has ore spawns, nodes only grow there, so you can build
+a mine or a quarry. Without any, nodes appear anywhere there's room.
 
 ### Power-ups
 
@@ -272,6 +300,8 @@ Edit them, save, and start the game again. No build step is needed.
 | `blockhold/data/gun_models.py` | the detailed gun models, built from parts in code (see `gunsmith.py`) |
 | `blockhold/data/attachments.py` | attachments: price, slot and what they change |
 | `blockhold/data/allies.py` | hireable survivors: price, health, gun, look |
+| `blockhold/data/resources.py` | resources and ore nodes: health, what they give, how often they spawn |
+| `blockhold/data/crafting.py` | workbench recipes and how gun costs are worked out |
 
 For example, to add a new gun, copy one of the `dict(...)` entries in `weapons.py`, give it
 a new `id` and `name`, and change the numbers. It appears in the shop automatically, with its

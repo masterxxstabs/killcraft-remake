@@ -57,6 +57,8 @@ class World:
         self.name = (map_data or {}).get('name', 'Random arena')
         self.player_spawn = Vec3(0, 0, 0)
         self.zombie_spawns = []
+        self.ore_spawns = []              # (position, ore kind or 'random') from map markers
+        self.benches = []                 # workbench positions
         self.rnd = random.Random(seed).random
         self.atlas = Atlas()
         self.paths_atlas = path_atlas()
@@ -187,6 +189,10 @@ class World:
             self.player_spawn = Vec3(x, 0, z)
         elif a.get('spawn') == 'zombie':
             self.zombie_spawns.append(Vec3(x, 0, z))
+        if a.get('ore'):
+            self.ore_spawns.append((Vec3(x, 0, z), a['ore']))
+        if a.get('station') == 'workbench':
+            self.benches.append(Vec3(x, 0, z))
         return p
 
     def remove_prop(self, p):
@@ -204,6 +210,19 @@ class World:
             self.zombie_spawns = [v for v in self.zombie_spawns if (v.x, v.z) != (p['x'], p['z'])]
         elif a.get('spawn') == 'player':
             self.player_spawn = Vec3(0, 0, 0)
+        if a.get('ore'):
+            self.ore_spawns = [s for s in self.ore_spawns if (s[0].x, s[0].z) != (p['x'], p['z'])]
+        if a.get('station') == 'workbench':
+            self.benches = [b for b in self.benches if (b.x, b.z) != (p['x'], p['z'])]
+
+    def set_dynamic_solid(self, gx, gz, h):
+        """Make a cell solid up to height h (0 = back to normal) for things that come and go, like ore nodes."""
+        if not self.inside(gx, gz):
+            return
+        i = self.gidx(gx, gz)
+        base = max([ph for o in self.props for (x, z, ph) in o['cells'] if (x, z) == (gx, gz)] or [0])
+        self.prop_h[i] = max(base, h)
+        self._refresh_height(gx, gz)
 
     def prop_at(self, x, z, radius=0.8):
         """The prop under a point: one whose footprint covers it, or the nearest small one."""
@@ -328,6 +347,17 @@ class World:
             if not self.free(gx, gz, 1):
                 continue
             self.column('stone', gx, gz, 3 + int(r() * 3), top='obsidian')
+        benches = 0
+        for _ in range(60):                       # two workbenches: one near the start, one further out
+            gx, gz = rand_cell(4)
+            cx, cz = gx - self.half, gz - self.half
+            dist = math.hypot(cx, cz)
+            if not (7 < dist < 12 if benches == 0 else dist > 16) or not self.free(gx, gz, 1):
+                continue
+            self.add_prop('workbench', gx - self.half + 0.5, gz - self.half + 0.5, (int(r() * 4)) * 90)
+            benches += 1
+            if benches == 2:
+                break
         for _ in range(45):                       # low-poly bushes and flowers
             gx, gz = rand_cell(2)
             if self.free(gx, gz, 0):

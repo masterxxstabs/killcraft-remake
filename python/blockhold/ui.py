@@ -14,6 +14,7 @@ from .gunsmith import CAMOS
 from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
 from .data.weapons import CATEGORIES, WEAPONS
+from .data.resources import RESOURCES
 from .render import col
 from .textures import icon, scope_texture, vignette_texture
 
@@ -248,6 +249,7 @@ class UI:
         self.build_menu()
         self.build_pause()
         self.build_shop()
+        self.build_craft()
         self.build_dead()
 
     def set_text(self, t, value):
@@ -355,6 +357,15 @@ class UI:
                                    scale=(0.09 - 2 * EDGE, 0.09 - 2 * EDGE), color=C(TEAL))
         self.ability_cd = text(h, 'Q', 0, B + 0.075, 1.7, PAPER, origin=(0, 0), z=-0.02)
 
+        # bottom right: mined resources (shown once you have some)
+        self.res_box = Entity(parent=h, enabled=False)
+        box(self.res_box, R - 0.38, B + 0.2, 0.35, 0.038, INK, z=0.003)
+        self.res_text = {}
+        for i, (rid, r) in enumerate(RESOURCES.items()):
+            x = R - 0.372 + i * 0.0855
+            box(self.res_box, x, B + 0.189, 0.016, 0.016, r['color'], z=0.001)
+            self.res_text[rid] = text(self.res_box, '0', x + 0.024, B + 0.181, 0.85, PAPER, origin=(-0.5, 0))
+
         # bottom right: weapon
         frame(h, R - 0.38, B + 0.155, 0.35, 0.125, PAPER, INK)
         self.weapon_name = text(h, '', R - 0.36, B + 0.13, 1.05, INK, origin=(-0.5, 0))
@@ -460,6 +471,11 @@ class UI:
             if self.board_t <= 0:
                 self.board_t = 0.25
                 self.build_scoreboard()
+        res = p.resources
+        self.res_box.enabled = any(res.values())
+        if self.res_box.enabled:
+            for rid, t in self.res_text.items():
+                self.set_text(t, str(res.get(rid, 0)))
         powers = g.powerups.hud_rows()
         for i, (row, chip, name, secs) in enumerate(self.power_rows):
             row.enabled = i < len(powers)
@@ -619,7 +635,7 @@ class UI:
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
          ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
          ('Reload', 'R')],
-        [('Ability', 'Q'), ('Switch weapon', '1-9 / wheel'), ('Use / revive', 'Hold E'), ('Shop', 'B'),
+        [('Ability', 'Q'), ('Switch weapon', '1-9 / wheel'), ('Craft / revive', 'E / hold E'), ('Shop', 'B'),
          ('Scoreboard', 'Hold Tab'),
          ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute', 'M'), ('Fullscreen', 'F11'), ('Turn 3D model', 'F8 / F9')],
     ]
@@ -750,6 +766,89 @@ class UI:
         self.shop = Entity(parent=camera.ui, z=-1, enabled=False)
         backdrop(self.shop, 0.55)
         self.shop_win = Window(self.shop, 'SHOP')
+
+    # ── workbench (crafting) ─────────────────────────────────────────────────
+    def build_craft(self):
+        self.craft = Entity(parent=camera.ui, z=-1, enabled=False)
+        backdrop(self.craft, 0.45)
+        self.craft_win = Window(self.craft, 'WORKBENCH')
+        self.craft_cat = 'items'
+        self.craft_sel = None
+
+    def select_recipe(self, rid=None, cat=None):
+        if cat is not None:
+            self.craft_cat = cat
+        self.craft_sel = rid
+        self.refresh_craft()
+
+    def refresh_craft(self):
+        from .data.crafting import all_recipes
+        g, win = self.game, self.craft_win
+        p, b = g.player, win.body
+        win.clear()
+        win.right.text = ''
+        # header: what you've got
+        x = win.x + win.w - 0.06 - 4 * 0.12
+        for rid, r in RESOURCES.items():
+            box(b, x, win.y - 0.035, 0.024, 0.024, r['color'], z=-0.01)
+            text(b, str(p.resources.get(rid, 0)), x + 0.034, win.y - 0.047, 1.3, INK, origin=(-0.5, 0))
+            x += 0.12
+        recipes = all_recipes()
+        cats = [('items', 'Items')] + list(CATEGORIES)
+        mine = [r for r in recipes if r['category'] == self.craft_cat]
+        sel = next((r for r in mine if r['id'] == self.craft_sel), None) or (mine[0] if mine else recipes[0])
+        self.craft_sel = sel['id']
+
+        # left: categories + recipe list
+        x, y = win.left, win.top + 0.01
+        for i, (cid, cname) in enumerate(cats):
+            on = cid == self.craft_cat
+            FlatButton(b, cname, x + (i % 5) * 0.11, y - (i // 5) * 0.05, 0.104, 0.042,
+                       lambda c=cid: self.select_recipe(None, c), fill=INK if on else PAPER, edge=INK,
+                       fg=PAPER if on else INK, size=0.8, hover=0.15 if on else -0.06)
+        y -= 0.115
+        for r in mine:
+            blocker = g.craft_blocker(r)
+            is_sel = r is sel
+            right = 'READY' if not blocker else ('OWNED' if blocker == 'OWNED' else '')
+            fg = PAPER if is_sel else (MUTED if blocker == 'OWNED' else INK)
+            FlatButton(b, r['name'], x, y, 0.54, 0.05, lambda rid=r['id']: self.select_recipe(rid),
+                       fill=INK if is_sel else PAPER, edge=INK if is_sel else LINE, fg=fg, size=1.0, align='left',
+                       right=right, hover=0.15 if is_sel else -0.06)
+            y -= 0.058
+        text(b, 'Mine ore nodes with a melee weapon (the Pickaxe is fastest).', x, win.btn_y + 0.045, 0.8, MUTED)
+
+        # right: the selected recipe
+        xr, y = win.right_col + 0.03, win.top + 0.01
+        text(b, sel['name'].upper(), xr, y, 1.9, INK)
+        text(b, sel['desc'], xr, y - 0.052, 0.85, MUTED, wordwrap=62)
+        y -= 0.1
+        if sel['kind'] == 'weapon':
+            d = g.weapons.get_def(sel['weapon'])
+            specials = self.weapon_specials(d, g.weapons)
+            if specials:
+                text(b, specials, xr, y, 0.8, TEAL, wordwrap=70)
+                y -= 0.035
+            if d['price']:
+                text(b, f"or buy it for {d['price']} coins in the shop between waves", xr, y, 0.8, MUTED)
+                y -= 0.035
+        y -= 0.02
+        text(b, 'COST', xr, y, 0.85, MUTED)
+        y -= 0.04
+        for rid, need in sel['cost'].items():
+            have = p.resources.get(rid, 0)
+            r = RESOURCES[rid]
+            box(b, xr, y, 0.026, 0.026, r['color'], z=-0.01)
+            text(b, r['name'], xr + 0.04, y - 0.013, 1.05, INK, origin=(-0.5, 0))
+            bar(b, xr + 0.2, y - 0.006, 0.2, 0.016, clamp01(have / need), GREEN if have >= need else AMBER)
+            text(b, f'{have} / {need}', xr + 0.42, y - 0.013, 1.0, GREEN if have >= need else RED, origin=(-0.5, 0))
+            y -= 0.055
+        blocker = g.craft_blocker(sel)
+        if sel['kind'] == 'armor':
+            text(b, f'Armor now: {round(p.armor * 100)}%', xr, y - 0.01, 0.85, INK)
+        win.bottom_left('CLOSE', g.close_shop, 'cross', g.close_shop)
+        label = 'CRAFT' if not blocker else blocker
+        win.bottom_right(label, lambda: g.craft(sel['id']), fill=GREEN if not blocker else NAVY, w=0.3)
 
     def set_tab(self, tab):
         self.shop_tab = tab

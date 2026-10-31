@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 RATE = 22050
-VERSION = 5
+VERSION = 6
 HERE = Path(__file__).resolve().parent
 CUSTOM_DIR = HERE.parent / 'sounds'
 CACHE_DIR = HERE / '_generated_sounds'
@@ -232,6 +232,12 @@ RECIPES = {
     'groan': lambda: tone(110, 0.5, 'saw', vol=0.08, to=60),
     'spit': lambda: noise(0.2, 900, 'band', vol=0.4, sweep=300),
     'boom': lambda: mix(noise(0.9, 900, vol=1.0, sweep=60), tone(70, 0.6, 'sine', vol=0.6, to=30)),
+    'mine_hit': lambda: mix(highpass(env_noise(0.12, 0.022, 121, 0.75), 1400), tone(1900, 0.08, 'sine', vol=0.1, to=1650),
+                            mech([(0, 2700, 0.35)], seed=122)),
+    'mine_break': lambda: mix(lowpass(env_noise(0.55, 0.16, 123, 0.9), 900), thump(90, 45, 0.25, 0.5),
+                              (0.07, lowpass(env_noise(0.35, 0.08, 124, 0.5), 2200))),
+    'craft': lambda: mix(mech([(0, 2400, 0.6)], seed=125), (0.15, mech([(0, 2200, 0.6)], seed=126)),
+                         (0.3, mech([(0, 2700, 0.6)], seed=127)), (0.45, seq([660, 990], 0.12, 'triangle', 0.12))),
     'powerup_drop': lambda: seq([1046, 1318, 1568, 2093], 0.08, 'sine', 0.12, gap=0.045),
     'powerup': lambda: seq([440, 554, 659, 880], 0.12, 'square', 0.1, gap=0.06),
     'blink': lambda: tone(300, 0.2, 'sine', vol=0.2, to=1500),

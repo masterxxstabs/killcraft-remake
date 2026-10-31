@@ -21,6 +21,8 @@
 #    variants   how many random versions to make (nature only)
 #    editor_only  True = only visible in the editor (spawn markers)
 #    spawn      'player' or 'zombie' = this asset is a spawn point
+#    ore        an ore node grows here in game ('random' or a node type from resources.py)
+#    station    'workbench' = players craft here (press E)
 # ─────────────────────────────────────────────────────────────────────────────
 
 BROWN = '#6b4528'
@@ -333,6 +335,53 @@ def player_spawn(lp):
     lp.tri((0, 2.2, 0), (0, 1.6, 0), (0.8, 1.9, 0), '#1197b0', (0.3, 1.9, -1))
 
 
+# ── mining and crafting ──────────────────────────────────────────────────────
+def workbench(lp):
+    top, dark, metal = '#8a5a32', '#5e3b1f', '#5b6067'
+    for x in (-0.9, 0.9):
+        for z in (-0.36, 0.36):
+            lp.box((x, 0.42, z), (0.1, 0.84, 0.1), dark)
+    lp.box((0, 0.25, 0), (1.8, 0.06, 0.72), dark)                       # lower shelf
+    lp.box((0, 0.88, 0), (2.0, 0.08, 0.9), top, top='#9c6b3f')          # table top
+    for x in (-0.97, 0.97):                                              # back board posts
+        lp.box((x, 1.3, -0.42), (0.08, 1.0, 0.08), dark)
+    lp.box((0, 1.38, -0.43), (1.86, 0.78, 0.04), '#7a4e2b')
+    lp.box((-0.62, 1.42, -0.39), (0.05, 0.36, 0.03), metal)              # hanging wrench
+    lp.box((-0.62, 1.62, -0.39), (0.16, 0.06, 0.03), metal)
+    lp.box((-0.3, 1.36, -0.39), (0.05, 0.38, 0.03), '#a87848')           # hammer
+    lp.box((-0.3, 1.57, -0.38), (0.2, 0.08, 0.06), metal)
+    lp.box((0.25, 1.42, -0.39), (0.5, 0.17, 0.02), '#aab1b9')            # saw
+    lp.box((0.56, 1.42, -0.38), (0.12, 0.16, 0.04), '#a8242e')
+    lp.box((0.25, 1.55, -0.39), (0.5, 0.02, 0.03), '#5b6067')
+    lp.box((-0.65, 0.97, 0.08), (0.3, 0.1, 0.2), '#3a3d42')              # anvil
+    lp.box((-0.65, 1.07, 0.08), (0.44, 0.1, 0.24), '#4a4e55')
+    lp.beam((-0.43, 1.08, 0.08), (-0.27, 1.08, 0.08), 0.05, '#4a4e55', sides=5, end_radius=0.0)
+    lp.box((0.78, 0.99, 0.3), (0.22, 0.14, 0.2), '#2f5d8a')              # vise
+    lp.box((0.78, 1.0, 0.45), (0.04, 0.04, 0.18), metal)
+    lp.box((0.1, 0.95, 0.12), (0.72, 0.05, 0.08), '#26282d', yaw=12)     # a rifle being built
+    lp.box((-0.2, 0.95, 0.19), (0.26, 0.07, 0.09), '#7a4a26', yaw=12)
+    lp.box((0.08, 0.92, 0.12), (0.05, 0.1, 0.05), '#26282d', yaw=12)
+    lp.box((0.42, 0.4, 0.05), (0.42, 0.24, 0.42), '#a87848')             # crate of ore under the table
+    for i, c in enumerate(('#c3cfdb', '#e0813a', '#a3a39f', '#c07bff')):
+        lp.blob((0.3 + (i % 2) * 0.22, 0.56, -0.05 + (i // 2) * 0.2), 0.08, c, jitter=0.3, detail=0)
+
+
+def _ore_marker(kind):
+    from .resources import draw_node
+
+    def build(lp):
+        draw_node(lp, kind)
+    return build
+
+
+def ore_random(lp):
+    from .resources import draw_node
+    draw_node(lp, 'stone')
+    lp.beam((0.05, 0.6, 0), (0.05, 1.9, 0), 0.03, '#f5f4f2', sides=4)
+    for i, c in enumerate(('#c3cfdb', '#e0813a', '#c07bff')):
+        lp.box((0.25, 1.78 - i * 0.12, 0), (0.4, 0.12, 0.02), c)
+
+
 def _perimeter(half, door=None, height=3):
     cells = []
     for dx in range(-half, half + 1):
@@ -390,10 +439,17 @@ ASSETS = {
     # special
     'zombie_grave': A('Zombie grave (spawn)', 'special', zombie_grave, spawn='zombie'),
     'player_spawn': A('Player start', 'special', player_spawn, editor_only=True, spawn='player'),
+    # mining and crafting (ore spawns only show in the editor; the real nodes grow there in game)
+    'workbench': A('Workbench (crafting)', 'mining', workbench, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)], station='workbench'),
+    'ore_random': A('Ore spawn (random)', 'mining', ore_random, editor_only=True, ore='random'),
+    'ore_stone': A('Stone node spawn', 'mining', _ore_marker('stone'), editor_only=True, ore='stone'),
+    'ore_iron': A('Iron node spawn', 'mining', _ore_marker('iron'), editor_only=True, ore='iron'),
+    'ore_copper': A('Copper node spawn', 'mining', _ore_marker('copper'), editor_only=True, ore='copper'),
+    'ore_crystal': A('Crystal node spawn', 'mining', _ore_marker('crystal'), editor_only=True, ore='crystal'),
 }
 
 ASSET_CATEGORIES = [('trees', 'Trees'), ('shrubs', 'Shrubs'), ('buildings', 'Buildings'), ('props', 'Props'),
-                    ('special', 'Special'), ('paths', 'Paths'), ('blocks', 'Blocks')]
+                    ('special', 'Special'), ('mining', 'Mining'), ('paths', 'Paths'), ('blocks', 'Blocks')]
 
 # Ground paths you can paint (texture tiles live in textures.py PATH_TILES)
 PATHS = {'dirt': 'Dirt path', 'gravel': 'Gravel', 'cobble': 'Cobblestone', 'road': 'Road', 'sand': 'Sand',

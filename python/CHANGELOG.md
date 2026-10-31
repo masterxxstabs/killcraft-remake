@@ -3,6 +3,14 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.6.0
+- Mining! Ore nodes (stone, iron, copper, crystal) spawn around the map. Hit them with a melee weapon
+- New Pickaxe: mines 2.5x faster
+- Crafting: press E at a workbench to craft any gun from ore instead of buying it, plus bandages, medkits and armor plating
+- Workbenches work during waves too, so watch your back
+- Map editor: new Mining tab with workbenches and ore spawns, so you can build your own mine
+- The Village and Forest Camp maps now have a workbench and a quarry
+
 ## 1.5.0
 - Movement: crouch (C / Ctrl), sprint-slide, climb up ledges, vault over low cover
 - All-new weapon sounds: layered gunshots per gun type, reload steps, shell casings, footsteps

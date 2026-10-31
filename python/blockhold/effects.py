@@ -112,11 +112,11 @@ class Effects:
         self.burst(pos, '#444444', 8, speed=radius * 1.5, size=0.45, life=1.1, gravity=-2)
         self.ring(Vec3(pos.x, max(0, pos.y - 0.5), pos.z), radius, '#ffa040')
 
-    def damage_number(self, pos, amount, crit=False, color=None):
+    def damage_number(self, pos, amount, crit=False, color=None, label=None):
         n = self.numbers[self._n]
         self._n = (self._n + 1) % len(self.numbers)
         t = n['t']
-        t.text = str(round(amount))
+        t.text = label or str(round(amount))
         t.color = col(color) if color else (col('#ffd54a') if crit else ucolor.white)
         t.scale = 1.9 if crit else 1.4
         jitter = Vec3((random.random() - 0.5) * 0.4, 0, (random.random() - 0.5) * 0.4)

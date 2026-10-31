@@ -84,7 +84,8 @@ class PowerUps:
         d = POWERUPS[kind]
         x, z = g.world.collide(Vec3(pos.x, 0, pos.z), 0.5)
         e = node(self.root, position=(x, 1.0, z))
-        spin = node(e, model=token_mesh(kind), scale=1.5)
+        spin = node(e, scale=1.5)
+        token_mesh(kind).copyTo(spin)          # copy: two tokens of one kind can't share the mesh itself
         tag = Entity(parent=e, y=0.62, billboard=True)
         Text(d['name'], parent=tag, scale=6, origin=(0, 0), color=col(d['color']))
         self.drops.append(dict(id=new_id(), kind=kind, pos=Vec3(x, 0, z), e=e, spin=spin, life=LIFETIME))

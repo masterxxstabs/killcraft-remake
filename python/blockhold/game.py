@@ -15,6 +15,7 @@ from .net import Events, PlayerInput
 from .enemies import EnemyManager
 from .pickups import Pickups
 from .powerups import PowerUps
+from .mining import Mining
 from .player import Player, REVIVE_TIME
 from .projectiles import Projectiles
 from .render import col, hex_rgb, node, set_fog
@@ -91,6 +92,8 @@ class Game(Entity):
         self.projectiles = Projectiles(self)
         self.pickups = Pickups(self)
         self.powerups = PowerUps(self)
+        self.mining = Mining(self)
+        self.craft_open = False
         self.weapons.set_visible(False)
         self.apply_sky(NORMAL_SKY, instant=True)
         self.show_cursor(True)
@@ -172,11 +175,13 @@ class Game(Entity):
         self.powerups.clear()
         self.effects.clear()
         self.clear_allies()
+        self.mining.clear()
         self.world.destroy()
         self.world = World(map_data=map_data)
         self.start_quest()
         self.player.reset()
         self.player.position = Vec3(self.world.player_spawn)
+        self.mining.reset()
         self.weapons.reset()
         self.weapons.set_visible(True)
         self.wave_number = self.remaining = 0
@@ -189,8 +194,10 @@ class Game(Entity):
         self.show_cursor(False)
 
     def to_menu(self):
+        self.close_shop()
         self.clear_allies()
         self.powerups.clear()
+        self.mining.clear()
         self.end_quest()
         if self.from_editor is not None:            # play test: go back to the editor
             data, self.from_editor = self.from_editor, None
@@ -312,9 +319,69 @@ class Game(Entity):
         if not self.shop_open:
             return
         self.shop_open = False
+        self.craft_open = False
         self.ui.shop.enabled = False
+        self.ui.craft.enabled = False
         self.ui.hud.enabled = True
         self.show_cursor(False)
+
+    # ── crafting ─────────────────────────────────────────────────────────────
+    def near_bench(self, player=None, reach=2.8):
+        p = player or self.player
+        return any((Vec3(b.x - p.position.x, 0, b.z - p.position.z)).length() < reach for b in self.world.benches)
+
+    def open_craft(self):
+        """The workbench menu. Unlike the shop it works during waves too, so watch your back."""
+        if self.player.downed or self.shop_open or not self.near_bench():
+            return
+        self.shop_open = self.craft_open = True
+        self.aiming = False
+        camera.fov = self.fov
+        self.ui.scope.enabled = False
+        self.weapons.trigger(False)
+        self.ui.refresh_craft()
+        self.ui.hud.enabled = False
+        self.ui.craft.enabled = True
+        self.show_cursor(True)
+
+    def can_craft(self, r, player=None):
+        p = player or self.player
+        return all(p.resources.get(res, 0) >= n for res, n in r['cost'].items())
+
+    def craft_blocker(self, r, player=None):
+        """Why recipe r can't be crafted right now ('' if it can)."""
+        p = player or self.player
+        if r['kind'] == 'weapon' and self.weapons.owns(r['weapon']):
+            return 'OWNED'
+        if r['kind'] == 'heal' and p.health >= p.max_health:
+            return 'FULL HEALTH'
+        if r['kind'] == 'armor' and p.armor >= r['max'] - 1e-6:
+            return 'MAXED'
+        if not self.can_craft(r, p):
+            return 'NEED MORE'
+        return ''
+
+    def craft(self, rid, player=None):
+        from .data.crafting import recipe
+        p = player or self.player
+        r = recipe(rid)
+        if r is None or self.craft_blocker(r, p):
+            self.sounds.play('deny')
+            return False
+        for res, n in r['cost'].items():
+            p.resources[res] -= n
+        if r['kind'] == 'weapon':
+            self.weapons.give(r['weapon'])
+        elif r['kind'] == 'heal':
+            p.heal(r['amount'])
+        elif r['kind'] == 'armor':
+            p.armor = min(r['max'], p.armor + r['amount'])
+        self.events.emit('crafted', player=p, recipe=rid)
+        if p.is_local:
+            self.sounds.play('craft')
+            self.ui.kill_feed(f"Crafted {r['name']}")
+            self.ui.refresh_craft()
+        return True
 
     def shop_start_wave(self):
         self.close_shop()
@@ -436,7 +503,7 @@ class Game(Entity):
             if a is not near:
                 a.revive_progress = 0
         if near is None:
-            self.ui.set_prompt('')
+            self.ui.set_prompt('Press E to use the workbench' if self.near_bench() else '')
             return
         if inp.use:
             near.revive_progress += dt
@@ -498,6 +565,7 @@ class Game(Entity):
     def on_player_death(self, player=None):
         if player is not None and not player.is_local:
             return                       # (multiplayer: a team-mate went down)
+        self.close_shop()                # the workbench can be open mid-wave
         self.weapons.trigger(False)
         self.aiming = False
         camera.fov = self.fov
@@ -568,8 +636,11 @@ class Game(Entity):
         if self.state != 'playing':
             return
         if self.shop_open:
-            if key in ('b', 'escape'):
+            if key in ('b', 'escape') or (key == 'e' and self.craft_open):
                 self.close_shop()
+            return
+        if key == 'e' and self.near_bench() and not self.player.downed:
+            self.open_craft()
             return
         if key == 'escape':
             self.pause()
@@ -707,4 +778,5 @@ class Game(Entity):
         self.pickups.update(dt)
         if self.state == 'playing':
             self.powerups.update(dt)
+            self.mining.update(dt)
         self.ui.update(dt)

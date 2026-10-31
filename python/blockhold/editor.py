@@ -471,10 +471,11 @@ class Editor:
             FlatButton(p, cname, x0 + (i % 2) * (w / 2 + 0.004), y - (i // 2) * 0.047, w / 2 - 0.004, 0.04,
                        lambda c=cid: self.select_category(c), fill=INK if on else PAPER, edge=INK,
                        fg=PAPER if on else INK, size=0.85, hover=0.15 if on else -0.06)
-        FlatButton(p, 'ERASER', x0 + (w / 2 + 0.004), y - 3 * 0.047, w / 2 - 0.004, 0.04, self.toggle_eraser,
-                   fill=RED if self.eraser else PAPER, edge=INK, fg=PAPER if self.eraser else INK, size=0.85,
-                   hover=0.12 if self.eraser else -0.06)
-        y -= 4 * 0.047 + 0.012
+        k = len(ASSET_CATEGORIES)                 # the eraser goes in the next free slot
+        FlatButton(p, 'ERASER', x0 + (k % 2) * (w / 2 + 0.004), y - (k // 2) * 0.047, w / 2 - 0.004, 0.04,
+                   self.toggle_eraser, fill=RED if self.eraser else PAPER, edge=INK, fg=PAPER if self.eraser else INK,
+                   size=0.85, hover=0.12 if self.eraser else -0.06)
+        y -= (k // 2 + 1) * 0.047 + 0.012
         if self.category == 'paths':
             items = [(k, n, self.path_kind == k) for k, n in PATHS.items()]
             pick = self.pick_tile

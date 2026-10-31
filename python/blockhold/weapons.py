@@ -413,6 +413,11 @@ class Weapons:
         if targets:
             g.sounds.play('thud')
             g.ui.hitmarker(False)
+        elif getattr(g, 'mining', None) is not None:      # nothing to hit: mine the ore node in front of you
+            n = g.mining.find(eye, fwd, reach)
+            if n is not None:
+                dist = (n['pos'] + Vec3(0, 0.45, 0) - eye).length()
+                g.mining.mine(n, self.owner, d.get('gather', 1), eye + fwd * max(0.3, dist - 0.4))
 
     def spray(self, d, eye, fwd, muzzle, dm):
         """Flamethrower-style cone: hits everything in front of you."""
