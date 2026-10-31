@@ -331,6 +331,15 @@ class UI:
         glyph(h, 'heart', L + 0.065, B + 0.065, 0.032, RED)
         box(h, L + 0.1, B + 0.088, 0.375, 0.046, NAVY, z=0.001)
         self.hp_fill = box(h, L + 0.1, B + 0.088, 0.375, 0.046, RED)
+        self.power_rows = []                    # active power-ups, stacked above the health bar
+        for i in range(4):
+            row = Entity(parent=h, enabled=False)
+            y = B + 0.152 + i * 0.047
+            box(row, L + 0.03, y, 0.3, 0.04, INK, z=0.003)
+            chip = box(row, L + 0.042, y - 0.008, 0.024, 0.024, PAPER, z=0.001)
+            name = text(row, '', L + 0.078, y - 0.02, 0.9, PAPER, origin=(-0.5, 0))
+            secs = text(row, '', L + 0.318, y - 0.02, 0.9, PAPER, origin=(0.5, 0))
+            self.power_rows.append((row, chip, name, secs))
         self.hp_text = text(h, '', L + 0.465, B + 0.065, 1.05, PAPER, origin=(0.5, 0), z=-0.02)
 
         # bottom middle: ability
@@ -409,6 +418,19 @@ class UI:
         self.quest_box.enabled = bool(tracker)
         if tracker:
             self.set_text(self.quest_text, tracker)
+
+        powers = g.powerups.hud_rows()
+        for i, (row, chip, name, secs) in enumerate(self.power_rows):
+            row.enabled = i < len(powers)
+            if row.enabled:
+                label, colour, left = powers[i]
+                if self._cache.get(('colour', i)) != colour:
+                    self._cache[('colour', i)] = colour
+                    chip.color = C(colour)
+                    name.color = secs.color = C(colour)
+                self.set_text(name, label)
+                self.set_text(secs, f'{math.ceil(left)}s')
+                chip.enabled = left > 3 or int(left * 4) % 2 == 0     # blink when running out
 
         now = pytime.time()
         self.feed = [f for f in self.feed if now - f[1] < 3]

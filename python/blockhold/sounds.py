@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 RATE = 22050
-VERSION = 4
+VERSION = 5
 HERE = Path(__file__).resolve().parent
 CUSTOM_DIR = HERE.parent / 'sounds'
 CACHE_DIR = HERE / '_generated_sounds'
@@ -232,6 +232,7 @@ RECIPES = {
     'groan': lambda: tone(110, 0.5, 'saw', vol=0.08, to=60),
     'spit': lambda: noise(0.2, 900, 'band', vol=0.4, sweep=300),
     'boom': lambda: mix(noise(0.9, 900, vol=1.0, sweep=60), tone(70, 0.6, 'sine', vol=0.6, to=30)),
+    'powerup_drop': lambda: seq([1046, 1318, 1568, 2093], 0.08, 'sine', 0.12, gap=0.045),
     'powerup': lambda: seq([440, 554, 659, 880], 0.12, 'square', 0.1, gap=0.06),
     'blink': lambda: tone(300, 0.2, 'sine', vol=0.2, to=1500),
     'death': lambda: tone(200, 0.25, 'square', vol=0.08, to=60),

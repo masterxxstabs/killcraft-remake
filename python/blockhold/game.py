@@ -14,6 +14,7 @@ from .effects import Effects
 from .net import Events, PlayerInput
 from .enemies import EnemyManager
 from .pickups import Pickups
+from .powerups import PowerUps
 from .player import Player
 from .projectiles import Projectiles
 from .render import col, hex_rgb, node, set_fog
@@ -89,6 +90,7 @@ class Game(Entity):
         self.enemies = EnemyManager(self)
         self.projectiles = Projectiles(self)
         self.pickups = Pickups(self)
+        self.powerups = PowerUps(self)
         self.weapons.set_visible(False)
         self.apply_sky(NORMAL_SKY, instant=True)
         self.show_cursor(True)
@@ -167,6 +169,7 @@ class Game(Entity):
         self.enemies.clear()
         self.projectiles.clear()
         self.pickups.clear()
+        self.powerups.clear()
         self.effects.clear()
         self.clear_allies()
         self.world.destroy()
@@ -187,6 +190,7 @@ class Game(Entity):
 
     def to_menu(self):
         self.clear_allies()
+        self.powerups.clear()
         self.end_quest()
         if self.from_editor is not None:            # play test: go back to the editor
             data, self.from_editor = self.from_editor, None
@@ -468,8 +472,10 @@ class Game(Entity):
             owner.score += round(d['score'] * (1.5 if headshot else 1) * (1 + self.wave_number * 0.1))
         self.events.emit('enemy_killed', enemy=e, attacker=attacker, headshot=headshot)
         lo, hi = d['coins']
-        coins = round((lo + random.random() * (hi - lo)) * e.coin_mult * (1 + self.wave_number * 0.04))
+        coins = round((lo + random.random() * (hi - lo)) * e.coin_mult * (1 + self.wave_number * 0.04)
+                      * self.powerups.coin_mult())
         self.pickups.drop_coins(e.position, coins)
+        self.powerups.on_kill(e)
         if random.random() < (1 if d.get('boss') else 0.07):
             self.pickups.drop(e.position, 'heal', 60 if d.get('boss') else 20)
         self.effects.burst(e.chest_pos(), d['colors']['shirt'], 10, speed=5, size=0.18)
@@ -684,4 +690,6 @@ class Game(Entity):
             a.update(dt)
         self.projectiles.update(dt)
         self.pickups.update(dt)
+        if self.state == 'playing':
+            self.powerups.update(dt)
         self.ui.update(dt)

@@ -355,7 +355,8 @@ class Weapons:
             g.sounds.play('empty')
             self.start_reload()
             return
-        st['ammo'] -= 1
+        if not g.powerups.active('overdrive'):       # Overdrive power-up: bottomless magazine
+            st['ammo'] -= 1
         self.kick = 0.4 if d.get('cone') else 1
         self.flash_t = 0.05
         p.recoil += (2.3 if d.get('projectile') else min(3, d['damage'] * d.get('pellets', 1) / 70 + 0.3)) \

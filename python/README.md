@@ -140,6 +140,20 @@ the Rookie (pistol), Gunner (AR-15), Medic (MP5, heals you when you're close) an
 (M249). You can have 3 at a time. When one goes down, stand next to them and hold **E**
 to get them back up. Everyone gets back up at the end of a wave. Their kills earn you coins.
 
+### Power-ups
+
+Now and then a zombie drops a floating power-up. Walk into it and it works for the whole team:
+
+| Power-up | What it does |
+| --- | --- |
+| Bonebreaker | every zombie dies in one hit for 15 seconds (bosses excepted) |
+| Gold Rush | double coins from kills for 20 seconds |
+| Overdrive | bottomless magazines for 12 seconds |
+| Shock Blast | blows up every zombie near you, and everyone gets 150 coins |
+
+They blink before they disappear, so grab them quickly. Drop rates and timings are in
+`blockhold/data/powerups.py`.
+
 ### Secrets
 
 Something is hidden on every map. If you hear whispering, look around...

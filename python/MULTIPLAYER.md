@@ -47,6 +47,7 @@ chat. A direct-IP join screen comes first, then maybe a lobby.
 | Allies belong to a player | `ally.owner`; `game.targets()` includes allies | each friend can hire their own survivors |
 | Revive by holding E | `game.update_revives(dt, input)` uses `input.use` | the same code will revive downed friends |
 | Quests listen to events | `quests.py` reacts to `enemy_killed` and shots | the host runs the quest; clients only see the effects |
+| Team power-ups | `game.powerups` (timers are team-wide, any player can pick one up) | the host runs them and sends `powerup_*` events |
 | Attachments and camos per weapon | `weapons.attach`, `weapons.camo` | a remote player's gun can be rebuilt from a small dict |
 
 ## Rules for new features

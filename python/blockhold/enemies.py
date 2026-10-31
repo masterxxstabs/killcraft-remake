@@ -150,6 +150,8 @@ class Enemy:
         g = self.game
         if attacker is not None or self.last_attacker is None:
             self.last_attacker = attacker or g.player
+        if amount >= 0.01 and g.powerups.active('instakill') and not self.d.get('boss'):
+            amount = max(amount, self.hp)          # Bonebreaker power-up
         self.hp -= amount
         if amount < 0.01:          # finishing blow from burning: no number, no flash
             if self.hp <= 0:

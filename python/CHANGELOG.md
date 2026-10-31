@@ -10,6 +10,7 @@ To publish an update: bump the number in VERSION, add a section here, push to Gi
 - Weapon customization: optics, suppressors, compensators, foregrips, lasers, extended mags
 - 9 camos to unlock, from Woodland to Gold
 - Hire survivors in the new ALLIES shop tab; revive them with E when they go down
+- Power-ups drop from zombies: Bonebreaker (one-hit kills), Gold Rush (double coins), Overdrive (bottomless mags) and Shock Blast
 - A secret is hidden on every map... listen for whispers
 - Groundwork for co-op multiplayer (see MULTIPLAYER.md)
 
