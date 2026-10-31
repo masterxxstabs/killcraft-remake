@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 RATE = 22050
-VERSION = 2
+VERSION = 4
 HERE = Path(__file__).resolve().parent
 CUSTOM_DIR = HERE.parent / 'sounds'
 CACHE_DIR = HERE / '_generated_sounds'
@@ -85,24 +85,145 @@ def seq(notes, dur, shape='triangle', vol=0.15, gap=None):
     return mix(*[(i * (gap or dur * 0.5), tone(f, dur, shape, vol)) for i, f in enumerate(notes)])
 
 
+# ── gunshot designer ─────────────────────────────────────────────────────────
+#  A real gunshot is several sounds on top of each other: the action clicking,
+#  a sharp crack, the "punch" of the muzzle blast and a long echo off the
+#  surroundings. gunshot() builds all four; the numbers below shape each gun.
+
+def lowpass(buf, freq):
+    a = min(1.0, 2 * math.pi * freq / RATE)
+    y, out = 0.0, []
+    for v in buf:
+        y += a * (v - y)
+        out.append(y)
+    return out
+
+
+def highpass(buf, freq):
+    lp = lowpass(buf, freq)
+    return [v - l for v, l in zip(buf, lp)]
+
+
+def echo(buf, delay, feedback=0.35, count=3, damp=2500):
+    """Repeat a sound a few times, quieter and duller each time (a room / outdoor slap-back)."""
+    out = list(buf) + [0.0] * int(delay * RATE * count)
+    tap = buf
+    for k in range(1, count + 1):
+        tap = lowpass(tap, damp / k)
+        o = int(delay * RATE * k)
+        g = feedback ** k
+        for i, v in enumerate(tap):
+            out[o + i] += v * g
+    return out
+
+
+def saturate(buf, drive=1.6):
+    """Soft clipping: makes shots sound loud and punchy instead of just clipped."""
+    t = math.tanh(drive)
+    return [math.tanh(v * drive) / t for v in buf]
+
+
+def env_noise(dur, decay, seed, vol=1.0):
+    rnd = random.Random(seed).random
+    n = int(RATE * dur)
+    return [(rnd() * 2 - 1) * vol * math.exp(-i / RATE / decay) for i in range(n)]
+
+
+def thump(freq, to, dur, vol):
+    out, phase = [], 0.0
+    n = int(RATE * dur)
+    for i in range(n):
+        t = i / RATE
+        f = freq * (to / freq) ** (t / dur)
+        phase += f / RATE
+        out.append(math.sin(phase * math.tau) * vol * math.exp(-t / (dur * 0.35)))
+    return out
+
+
+def gunshot(crack=1.0, crack_tone=6000, body=1.0, body_tone=1800, body_decay=0.05, punch=1.0, punch_freq=110,
+            tail=0.5, tail_decay=0.35, tail_tone=900, echo_delay=0.11, click=0.3, drive=1.8, seed=1):
+    parts = []
+    if click:
+        parts.append(highpass(env_noise(0.012, 0.003, seed + 1, click), 3000))
+    if crack:
+        parts.append(highpass(env_noise(0.03, 0.006, seed + 2, crack), crack_tone * 0.5))
+    if body:
+        parts.append(lowpass(env_noise(body_decay * 6, body_decay, seed + 3, body), body_tone))
+    if punch:
+        parts.append(thump(punch_freq, punch_freq * 0.4, 0.18, punch))
+    shot = saturate(mix(*parts), drive)
+    if tail:
+        t = lowpass(env_noise(tail_decay * 3, tail_decay * 0.7, seed + 4, tail * 0.5), tail_tone)
+        shot = mix(shot, (0.01, t))
+    return echo(shot, echo_delay, 0.3, 2) if echo_delay else shot
+
+
+def mech(clicks, seed=5):
+    """Metal parts moving: a list of (time, brightness, loudness) clicks."""
+    parts = []
+    for i, (t, tone_hz, vol) in enumerate(clicks):
+        n = highpass(env_noise(0.04, 0.008, seed + i, vol), tone_hz)
+        ring = [math.sin(k / RATE * math.tau * tone_hz * 1.3) * vol * 0.25 * math.exp(-k / RATE / 0.01)
+                for k in range(int(RATE * 0.04))]
+        parts.append((t, mix(n, ring)))
+    return mix(*parts)
+
+
 # ── the sound list ───────────────────────────────────────────────────────────
 RECIPES = {
-    'shoot_pistol': lambda: mix(noise(0.12, 2200, vol=0.6, sweep=400), tone(180, 0.08, vol=0.2, to=60)),
-    'shoot_nailgun': lambda: mix(noise(0.06, 3500, 'band', vol=0.5), tone(900, 0.04, vol=0.08, to=400)),
-    'shoot_scatter': lambda: mix(noise(0.3, 1400, vol=0.9, sweep=150), tone(90, 0.2, vol=0.35, to=40)),
-    'shoot_railspike': lambda: mix(tone(1800, 0.35, 'saw', vol=0.2, to=120), noise(0.25, 5000, 'high', vol=0.3)),
-    'shoot_rifle': lambda: mix(noise(0.18, 3000, vol=0.75, sweep=300), tone(140, 0.12, vol=0.25, to=50),
-                               (0.03, noise(0.25, 600, vol=0.25, sweep=120))),
-    'shoot_suppressed': lambda: mix(noise(0.08, 900, 'band', vol=0.45, sweep=300), tone(220, 0.05, 'sine', vol=0.1, to=90)),
-    'shoot_sniper': lambda: mix(noise(0.6, 2200, vol=1.0, sweep=80), tone(60, 0.5, 'sine', vol=0.6, to=28),
-                                (0.08, noise(0.9, 500, vol=0.35, sweep=60))),
-    'shoot_firework': lambda: noise(0.4, 800, 'band', vol=0.6, sweep=3000),
+    # guns (each weapon's `sound` field picks one of these: shoot_<sound>)
+    'shoot_pistol': lambda: gunshot(crack=0.8, body=0.8, body_tone=2200, punch=0.6, punch_freq=150, tail=0.35,
+                                    tail_decay=0.25, echo_delay=0.09, seed=10),
+    'shoot_heavy_pistol': lambda: gunshot(crack=1.0, body=1.0, body_tone=1500, body_decay=0.07, punch=1.0,
+                                          punch_freq=95, tail=0.55, tail_decay=0.45, echo_delay=0.12, seed=20),
+    'shoot_smg': lambda: gunshot(crack=0.7, crack_tone=7000, body=0.6, body_tone=2600, body_decay=0.03, punch=0.45,
+                                 punch_freq=170, tail=0.25, tail_decay=0.18, echo_delay=0.07, click=0.4, seed=30),
+    'shoot_rifle': lambda: gunshot(crack=1.0, crack_tone=7500, body=0.8, body_tone=2400, body_decay=0.045,
+                                   punch=0.7, punch_freq=120, tail=0.55, tail_decay=0.5, tail_tone=1100,
+                                   echo_delay=0.13, seed=40),
+    'shoot_battle_rifle': lambda: gunshot(crack=1.0, crack_tone=6000, body=1.0, body_tone=1700, body_decay=0.06,
+                                          punch=1.0, punch_freq=85, tail=0.7, tail_decay=0.6, tail_tone=850,
+                                          echo_delay=0.14, drive=2.2, seed=50),
+    'shoot_shotgun': lambda: mix(gunshot(crack=0.6, body=1.2, body_tone=1200, body_decay=0.09, punch=1.2,
+                                         punch_freq=70, tail=0.8, tail_decay=0.55, tail_tone=700, echo_delay=0.15,
+                                         drive=2.4, seed=60),
+                                 (0.32, mech([(0, 1800, 0.35), (0.12, 1200, 0.45)], seed=61))),
+    'shoot_scatter': lambda: gunshot(crack=0.5, body=1.3, body_tone=1000, body_decay=0.1, punch=1.3, punch_freq=60,
+                                     tail=0.8, tail_decay=0.5, tail_tone=650, echo_delay=0.15, drive=2.4, seed=65),
+    'shoot_sniper': lambda: gunshot(crack=1.2, crack_tone=5000, body=1.2, body_tone=1300, body_decay=0.09,
+                                    punch=1.4, punch_freq=55, tail=1.0, tail_decay=1.0, tail_tone=600,
+                                    echo_delay=0.22, drive=2.6, seed=70),
+    'shoot_suppressed': lambda: mix(lowpass(env_noise(0.09, 0.018, 81, 0.9), 1300),
+                                    thump(240, 120, 0.06, 0.25),
+                                    mech([(0.0, 3500, 0.45), (0.035, 2500, 0.4)], seed=82)),
+    'shoot_nailgun': lambda: mix(lowpass(env_noise(0.07, 0.015, 91, 0.6), 2500),
+                                 mech([(0.0, 4500, 0.5), (0.03, 3000, 0.35)], seed=92)),
+    'shoot_railspike': lambda: mix(tone(1800, 0.35, 'saw', vol=0.2, to=120), noise(0.25, 5000, 'high', vol=0.3),
+                                   (0.0, thump(90, 40, 0.3, 0.6))),
+    'shoot_firework': lambda: mix(noise(0.45, 800, 'band', vol=0.6, sweep=3000), thump(80, 50, 0.2, 0.4)),
+    'shoot_spit': lambda: noise(0.12, 900, 'band', vol=0.35, sweep=400),
+    'shoot_blink': lambda: tone(500, 0.08, 'sine', vol=0.18, to=900),
+    # weapon handling
+    'reload_out': lambda: mech([(0, 2200, 0.5), (0.05, 900, 0.35)], seed=101),
+    'reload_in': lambda: mix(mech([(0, 1500, 0.7), (0.03, 3200, 0.4)], seed=102),
+                             lowpass(env_noise(0.06, 0.012, 103, 0.5), 600)),
+    'reload_rack': lambda: mech([(0, 2600, 0.55), (0.09, 1800, 0.65)], seed=104),
+    'pump': lambda: mech([(0, 1500, 0.5), (0.13, 1100, 0.6)], seed=105),
+    'equip': lambda: mix(lowpass(env_noise(0.15, 0.04, 106, 0.3), 900), (0.08, mech([(0, 2400, 0.35)], seed=107))),
+    'reload': lambda: mix(tone(300, 0.05, vol=0.12), (0.12, tone(500, 0.05, vol=0.12))),
+    'empty': lambda: mech([(0, 3800, 0.45)], seed=108),
+    'casing': lambda: mix(*[(t, [math.sin(k / RATE * math.tau * f) * 0.12 * math.exp(-k / RATE / 0.03)
+                                 for k in range(int(RATE * 0.08))]) for t, f in ((0, 5200), (0.07, 4700), (0.12, 5600))]),
+    # movement
+    'step': lambda: lowpass(env_noise(0.08, 0.018, 111, 0.7), 500),
+    'land': lambda: mix(lowpass(env_noise(0.18, 0.04, 112, 0.9), 350), thump(70, 40, 0.15, 0.5)),
+    'slide': lambda: lowpass(highpass(noise(0.6, 2000, 'band', vol=0.5, attack=0.03, sweep=600), 300), 3000),
+    'mantle': lambda: mix(lowpass(env_noise(0.2, 0.05, 113, 0.6), 800), (0.12, lowpass(env_noise(0.1, 0.02, 114, 0.6), 400))),
     'swing': lambda: noise(0.15, 600, 'band', vol=0.4, attack=0.03, sweep=1800),
     'hit': lambda: tone(520, 0.05, vol=0.15, to=300),
     'headshot': lambda: tone(1200, 0.08, vol=0.18, to=1600),
     'thud': lambda: noise(0.08, 400, vol=0.6),
-    'reload': lambda: mix(tone(300, 0.05, vol=0.12), (0.12, tone(500, 0.05, vol=0.12))),
-    'empty': lambda: tone(1400, 0.03, vol=0.1),
+
     'hurt': lambda: tone(160, 0.18, 'saw', vol=0.25, to=80),
     'coin': lambda: mix(tone(988, 0.06, vol=0.1), (0.06, tone(1319, 0.12, vol=0.1))),
     'heal': lambda: mix(tone(523, 0.1, 'sine', vol=0.2), (0.08, tone(784, 0.15, 'sine', vol=0.2))),
@@ -175,8 +296,8 @@ class Sounds:
         s.setPlayRate(pitch)
         s.play()
 
-    def shoot(self, weapon):
-        self.play('shoot_' + weapon.get('sound', 'pistol'), pitch=0.95 + random.random() * 0.1)
+    def shoot(self, weapon, sound=None):
+        self.play('shoot_' + (sound or weapon.get('sound', 'pistol')), pitch=0.95 + random.random() * 0.1)
 
     def toggle_mute(self):
         self.muted = not self.muted

@@ -34,12 +34,18 @@ def _norm(a):
     return (a[0] / length, a[1] / length, a[2] / length)
 
 
+VIEWER = _norm((-0.25, 0.35, -0.9))     # roughly where the camera is, for the held gun's highlights
+
+
 class LowPoly:
-    def __init__(self, seed=1, variation=0.05):
+    def __init__(self, seed=1, variation=0.05, sun=None):
         self.verts = []
         self.cols = []
         self.rnd = random.Random(seed)
         self.variation = variation
+        self.sun = _norm(sun) if sun else SUN
+        self.half = _norm(tuple(a + b for a, b in zip(self.sun, VIEWER)))
+        self.spec = 0.0          # shininess of the next shapes (0 = matte, 1 = polished metal)
 
     # ── triangles ────────────────────────────────────────────────────────────
     def tri(self, a, b, c, colour, outward=None):
@@ -54,10 +60,13 @@ class LowPoly:
                 b, c = c, b
                 n = (-n[0], -n[1], -n[2])
         face_out = _norm((-n[0], -n[1], -n[2]))
-        light = 0.58 + 0.42 * max(0.0, _dot(face_out, SUN)) + 0.08 * max(0.0, face_out[1])
+        light = 0.58 + 0.42 * max(0.0, _dot(face_out, self.sun)) + 0.08 * max(0.0, face_out[1])
+        if isinstance(colour, list):                 # a palette: pick per face (camo)
+            colour = self.rnd.choice(colour)
         r, g, bl = rgb(colour) if isinstance(colour, str) else colour
         v = 1 + (self.rnd.random() - 0.5) * 2 * self.variation
-        cl = ucolor.Color(min(1, r * light * v), min(1, g * light * v), min(1, bl * light * v), 1)
+        hi = self.spec * max(0.0, _dot(face_out, self.half)) ** 10 * 0.6 if self.spec else 0
+        cl = ucolor.Color(min(1, r * light * v + hi), min(1, g * light * v + hi), min(1, bl * light * v + hi), 1)
         self.verts += [a, b, c]
         self.cols += [cl, cl, cl]
 

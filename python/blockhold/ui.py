@@ -8,6 +8,9 @@ import math
 import time as pytime
 from ursina import Button, Entity, Text, Texture, camera, color as ucolor, destroy, held_keys, mouse, window
 from . import maps
+from .data.attachments import ATTACHMENTS, SLOT_NAMES
+from .data.gun_models import MODELS as GUN_MODELS
+from .gunsmith import CAMOS
 from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
 from .data.weapons import CATEGORIES, WEAPONS
@@ -236,6 +239,7 @@ class UI:
         self._cache = {}
         self.menu_tab = 'play'
         self.shop_tab = 'weapons'
+        self.shop_view = 'stats'
         self.shop_sel = None
         self._update_status = None
         self.build_hud()
@@ -731,6 +735,18 @@ class UI:
         # right: details, stat bars with their upgrade buttons
         xr, y = win.right_col + 0.03, win.top + 0.01
         text(b, d['name'].upper(), xr, y, 1.9, INK)
+        can_customize = w.owns(d['id']) and (w.slots_for(d) or d['id'] in GUN_MODELS)
+        if can_customize:
+            for i, (view, label) in enumerate((('stats', 'UPGRADES'), ('customize', 'CUSTOMIZE'))):
+                on = self.shop_view == view
+                FlatButton(b, label, xr + 0.33 + i * 0.125, y + 0.004, 0.12, 0.036,
+                           lambda v=view: (setattr(self, 'shop_view', v), self.refresh_shop()),
+                           fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.75,
+                           hover=0.15 if on else -0.06)
+        if can_customize and self.shop_view == 'customize':
+            self.weapon_customize(b, g, w, d, xr, y - 0.05)
+            self.weapon_buttons(win, g, w, d)
+            return
         text(b, d['desc'], xr, y - 0.052, 0.85, MUTED, wordwrap=62)
         specials = self.weapon_specials(d, w)
         if specials:
@@ -765,7 +781,11 @@ class UI:
                            icon_name=None if maxed else 'arrow_up', size=0.9)
             y -= 0.068
 
+        self.weapon_buttons(win, g, w, d)
+
+    def weapon_buttons(self, win, g, w, d):
         # bottom right: buy / equip + start wave
+        owned = w.owns(d['id'])
         if not owned:
             ok = g.coins >= d['price']
             win.bottom_right(f"BUY  {d['price']}", lambda: g.buy_weapon(d['id']), 'play', g.shop_start_wave,
@@ -775,6 +795,56 @@ class UI:
                              g.shop_start_wave, fill=SLATE, w=0.3)
         else:
             win.bottom_right('START WAVE', g.shop_start_wave, fill=TEAL, w=0.3)
+
+    def weapon_customize(self, b, g, w, d, xr, y):
+        """Attachments and camo, with a 3D preview of the gun."""
+        # preview
+        pw, ph = 0.6, 0.135
+        frame(b, xr, y, pw, ph, '#e9e8e4', LINE, t=0.004)
+        if d['id'] in GUN_MODELS:
+            s = w.gun_smith(d)
+            zs = [v[2] for v in s.lp.verts]
+            ys = [v[1] for v in s.lp.verts]
+            length = max(zs) - min(zs)
+            scale = min(0.5 / length, 0.12 / max(0.01, max(ys) - min(ys)))
+            gun = Entity(parent=b, model=s.build(), rotation=(4, 90, 0), scale=scale,
+                         position=(xr + pw / 2 - (max(zs) + min(zs)) / 2 * scale, y - ph / 2 - (max(ys) + min(ys)) / 2 * scale, -0.2))
+            gun.setDepthTest(True)
+            gun.setDepthWrite(True)
+        else:
+            text(b, 'This weapon keeps its classic look.', xr + pw / 2, y - ph / 2, 0.85, MUTED, origin=(0, 0))
+        y -= ph + 0.025
+        fitted = w.attach.get(d['id'], {})
+        owned_att = w.owned_att.get(d['id'], set())
+        for slot in w.slots_for(d):
+            text(b, SLOT_NAMES[slot].upper(), xr, y - 0.004, 0.8, MUTED)
+            options = [k for k, a in ATTACHMENTS.items() if a['slot'] == slot]
+            for i, aid in enumerate(options):
+                a = ATTACHMENTS[aid]
+                on = fitted.get(slot) == aid
+                have = aid in owned_att
+                label = a['name'] if have else f"{a['name']}  {a['price']}"
+                ok = have or g.coins >= a['price']
+                FlatButton(b, label, xr + 0.13 + i * 0.148, y + 0.006, 0.142, 0.038,
+                           lambda x=aid: g.buy_attachment(d['id'], x),
+                           fill=INK if on else (PAPER if ok else '#e2d9d6'), edge=INK if (on or have) else LINE,
+                           fg=PAPER if on else (INK if ok else RED), size=0.64, hover=0.15 if on else -0.06)
+            y -= 0.05
+        if d['id'] in GUN_MODELS:
+            text(b, 'CAMO', xr, y - 0.004, 0.8, MUTED)
+            current = w.camo.get(d['id'], 'factory')
+            for i, (cid, c) in enumerate(CAMOS.items()):
+                swatch = c['colours'][0] if c['colours'] else '#383c43'
+                on = cid == current
+                have = cid in w.owned_camos
+                FlatButton(b, '', xr + 0.13 + i * 0.044, y + 0.008, 0.04, 0.036, lambda x=cid: g.buy_camo(d['id'], x),
+                           fill=swatch, edge=INK if on else LINE, hover=0.15)
+                if on:
+                    box(b, xr + 0.13 + i * 0.044, y - 0.032, 0.04, 0.006, INK)
+                if not have:
+                    text(b, str(c['price']), xr + 0.15 + i * 0.044, y - 0.036, 0.5, MUTED, origin=(0, 0.5))
+            c = CAMOS[current]
+            text(b, f"{c['name']} camo", xr, y - 0.03, 0.7, INK)
 
     def dmg_stat(self, d, w):
         dm = 1 + 0.15 * w.level(d, 'damage')

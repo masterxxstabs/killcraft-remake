@@ -4,13 +4,18 @@ never pokes through walls."""
 import math
 import random
 from panda3d.core import AmbientLight, Camera as PandaCamera, DirectionalLight, NodePath, PerspectiveLens
-from ursina import Vec3, application, camera, destroy, window
+from ursina import Vec3, application, camera, destroy, invoke, window
 from . import custom_models
+from .data.attachments import ATTACHMENTS
+from .data.gun_models import MODELS
 from .data.weapons import PRICE_GROWTH, WEAPON_UPGRADES, WEAPONS, weapon_upgrade_price
+from .gunsmith import Smith
 from .render import block, col, node, set_fog
 from .textures import weapon_atlas
 
 UPGRADES_BY_ID = {u['id']: u for u in WEAPON_UPGRADES}
+MOUNT_FOR_SLOT = {'optic': 'optic', 'muzzle': 'muzzle', 'under': 'under'}
+_slot_cache = {}
 
 
 class Weapons:
@@ -50,6 +55,10 @@ class Weapons:
         self.owned = []
         self.state = {}
         self.levels = {}            # weapon id -> {upgrade id: level}
+        self.attach = {}            # weapon id -> {slot: attachment id}
+        self.owned_att = {}         # weapon id -> set of attachment ids bought for it
+        self.camo = {}              # weapon id -> camo id
+        self.owned_camos = {'factory'}
         self.held = None
         for d in self.defs:
             if d['price'] == 0:
@@ -119,12 +128,70 @@ class Weapons:
         if key == 'rate':
             return d['rate'] * (1 + bonus * lv)
         if key == 'mag':
-            return round(d.get('mag', 0) * (1 + bonus * lv))
+            return round(d.get('mag', 0) * (1 + bonus * lv) * self.mod(d, 'mag'))
         if key == 'reload':
-            return d.get('reload', 1) * (1 - bonus) ** lv
+            return d.get('reload', 1) * (1 - bonus) ** lv * self.mod(d, 'reload')
         if key == 'range':
-            return d['range'] * (1 + bonus * lv)
+            return d['range'] * (1 + bonus * lv) * self.mod(d, 'range')
         raise KeyError(key)
+
+    # ── attachments & camos ──────────────────────────────────────────────────
+    def fitted(self, d):
+        """The attachments on weapon d."""
+        return [ATTACHMENTS[a] for a in self.attach.get(d['id'], {}).values() if a in ATTACHMENTS]
+
+    def mod(self, d, key):
+        m = 1.0
+        for a in self.fitted(d):
+            m *= a.get(key, 1.0)
+        return m
+
+    def has_scope(self, d):
+        return bool(d.get('scope') or any(a.get('scope') for a in self.fitted(d)))
+
+    def shot_sound(self, d):
+        return next((a['sound'] for a in self.fitted(d) if a.get('sound')), d.get('sound', 'pistol'))
+
+    def slots_for(self, d):
+        """Which attachment slots weapon d has (from the mount points on its model)."""
+        if d['id'] not in _slot_cache:
+            slots = []
+            if d['id'] in MODELS:
+                s = Smith()
+                MODELS[d['id']](s)
+                slots = [slot for slot, m in MOUNT_FOR_SLOT.items() if m in s.mounts]
+                if d.get('projectile') or d.get('cone'):
+                    slots = [x for x in slots if x == 'optic']
+            if d.get('mag') and not d.get('melee') and not d.get('projectile'):
+                slots.append('mag')
+            _slot_cache[d['id']] = slots
+        return _slot_cache[d['id']]
+
+    def fit(self, d, slot, aid):
+        """Put attachment aid (or None) in a slot. The magazine is refilled."""
+        self.attach.setdefault(d['id'], {})[slot] = aid
+        self.state[d['id']]['ammo'] = self.stat(d, 'mag')
+        if self.held is d:
+            self.equip(self.current, force=True)
+        self.game.ui.update_weapon()
+
+    def set_camo(self, d, camo):
+        self.camo[d['id']] = camo
+        if self.held is d:
+            self.equip(self.current, force=True)
+
+    def gun_smith(self, d):
+        """Build the detailed model of d with its camo and attachments."""
+        s = Smith(camo=self.camo.get(d['id'], 'factory'))
+        MODELS[d['id']](s)
+        for slot, aid in self.attach.get(d['id'], {}).items():
+            a = ATTACHMENTS.get(aid)
+            mount = s.mounts.get(MOUNT_FOR_SLOT.get(slot))
+            if a and a['build'] and mount is not None:
+                a['build'](s, mount)
+                if slot == 'muzzle' and aid == 'suppressor':
+                    s.mounts['muzzle_end'] = (mount[0], mount[1], mount[2] + 0.16)
+        return s
 
     def dmg_mult(self, d):
         """Damage multiplier from this weapon's upgrades and the player's Power upgrade."""
@@ -152,6 +219,7 @@ class Weapons:
             destroy(self.model)
         self.model = self.build_model(self.held)
         self.switch_anim = 0.25
+        self.game.sounds.play('equip', volume=0.8)
         self.game.ui.update_weapon()
 
     def cycle(self, direction):
@@ -166,6 +234,12 @@ class Weapons:
         if custom is not None:
             self.custom = custom
             self.muzzle = Vec3(0, 0, d.get('length', 0.5) * 0.95)
+            return g
+        if d['id'] in MODELS:
+            s = self.gun_smith(d)
+            node(g, model=s.build())
+            m = s.mounts.get('muzzle_end') or s.mounts.get('muzzle') or (0, 0, d.get('length', 0.4))
+            self.muzzle = Vec3(*m)
             return g
         atlas = weapon_atlas()
         spin_parts = []
@@ -202,7 +276,9 @@ class Weapons:
         if d.get('melee') or self.reloading > 0 or st['ammo'] >= self.stat(d, 'mag'):
             return
         self.reloading = self.reload_total = self.stat(d, 'reload') * self.owner.reload_mult
-        self.game.sounds.play('reload')
+        self.reload_steps = ['reload_out', 'reload_in', 'pump' if d.get('pellets', 1) > 1 else 'reload_rack']
+        self.game.sounds.play(self.reload_steps.pop(0))
+        self.game.events.emit('reload', player=self.owner, weapon=d['id'])
 
     def rate_mult(self):
         p = self.owner
@@ -214,6 +290,10 @@ class Weapons:
         self.cooldown -= dt
         if self.reloading > 0:
             self.reloading -= dt
+            done = 1 - self.reloading / self.reload_total
+            steps = getattr(self, 'reload_steps', [])
+            if steps and done >= (0.5 if len(steps) == 2 else 0.85):   # mag in halfway, rack near the end
+                g.sounds.play(steps.pop(0), volume=0.9)
             if self.reloading <= 0:
                 st['ammo'] = self.stat(d, 'mag')
                 self.reloading = 0
@@ -278,9 +358,13 @@ class Weapons:
         st['ammo'] -= 1
         self.kick = 0.4 if d.get('cone') else 1
         self.flash_t = 0.05
-        p.recoil += 2.3 if d.get('projectile') else min(3, d['damage'] * d.get('pellets', 1) / 70 + 0.3)
+        p.recoil += (2.3 if d.get('projectile') else min(3, d['damage'] * d.get('pellets', 1) / 70 + 0.3)) \
+            * self.mod(d, 'recoil') * (0.7 if g.aiming else 1)
         if not d.get('cone') or random.random() < 0.3:
-            g.sounds.shoot(d)
+            g.sounds.shoot(d, self.shot_sound(d))
+            if not d.get('projectile') and d.get('sound') not in ('blink', 'spit', 'railspike', 'nailgun') \
+                    and random.random() < 0.35:
+                invoke(g.sounds.play, 'casing', volume=0.5, pitch=0.9 + random.random() * 0.2, delay=0.25)
         muzzle = self.muzzle_world()
 
         if d.get('projectile'):
@@ -359,10 +443,11 @@ class Weapons:
         for _ in range(d.get('pellets', 1)):
             direction = Vec3(fwd)
             if d.get('spread'):
-                s = d['spread'] * (0.45 if g.aiming else 1)
+                s = d['spread'] * (0.45 * self.mod(d, 'aim_spread') if g.aiming else self.mod(d, 'spread'))
                 direction += Vec3((random.random() - 0.5) * 2 * s, (random.random() - 0.5) * 2 * s, (random.random() - 0.5) * 2 * s)
                 direction = direction.normalized()
-            wall = g.world.raycast(eye, direction, d['range'])
+            rng = self.stat(d, 'range')
+            wall = g.world.raycast(eye, direction, rng)
             end = eye + direction * wall
             stopped = False
             first = None
@@ -380,7 +465,7 @@ class Weapons:
                     end = eye + direction * dist
                     stopped = True
                     break
-            if not stopped and wall < d['range']:
+            if not stopped and wall < rng:
                 g.effects.burst(end, '#8a8a8a', 3, speed=2, size=0.08, life=0.4)
             if d.get('chain'):
                 g.effects.lightning(muzzle, end, tracer)

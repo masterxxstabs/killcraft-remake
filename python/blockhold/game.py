@@ -332,6 +332,41 @@ class Game(Entity):
         self.sounds.play('buy')
         self.ui.refresh_shop()
 
+    def buy_attachment(self, wid, aid):
+        """Buy (if needed) and fit an attachment. aid=None takes the slot's attachment off."""
+        w = self.weapons
+        d = w.get_def(wid)
+        from .data.attachments import ATTACHMENTS
+        if aid is None:
+            return
+        a = ATTACHMENTS[aid]
+        owned = w.owned_att.setdefault(wid, set())
+        if aid not in owned:
+            if self.coins < a['price']:
+                self.sounds.play('deny')
+                return
+            self.coins -= a['price']
+            owned.add(aid)
+            self.sounds.play('buy')
+        else:
+            self.sounds.play('equip')
+        current = w.attach.get(wid, {}).get(a['slot'])
+        w.fit(d, a['slot'], None if current == aid else aid)       # clicking the fitted one takes it off
+        self.ui.refresh_shop()
+
+    def buy_camo(self, wid, camo):
+        from .gunsmith import CAMOS
+        w = self.weapons
+        if camo not in w.owned_camos:
+            if self.coins < CAMOS[camo]['price']:
+                self.sounds.play('deny')
+                return
+            self.coins -= CAMOS[camo]['price']
+            w.owned_camos.add(camo)
+            self.sounds.play('buy')
+        w.set_camo(w.get_def(wid), camo)
+        self.ui.refresh_shop()
+
     def buy_upgrade(self, uid):
         u = next(x for x in UPGRADES if x['id'] == uid)
         lvl = self.upgrade_levels.get(uid, 0)
@@ -401,14 +436,15 @@ class Game(Entity):
         invoke(show, delay=1.2)
 
     def is_scoped(self):
-        return self.aiming and self.weapons.d.get('scope') and camera.fov < 45
+        return self.aiming and self.weapons.has_scope(self.weapons.d) and camera.fov < 45
 
     def update_aim(self, dt):
         d = self.weapons.d
         can_aim = self.aiming and not d.get('melee') and self.can_act() and self.weapons.reloading <= 0
-        target = (28 if d.get('scope') else self.fov * 0.68) if can_aim else self.fov
+        scope = self.weapons.has_scope(d)
+        target = (28 if scope else self.fov * 0.68 / self.weapons.mod(d, 'zoom')) if can_aim else self.fov
         camera.fov += (target - camera.fov) * min(1, dt * 12)
-        scoped = can_aim and d.get('scope') and camera.fov < 45
+        scoped = can_aim and scope and camera.fov < 45
         self.ui.scope.enabled = bool(scoped)
         self.weapons.set_visible(not scoped)
 

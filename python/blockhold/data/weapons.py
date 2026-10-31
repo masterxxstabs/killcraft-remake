@@ -81,7 +81,7 @@ WEAPONS = [
     dict(
         id='revolver', category='pistol', name='Six-Shooter', desc='Huge damage, six shots. Headshots hit extra hard.',
         price=150, damage=72, rate=2.2, mag=6, reload=2.0, spread=0.004, range=90, knockback=3,
-        headshot=2.5, sound='scatter', length=0.34,
+        headshot=2.5, sound='heavy_pistol', length=0.34,
         model=[
             ('steel', (0.032, 0.032, 0.22), (0, 0.03, 0.17)),
             ('steel', (0.024, 0.016, 0.2), (0, 0.054, 0.17)),
@@ -113,7 +113,7 @@ WEAPONS = [
     dict(
         id='smg', category='smg', name='Buzz SMG', desc='Tiny bullets, insane fire rate.',
         price=260, damage=14, rate=15, auto=True, mag=36, reload=1.6, spread=0.04, range=60,
-        knockback=0.5, sound='nailgun', length=0.5,
+        knockback=0.5, sound='smg', length=0.5,
         model=[
             ('dark', (0.06, 0.08, 0.32), (0, 0.02, 0.12)),
             ('steel', (0.03, 0.03, 0.12), (0, 0.03, 0.33)),
@@ -157,7 +157,7 @@ WEAPONS = [
     dict(
         id='rifle', category='rifle', name='Ranger Rifle', desc='Accurate automatic rifle. A great all-rounder.',
         price=480, damage=34, rate=8, auto=True, mag=30, reload=1.9, spread=0.012, range=100,
-        knockback=1.2, sound='pistol', length=0.85,
+        knockback=1.2, sound='rifle', length=0.85,
         model=[
             ('dark', (0.06, 0.09, 0.36), (0, 0.02, 0.12)),
             ('polymer', (0.07, 0.07, 0.22), (0, 0.02, 0.38)),
@@ -257,7 +257,7 @@ WEAPONS = [
     dict(
         id='shredder', category='heavy', name='Shredder', desc='Minigun. Spins up, then never stops. Slows you down.',
         price=1400, damage=16, rate=24, auto=True, mag=200, reload=3.5, spread=0.045, range=70,
-        spinup=0.9, move_mult=0.8, knockback=0.6, sound='nailgun', length=0.75,
+        spinup=0.9, move_mult=0.8, knockback=0.6, sound='smg', length=0.75,
         model=[
             ('dark', (0.15, 0.15, 0.22), (0, 0.0, 0.0)),
             ('steel', (0.03, 0.03, 0.45), (0, 0.04, 0.33), 'spin'),
@@ -293,7 +293,7 @@ WEAPONS = [
     dict(
         id='m1911', category='pistol', name='M1911', desc='Classic .45 pistol. Hard-hitting and reliable.',
         price=120, damage=40, rate=4, mag=8, reload=1.3, spread=0.006, range=85, knockback=2,
-        sound='pistol', length=0.22,
+        sound='heavy_pistol', length=0.22,
         model=[
             ('steel', (0.04, 0.05, 0.22), (0, 0.03, 0.09)),
             ('dark', (0.038, 0.035, 0.17), (0, -0.005, 0.07)),
@@ -308,7 +308,7 @@ WEAPONS = [
     dict(
         id='deagle', category='pistol', name='Desert Eagle', desc='Hand cannon. Enormous damage, heavy kick.',
         price=400, damage=110, rate=1.8, mag=7, reload=1.8, spread=0.006, range=90, knockback=4,
-        headshot=2.5, sound='scatter', length=0.27,
+        headshot=2.5, sound='heavy_pistol', length=0.27,
         model=[
             ('chrome', (0.05, 0.06, 0.28), (0, 0.035, 0.11)),
             ('chrome', (0.03, 0.02, 0.24), (0, 0.072, 0.12)),
@@ -322,7 +322,7 @@ WEAPONS = [
     dict(
         id='uzi', category='smg', name='Uzi', desc='Compact bullet hose. Not very accurate.',
         price=220, damage=15, rate=16, auto=True, mag=32, reload=1.6, spread=0.05, range=55,
-        knockback=0.5, sound='nailgun', length=0.42,
+        knockback=0.5, sound='smg', length=0.42,
         model=[
             ('dark', (0.06, 0.08, 0.3), (0, 0.02, 0.1)),
             ('steel', (0.025, 0.025, 0.06), (0, 0.01, 0.28)),
@@ -336,7 +336,7 @@ WEAPONS = [
     dict(
         id='mp5', category='smg', name='MP5', desc='Smooth, accurate submachine gun.',
         price=300, damage=18, rate=13, auto=True, mag=30, reload=1.7, spread=0.02, range=70,
-        knockback=0.7, sound='nailgun', length=0.55,
+        knockback=0.7, sound='smg', length=0.55,
         model=[
             ('dark', (0.055, 0.07, 0.3), (0, 0.02, 0.12)),
             ('polymer', (0.065, 0.06, 0.13), (0, 0.0, 0.3)),
@@ -373,7 +373,7 @@ WEAPONS = [
     dict(
         id='ak47', category='rifle', name='AK-47', desc='Hits hard and never jams. Kicks like a mule.',
         price=520, damage=40, rate=9.5, auto=True, mag=30, reload=2.2, spread=0.025, range=95,
-        knockback=1.6, sound='rifle', length=0.88,
+        knockback=1.6, sound='battle_rifle', length=0.88,
         model=[
             ('dark', (0.055, 0.08, 0.34), (0, 0.02, 0.1)),
             ('dark', (0.045, 0.02, 0.3), (0, 0.07, 0.1)),
@@ -411,7 +411,7 @@ WEAPONS = [
     dict(
         id='scarh', category='rifle', name='SCAR-H', desc='Battle rifle with big bullets. Punches through 2 enemies.',
         price=750, damage=58, rate=7, auto=True, mag=20, reload=2.3, spread=0.014, range=120,
-        pierce=2, knockback=2.5, sound='rifle', length=0.9,
+        pierce=2, knockback=2.5, sound='battle_rifle', length=0.9,
         model=[
             ('tan', (0.06, 0.09, 0.36), (0, 0.02, 0.12)),
             ('dark', (0.025, 0.03, 0.38), (0, 0.08, 0.15)),
@@ -429,7 +429,7 @@ WEAPONS = [
     dict(
         id='remington', category='shotgun', name='Remington 870', desc='Pump shotgun. Eight pellets, big stopping power.',
         price=260, damage=17, rate=1.2, mag=6, reload=2.4, pellets=8, spread=0.07, range=35,
-        knockback=3.5, sound='scatter', length=0.9,
+        knockback=3.5, sound='shotgun', length=0.9,
         model=[
             ('dark', (0.045, 0.045, 0.48), (0, 0.04, 0.28)),
             ('dark', (0.04, 0.035, 0.38), (0, 0.0, 0.24)),
@@ -463,7 +463,7 @@ WEAPONS = [
     dict(
         id='m249', category='heavy', name='M249 SAW', desc='Belt-fed machine gun. 100 rounds before you reload.',
         price=1100, damage=26, rate=13, auto=True, mag=100, reload=4.0, spread=0.035, range=90,
-        move_mult=0.85, knockback=1.2, sound='rifle', length=0.95,
+        move_mult=0.85, knockback=1.2, sound='battle_rifle', length=0.95,
         model=[
             ('dark', (0.08, 0.1, 0.34), (0, 0.02, 0.1)),
             ('dark', (0.03, 0.03, 0.28), (0, 0.03, 0.4)),
