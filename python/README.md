@@ -40,7 +40,7 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | N | start the next wave early |
 | M | mute |
 | F11 | fullscreen on/off |
-| Esc | pause (mouse sensitivity and volume are here) |
+| Esc | pause (mouse sensitivity, volume and field of view are here) |
 | F8 / F9 | turn / roll a downloaded 3D gun model that's facing the wrong way |
 
 Your best wave, best score and total kills are saved in a `.blockhold` folder in your
@@ -179,6 +179,10 @@ crown. Its skin is painted from those settings automatically.
 **Your own sounds:** put `.wav` or `.ogg` files in the `sounds/` folder, named after the
 effect (for example `shoot_pistol.wav`). `sounds/README.txt` lists every name.
 
+**Your own UI colours:** the menus use a flat design. Every colour is in the `PALETTE` section
+at the top of `blockhold/ui.py`, so changing a few hex codes restyles the whole game. The
+icons are drawn in code in `blockhold/textures.py` (look for `_icon_shapes`).
+
 **Your own block looks:** the pixel-art textures (blocks, gun materials and zombie skins)
 are drawn in code in `blockhold/textures.py`. Change the colours there, or add a new tile.
 
@@ -199,6 +203,6 @@ are drawn in code in `blockhold/textures.py`. Change the colours there, or add a
 | `blockhold/pickups.py` | coins and health drops |
 | `blockhold/effects.py` | particles, tracers, explosions, damage numbers |
 | `blockhold/sounds.py` | makes every sound effect with code on first launch |
-| `blockhold/ui.py` | HUD, menus and shop |
+| `blockhold/ui.py` | HUD, menus and shop (flat design; colours in the PALETTE section at the top) |
 | `blockhold/render.py` | the shader (fog) and block mesh helpers |
 | `blockhold/textures.py` | pixel-art textures drawn with Pillow |

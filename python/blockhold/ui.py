@@ -1,45 +1,230 @@
-"""HUD, main menu, pause screen, shop and game-over screen (Ursina UI)."""
+"""HUD, main menu, pause screen, shop and game-over screen.
+
+Flat design: off-white panels with thick dark outlines, tabs along the top, a
+header bar, label / value rows, teal progress bars and slate-blue buttons.
+Change the colours in the PALETTE section to restyle everything at once.
+"""
 import math
 import time as pytime
-from ursina import Button, Entity, Slider, Text, Vec2, camera, color as ucolor, destroy, window
+from ursina import Button, Entity, Text, camera, color as ucolor, destroy, held_keys, mouse, window
 from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
 from .data.weapons import CATEGORIES, WEAPONS
 from .render import col
-from .textures import scope_texture, vignette_texture
+from .textures import icon, scope_texture, vignette_texture
 
-YELLOW = '#ffe066'
-DARK = '#2c313c'
+# ── PALETTE ──────────────────────────────────────────────────────────────────
+PAPER = '#f5f4f2'       # panel background
+INK = '#12121c'         # outlines, active tabs, main text
+SLATE = '#404968'       # buttons
+SLATE_EDGE = '#1e2537'  # button outlines
+NAVY = '#1f2636'        # empty part of bars, small square buttons
+TEAL = '#1197b0'        # bar fill, highlights
+LINE = '#414a67'        # divider lines
+MUTED = '#6b7189'       # secondary text
+RED = '#d64541'
+AMBER = '#d9912b'
+GREEN = '#2e9e6a'
+EDGE = 0.008            # thickness of the outlines
 
-
-def quad(parent, color, scale, position=(0, 0), origin=(0, 0), z=0, **kw):
-    return Entity(parent=parent, model='quad', color=col(color) if isinstance(color, str) else color,
-                  scale=scale, position=position, origin=origin, z=z, **kw)
-
-
-def label(parent, text='', position=(0, 0), scale=1.0, color='#ffffff', origin=(-0.5, 0.5), **kw):
-    return Text(text, parent=parent, position=position, scale=scale, color=col(color), origin=origin, **kw)
-
-
-def button(parent, text, position, scale, on_click, color=DARK, text_scale=1.0):
-    b = Button(parent=parent, text=text, position=position, scale=scale, color=col(color),
-               highlight_color=col(color).tint(0.15), pressed_color=col(color).tint(-0.15), on_click=on_click)
-    if b.text_entity:
-        b.text_entity.scale *= text_scale
-    return b
-
-
-class Bar:
-    """A left-to-right fill bar."""
-    def __init__(self, parent, position, size, fill, back='#111111'):
-        self.back = quad(parent, back, size, position, origin=(-0.5, 0), z=0.01)
-        self.fill = quad(parent, fill, size, position, origin=(-0.5, 0))
-        self.size = size
-
-    def set(self, frac):
-        self.fill.scale_x = self.size[0] * max(0.0, min(1.0, frac))
+# window layout (screen height = 1)
+WIN_W, WIN_H, WIN_TOP = 1.36, 0.78, 0.33
+HEADER_H = 0.095
+BTN_H = 0.065
 
 
+def C(c, a=1.0):
+    return col(c, a) if isinstance(c, str) else c
+
+
+# ── building blocks ──────────────────────────────────────────────────────────
+#  Everything is placed by its TOP-LEFT corner, like in a drawing program.
+
+def box(parent, x, y, w, h, color, z=0.0, **kw):
+    return Entity(parent=parent, model='quad', color=C(color), origin=(-0.5, 0.5),
+                  position=(x, y, z), scale=(w, h), **kw)
+
+
+def frame(parent, x, y, w, h, fill=PAPER, edge=INK, t=EDGE, z=0.0):
+    """A filled box with a thick outline. Returns the inner fill."""
+    box(parent, x, y, w, h, edge, z=z + 0.002)
+    return box(parent, x + t, y - t, w - 2 * t, h - 2 * t, fill, z=z + 0.001)
+
+
+def text(parent, s, x, y, size=1.0, color=INK, origin=(-0.5, 0.5), z=-0.01, **kw):
+    if 'wordwrap' in kw and not s:
+        s = ' '        # Ursina can't word-wrap an empty string
+    return Text(s, parent=parent, position=(x, y, z), scale=size, color=C(color), origin=origin, **kw)
+
+
+def glyph(parent, name, x, y, size, color=PAPER, z=-0.012):
+    """An icon centred on (x, y)."""
+    return Entity(parent=parent, model='quad', texture=icon(name), color=C(color), position=(x, y, z), scale=size)
+
+
+def hline(parent, x, y, w, color=LINE, t=0.004):
+    return box(parent, x, y, w, t, color)
+
+
+def clamp01(v):
+    return max(0.0, min(1.0, v))
+
+
+class FlatButton:
+    """A solid button with an outline. (x, y) is the top-left corner."""
+
+    def __init__(self, parent, label, x, y, w, h, on_click, fill=SLATE, edge=SLATE_EDGE, fg=PAPER,
+                 size=1.15, icon_name=None, align='center', right='', z=-0.02, hover=0.12):
+        t = EDGE * 0.8
+        self.parts = [box(parent, x, y, w, h, edge, z=z + 0.002)]
+        f = C(fill)
+        self.button = Button(parent=parent, model='quad', text='', color=f, position=(x + w / 2, y - h / 2, z),
+                             scale=(w - 2 * t, h - 2 * t), highlight_color=f.tint(hover), pressed_color=f.tint(-0.1),
+                             on_click=on_click)
+        self.parts.append(self.button)
+        cy = y - h / 2
+        if icon_name and not label:
+            self.parts.append(glyph(parent, icon_name, x + w / 2, cy, h * 0.55, fg, z=z - 0.01))
+        elif icon_name:
+            self.parts.append(glyph(parent, icon_name, x + h * 0.55, cy, h * 0.45, fg, z=z - 0.01))
+            self.parts.append(text(parent, label, x + h * 0.95, cy, size, fg, origin=(-0.5, 0), z=z - 0.01))
+        elif align == 'left':
+            self.parts.append(text(parent, label, x + 0.02, cy, size, fg, origin=(-0.5, 0), z=z - 0.01))
+        else:
+            self.parts.append(text(parent, label, x + w / 2, cy, size, fg, origin=(0, 0), z=z - 0.01))
+        if right:
+            self.parts.append(text(parent, right, x + w - 0.02, cy, size * 0.9, fg, origin=(0.5, 0), z=z - 0.01))
+
+    def set_enabled(self, on):
+        for p in self.parts:
+            p.enabled = on
+
+
+def tab_strip(parent, x, y, items, active, on_pick, w_each=0.2, h=0.05):
+    """The row of tabs sitting on top of a window (active tab is dark)."""
+    n = len(items)
+    box(parent, x, y, n * w_each + (n + 1) * EDGE, h + 2 * EDGE, INK, z=0.004)
+    for i, (key, label) in enumerate(items):
+        on = key == active
+        FlatButton(parent, label, x + EDGE + i * (w_each + EDGE), y - EDGE, w_each, h, lambda k=key: on_pick(k),
+                   fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=1.05,
+                   hover=0.15 if on else -0.06, z=-0.005)
+
+
+def bar(parent, x, y, w, h, frac, fill=TEAL, back=NAVY):
+    box(parent, x, y, w, h, back, z=0.001)
+    return box(parent, x, y, w * clamp01(frac), h, fill)
+
+
+def stat_row(parent, x, y, w, label, frac, value, fill=TEAL):
+    """Label on top, a bar underneath and the value to the right (the mock-up's right column)."""
+    text(parent, label, x, y, 0.95, INK)
+    bar(parent, x, y - 0.032, w, 0.02, frac, fill)
+    text(parent, value, x + w + 0.018, y - 0.042, 1.05, INK, origin=(-0.5, 0))
+
+
+def pair(parent, x, y, label, value, gap=0.3, size=1.1):
+    """Label / value row (the mock-up's left column)."""
+    text(parent, label, x, y, size, INK)
+    text(parent, str(value), x + gap, y + 0.003, size * 1.15, INK)
+
+
+class FlatSlider(Entity):
+    """A teal bar you can click or drag to set a value."""
+
+    def __init__(self, parent, x, y, w, label, lo, hi, value, fmt, on_change):
+        super().__init__(parent=parent)
+        self.x0, self.w, self.lo, self.hi, self.fmt, self.on_change = x, w, lo, hi, fmt, on_change
+        self.value = value
+        self.dragging = False
+        text(self, label, x, y, 0.95, INK)
+        h = 0.022
+        self.track = Button(parent=self, model='quad', text='', color=C(NAVY), highlight_color=C(NAVY).tint(0.1),
+                            pressed_color=C(NAVY), position=(x + w / 2, y - 0.032 - h / 2, -0.005), scale=(w, h * 1.8))
+        self.fill = box(self, x, y - 0.032, w, h, TEAL, z=-0.01)
+        self.knob = box(self, x, y - 0.026, 0.008, h + 0.012, INK, z=-0.012)
+        self.label = text(self, '', x + w + 0.018, y - 0.043, 1.05, INK, origin=(-0.5, 0))
+        self.refresh()
+
+    def refresh(self):
+        f = clamp01((self.value - self.lo) / (self.hi - self.lo))
+        self.fill.scale_x = max(0.0001, self.w * f)
+        self.knob.x = self.x0 + self.w * f - 0.004
+        self.label.text = self.fmt(self.value)
+
+    def update(self):
+        if self.track.hovered and held_keys['left mouse']:
+            self.dragging = True
+        if not held_keys['left mouse']:
+            self.dragging = False
+        if self.dragging:
+            f = clamp01((mouse.x - self.x0) / self.w)
+            v = round(self.lo + (self.hi - self.lo) * f)
+            if v != self.value:
+                self.value = v
+                self.refresh()
+                self.on_change(v)
+
+
+class Window:
+    """The framed panel from the mock-up: optional tabs on top, a header with a
+    big title on the left and small text on the right, then a body."""
+
+    def __init__(self, parent, title='', right='', w=WIN_W, h=WIN_H, top=WIN_TOP):
+        self.x, self.y, self.w, self.h = -w / 2, top, w, h
+        self.root = Entity(parent=parent)
+        box(self.root, self.x, self.y, w, h, INK, z=0.01)
+        box(self.root, self.x + EDGE * 1.5, self.y - EDGE * 1.5, w - EDGE * 3, h - EDGE * 3, PAPER, z=0.009)
+        box(self.root, self.x, self.y - HEADER_H, w, EDGE * 1.5, INK, z=0.008)
+        self.title = text(self.root, title, self.x + 0.04, self.y - 0.047, 2.6, INK, origin=(-0.5, 0))
+        self.right = text(self.root, right, self.x + w - 0.045, self.y - 0.047, 1.5, INK, origin=(0.5, 0))
+        self.tabs = Entity(parent=self.root)
+        self.body = Entity(parent=self.root)
+        # handy layout numbers
+        self.top = self.y - HEADER_H - 0.04            # first line of the body
+        self.left = self.x + 0.06                      # left column
+        self.right_col = self.x + w * 0.53             # right column
+        self.btn_y = self.y - h + 0.035 + BTN_H        # bottom row of buttons
+
+    def set_tabs(self, items, active, on_pick):
+        for c in list(self.tabs.children):
+            destroy(c)
+        tab_strip(self.tabs, self.x + self.w * 0.075, self.y + 0.05 + 2 * EDGE, items, active, on_pick)
+
+    def clear(self):
+        for c in list(self.body.children):
+            destroy(c)
+
+    def bottom_left(self, label, on_click, icon_name, on_icon):
+        FlatButton(self.body, label, self.left, self.btn_y, 0.26, BTN_H, on_click)
+        FlatButton(self.body, '', self.left + 0.272, self.btn_y, BTN_H * 1.2, BTN_H, on_icon, fill=NAVY,
+                   edge=LINE, icon_name=icon_name)
+
+    def bottom_right(self, label, on_click, icon_name=None, on_icon=None, fill=SLATE, w=0.26):
+        x = self.x + self.w - 0.06 - w
+        FlatButton(self.body, label, x, self.btn_y, w, BTN_H, on_click, fill=fill)
+        if icon_name:
+            FlatButton(self.body, '', x - 0.012 - BTN_H * 1.2, self.btn_y, BTN_H * 1.2, BTN_H, on_icon, fill=NAVY,
+                       edge=LINE, icon_name=icon_name)
+
+
+def backdrop(parent, alpha):
+    return box(parent, -2, 0.5, 4, 1, C(INK, alpha), z=0.05)
+
+
+def milestones(save):
+    """Long-term goals shown as progress bars."""
+    return [
+        ('Reach wave 10', save['best_wave'] / 10, f"{min(save['best_wave'], 10)}/10"),
+        ('Reach wave 25', save['best_wave'] / 25, f"{min(save['best_wave'], 25)}/25"),
+        ('Score 10,000 in one game', save['best_score'] / 10000, f"{round(clamp01(save['best_score'] / 10000) * 100)}%"),
+        ('Defeat 1,000 zombies', save['total_kills'] / 1000, f"{round(clamp01(save['total_kills'] / 1000) * 100)}%"),
+        ('Defeat 10,000 zombies', save['total_kills'] / 10000, f"{round(clamp01(save['total_kills'] / 10000) * 100)}%"),
+        ('Play 25 games', save['games'] / 25, f"{min(save['games'], 25)}/25"),
+    ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 class UI:
     def __init__(self, game):
         self.game = game
@@ -48,7 +233,10 @@ class UI:
         self.hurt_t = 0
         self.feed = []
         self._cache = {}
-        self.shop_items = []
+        self.menu_tab = 'play'
+        self.shop_tab = 'weapons'
+        self.shop_sel = None
+        self._update_status = None
         self.build_hud()
         self.build_menu()
         self.build_pause()
@@ -68,46 +256,79 @@ class UI:
         h = self.hud = Entity(parent=camera.ui, enabled=False)
         self.scope = Entity(parent=h, enabled=False)
         Entity(parent=self.scope, model='quad', texture=scope_texture(), scale=(1, 1), z=0.9)
-        quad(self.scope, '#000000', (a, 1), (-0.499, 0), origin=(0.5, 0), z=0.9)
-        quad(self.scope, '#000000', (a, 1), (0.499, 0), origin=(-0.5, 0), z=0.9)
+        box(self.scope, -0.499 - a, 0.5, a, 1, '#000000', z=0.9)
+        box(self.scope, 0.499, 0.5, a, 1, '#000000', z=0.9)
         self.vignette = Entity(parent=h, model='quad', texture=vignette_texture(), scale=(a, 1), z=1, color=ucolor.Color(1, 1, 1, 0))
-        self.adrenaline = Entity(parent=h, model='quad', texture=vignette_texture((255, 60, 110)), scale=(a, 1), z=1, color=ucolor.Color(1, 1, 1, 0))
-        # crosshair + hitmarker
-        quad(h, '#ffffff', (0.022, 0.0028))
-        quad(h, '#ffffff', (0.0028, 0.022))
+        self.adrenaline = Entity(parent=h, model='quad', texture=vignette_texture((255, 60, 110)), scale=(a, 1), z=1,
+                                 color=ucolor.Color(1, 1, 1, 0))
+
+        # crosshair: white with a dark outline
+        for sx, sy in ((0.026, 0.0065), (0.0065, 0.026)):
+            box(h, -sx / 2, sy / 2, sx, sy, INK, z=0.002)
+        for sx, sy in ((0.022, 0.0028), (0.0028, 0.022)):
+            box(h, -sx / 2, sy / 2, sx, sy, PAPER)
         self.hit = Entity(parent=h, enabled=False)
-        quad(self.hit, '#ffffff', (0.04, 0.003), rotation_z=45)
-        quad(self.hit, '#ffffff', (0.04, 0.003), rotation_z=-45)
-        self.reload_bar = Bar(h, (-0.04, -0.045), (0.08, 0.006), '#ffffff', '#000000')
+        for r in (45, -45):
+            Entity(parent=self.hit, model='quad', color=C(PAPER), scale=(0.042, 0.004), rotation_z=r)
+        self.reload_back = box(h, -0.04, -0.04, 0.08, 0.008, INK, z=0.001)
+        self.reload_fill = box(h, -0.04, -0.04, 0.08, 0.008, TEAL)
 
-        label(h, 'WAVE', (L + 0.03, T - 0.03), 0.9, '#cccccc')
-        self.wave = label(h, '0', (L + 0.03, T - 0.055), 3)
-        self.remaining = label(h, '', (L + 0.03, T - 0.135), 1.1)
+        # top left: wave
+        box(h, L + 0.03, T - 0.03, 0.12, 0.095, INK, z=0.003)
+        text(h, 'WAVE', L + 0.09, T - 0.047, 0.85, PAPER, origin=(0, 0))
+        self.wave = text(h, '0', L + 0.09, T - 0.088, 2.6, PAPER, origin=(0, 0))
+        frame(h, L + 0.15 - EDGE, T - 0.03, 0.3, 0.095, PAPER, INK)
+        self.remaining = text(h, '', L + 0.17, T - 0.0775, 1.15, INK, origin=(-0.5, 0))
 
-        self.coins = label(h, '', (R - 0.03, T - 0.03), 2.2, YELLOW, origin=(0.5, 0.5))
-        self.score = label(h, '', (R - 0.03, T - 0.09), 1.0, '#dddddd', origin=(0.5, 0.5))
-        self.feed_text = label(h, '', (R - 0.03, T - 0.13), 0.9, '#dddddd', origin=(0.5, 0.5))
+        # top right: coins, score, kill feed
+        frame(h, R - 0.33, T - 0.03, 0.3, 0.095, PAPER, INK)
+        glyph(h, 'coin', R - 0.29, T - 0.0775, 0.045, AMBER)
+        self.coins = text(h, '', R - 0.05, T - 0.066, 2.0, INK, origin=(0.5, 0))
+        self.score = text(h, '', R - 0.05, T - 0.103, 0.85, MUTED, origin=(0.5, 0))
+        self.feed_box = box(h, R - 0.33, T - 0.135, 0.3, 0.1, INK, z=0.003)
+        self.feed_text = text(h, '', R - 0.045, T - 0.145, 0.85, PAPER, origin=(0.5, 0.5))
 
-        self.banner_text = label(h, '', (0, 0.24), 3.2, origin=(0, 0))
-        self.banner_sub = label(h, '', (0, 0.175), 1.2, '#eeeeee', origin=(0, 0))
+        # banner (wave messages)
+        self.banner_root = Entity(parent=h, enabled=False)
+        bw, bh, by = 0.92, 0.13, 0.27
+        frame(self.banner_root, -bw / 2, by, bw, bh, PAPER, INK)
+        self.banner_accent = box(self.banner_root, -bw / 2, by, bw, 0.016, TEAL, z=-0.001)
+        self.banner_text = text(self.banner_root, '', 0, by - 0.058, 2.6, INK, origin=(0, 0))
+        self.banner_sub = text(self.banner_root, '', 0, by - 0.101, 1.0, MUTED, origin=(0, 0))
 
+        # boss health
         self.boss = Entity(parent=h, enabled=False)
-        self.boss_name = label(self.boss, '', (0, T - 0.05), 1.2, '#ff8c1a', origin=(0, 0))
-        self.boss_bar = Bar(self.boss, (-0.35, T - 0.085), (0.7, 0.022), '#a52fc9')
+        box(self.boss, -0.36, T - 0.14, 0.72, 0.075, INK, z=0.003)
+        self.boss_name = text(self.boss, '', 0, T - 0.158, 1.0, PAPER, origin=(0, 0))
+        box(self.boss, -0.345, T - 0.178, 0.69, 0.024, NAVY, z=0.001)
+        self.boss_fill = box(self.boss, -0.345, T - 0.178, 0.69, 0.024, RED)
 
-        self.hint = label(h, 'B = shop   ·   N = start the next wave now', (0, B + 0.17), 1.0, '#ffffff', origin=(0, 0))
+        # between-wave hint
+        self.hint = Entity(parent=h)
+        box(self.hint, -0.25, B + 0.205, 0.5, 0.045, INK, z=0.003)
+        text(self.hint, 'B  =  shop      N  =  start the next wave', 0, B + 0.1825, 0.95, PAPER, origin=(0, 0))
 
-        self.hp_bar = Bar(h, (L + 0.03, B + 0.05), (0.42, 0.035), '#d93a3a')
-        self.hp_text = label(h, '', (L + 0.03 + 0.21, B + 0.05), 1.0, origin=(0, 0), z=-0.1)
+        # bottom left: health
+        box(h, L + 0.03, B + 0.1, 0.46, 0.07, INK, z=0.003)
+        glyph(h, 'heart', L + 0.065, B + 0.065, 0.032, RED)
+        box(h, L + 0.1, B + 0.088, 0.375, 0.046, NAVY, z=0.001)
+        self.hp_fill = box(h, L + 0.1, B + 0.088, 0.375, 0.046, RED)
+        self.hp_text = text(h, '', L + 0.465, B + 0.065, 1.05, PAPER, origin=(0.5, 0), z=-0.02)
 
-        self.ability_back = quad(h, '#111111', (0.075, 0.075), (0, B + 0.06), z=0.01)
-        self.ability_fill = quad(h, '#ffffff', (0.075, 0.075), (0, B + 0.06 - 0.0375), origin=(0, -0.5))
-        self.ability_cd = label(h, 'Q', (0, B + 0.06), 1.8, origin=(0, 0), z=-0.1)
-        self.ability_name = label(h, '', (0, B + 0.115), 0.85, origin=(0, 0))
+        # bottom middle: ability
+        self.ability_name = text(h, '', 0, B + 0.142, 0.85, PAPER, origin=(0, 0), z=-0.02)
+        self.ability_name_box = box(h, -0.07, B + 0.158, 0.14, 0.033, INK, z=0.003)
+        box(h, -0.045, B + 0.12, 0.09, 0.09, INK, z=0.003)
+        box(h, -0.045 + EDGE, B + 0.12 - EDGE, 0.09 - 2 * EDGE, 0.09 - 2 * EDGE, NAVY, z=0.002)
+        self.ability_fill = Entity(parent=h, model='quad', origin=(0, -0.5), position=(0, B + 0.03 + EDGE, 0.001),
+                                   scale=(0.09 - 2 * EDGE, 0.09 - 2 * EDGE), color=C(TEAL))
+        self.ability_cd = text(h, 'Q', 0, B + 0.075, 1.7, PAPER, origin=(0, 0), z=-0.02)
 
-        self.slots = label(h, '', (R - 0.03, B + 0.15), 1.0, '#bbbbbb', origin=(0.5, 0.5))
-        self.weapon_name = label(h, '', (R - 0.03, B + 0.115), 1.2, origin=(0.5, 0.5))
-        self.ammo = label(h, '', (R - 0.03, B + 0.085), 2.6, origin=(0.5, 0.5))
+        # bottom right: weapon
+        frame(h, R - 0.38, B + 0.155, 0.35, 0.125, PAPER, INK)
+        self.weapon_name = text(h, '', R - 0.36, B + 0.13, 1.05, INK, origin=(-0.5, 0))
+        self.ammo = text(h, '', R - 0.05, B + 0.08, 2.4, INK, origin=(0.5, 0))
+        self.slots = text(h, '', R - 0.36, B + 0.06, 0.8, MUTED, origin=(-0.5, 0))
 
     def update_weapon(self):
         w = getattr(self.game, 'weapons', None)
@@ -115,40 +336,41 @@ class UI:
             return
         d, st = w.d, w.state[w.d['id']]
         lvl = w.total_level(d)
-        self.set_text(self.weapon_name, d['name'] + (f'  +{lvl}' if lvl else ''))
+        self.set_text(self.weapon_name, d['name'].upper() + (f'  +{lvl}' if lvl else ''))
         if d.get('melee'):
             self.set_text(self.ammo, '--')
-            self.ammo.color = ucolor.white
+            self.ammo.color = C(INK)
         else:
             mag = w.stat(d, 'mag')
-            self.set_text(self.ammo, f"{st['ammo']} / {mag}")
-            self.ammo.color = col('#ff5a5a') if st['ammo'] <= math.ceil(mag * 0.25) else ucolor.white
-        self.set_text(self.slots, '  '.join(f'[{i + 1}]' if o is w.held else f' {i + 1} ' for i, o in enumerate(w.owned[:9])))
+            self.set_text(self.ammo, f"{st['ammo']}/{mag}")
+            self.ammo.color = C(RED) if st['ammo'] <= math.ceil(mag * 0.25) else C(INK)
+        self.set_text(self.slots, '  '.join(f'[{i + 1}]' if o is w.held else f'{i + 1}' for i, o in enumerate(w.owned[:9])))
 
-    def banner(self, text, color='#ffffff', duration=2.5, sub=''):
-        self.banner_text.text = text
-        self.banner_text.color = col(color)
+    def banner(self, title, color=TEAL, duration=2.5, sub=''):
+        self.banner_text.text = title
         self.banner_sub.text = sub
+        self.banner_accent.color = C(color)
+        self.banner_root.enabled = True
         self.banner_t = duration
 
     def hitmarker(self, head):
         for c in self.hit.children:
-            c.color = col('#ff4040') if head else ucolor.white
+            c.color = C(RED) if head else C(PAPER)
         self.hit.enabled = True
         self.hit_t = 0.12
 
     def hurt(self, frac):
         self.hurt_t = min(1, self.hurt_t + 0.35 + frac * 2)
 
-    def kill_feed(self, text):
-        self.feed.insert(0, (text, pytime.time()))
+    def kill_feed(self, line):
+        self.feed.insert(0, (line, pytime.time()))
         del self.feed[5:]
 
     def update(self, dt):
         g, p = self.game, self.game.player
-        self.hp_bar.set(p.health / p.max_health)
+        self.hp_fill.scale_x = max(0.0001, 0.375 * clamp01(p.health / p.max_health))
         self.set_text(self.hp_text, f'{math.ceil(p.health)} / {p.max_health}')
-        self.set_text(self.coins, f'{g.coins} coins')
+        self.set_text(self.coins, str(g.coins))
         self.set_text(self.score, f'SCORE {g.score}')
         self.set_text(self.wave, str(g.wave_number))
         if g.phase == 'wave':
@@ -160,30 +382,32 @@ class UI:
         now = pytime.time()
         self.feed = [f for f in self.feed if now - f[1] < 3]
         self.set_text(self.feed_text, '\n'.join(f[0] for f in self.feed))
+        self.feed_box.enabled = bool(self.feed)
+        self.feed_box.scale_y = 0.02 + 0.0245 * len(self.feed)
 
         a = g.ability
         cd = max(0, p.ability_cd)
-        self.ability_fill.color = col(a['color'], 0.85 if cd <= 0 else 0.4)
-        self.ability_fill.scale_y = 0.075 * (1 - cd / a['cooldown'])
+        self.ability_fill.color = C(a['color'], 1 if cd <= 0 else 0.45)
+        self.ability_fill.scale_y = max(0.0001, (0.09 - 2 * EDGE) * (1 - cd / a['cooldown']))
         self.set_text(self.ability_cd, str(math.ceil(cd)) if cd > 0 else 'Q')
-        self.set_text(self.ability_name, a['name'])
+        self.set_text(self.ability_name, a['name'].upper())
 
         w = g.weapons
-        self.reload_bar.back.enabled = self.reload_bar.fill.enabled = w.reloading > 0
-        if w.reloading > 0:
-            self.reload_bar.set(1 - w.reloading / w.reload_total)
+        reloading = w.reloading > 0
+        self.reload_back.enabled = self.reload_fill.enabled = reloading
+        if reloading:
+            self.reload_fill.scale_x = max(0.0001, 0.08 * (1 - w.reloading / w.reload_total))
 
         boss = next((e for e in g.enemies.alive() if e.d.get('boss')), None)
         self.boss.enabled = boss is not None
         if boss:
-            self.set_text(self.boss_name, boss.d['name'])
-            self.boss_bar.set(boss.hp / boss.max_hp)
+            self.set_text(self.boss_name, boss.d['name'].upper())
+            self.boss_fill.scale_x = max(0.0001, 0.69 * boss.hp / boss.max_hp)
 
         if self.banner_t > 0:
             self.banner_t -= dt
-            fade = min(1, self.banner_t * 3)
-            self.banner_text.alpha = fade
-            self.banner_sub.alpha = fade
+            if self.banner_t <= 0:
+                self.banner_root.enabled = False
         if self.hit_t > 0:
             self.hit_t -= dt
             if self.hit_t <= 0:
@@ -194,67 +418,149 @@ class UI:
         self.adrenaline.alpha = 0.8 if p.buffs.get('adrenaline', 0) > 0 else 0
 
     # ── main menu ────────────────────────────────────────────────────────────
+    MENU_TABS = [('play', 'PLAY'), ('controls', 'CONTROLS'), ('settings', 'SETTINGS'), ('about', 'ABOUT')]
+
     def build_menu(self):
-        m = self.menu = Entity(parent=camera.ui, z=-1)
-        quad(m, ucolor.Color(0.04, 0.05, 0.08, 0.55), (4, 1), z=1)
-        label(m, 'BLOCK', (-0.02, 0.38), 7, '#8fd14f', origin=(0.5, 0))
-        label(m, 'HOLD', (-0.02, 0.38), 7, '#c94a3a', origin=(-0.5, 0))
-        label(m, 'Hold the arena. Survive the waves. Spend your coins.', (0, 0.29), 1.1, '#cccccc', origin=(0, 0))
-        label(m, 'CHOOSE YOUR ABILITY', (0, 0.22), 1.1, '#aaaaaa', origin=(0, 0))
-        self.cards = Entity(parent=m)
-        button(m, 'PLAY', (0, -0.12), (0.32, 0.085), lambda: self.game.start_game(), '#4f8a2b', 1.6)
-        self.records = label(m, '', (0, -0.2), 1.0, '#aaaaaa', origin=(0, 0))
-        label(m, 'WASD move · left-click shoot · right-click aim · Space jump · Shift sprint · 1-9 / wheel switch weapon\n'
-                 'R reload · Q ability · B shop (between waves) · N start wave · M mute · F11 fullscreen · Esc pause',
-              (0, -0.3), 0.85, '#bbbbbb', origin=(0, 0))
-        button(m, 'Quit', (0, -0.41), (0.14, 0.05), lambda: self.game.quit(), DARK, 0.9)
-        # version + updates (bottom left)
-        a = window.aspect_ratio
-        self.version_text = label(m, '', (-a / 2 + 0.03, -0.2), 0.8, '#aaaaaa')
-        self.update_button = button(m, 'UPDATE NOW', (-a / 2 + 0.15, -0.44), (0.24, 0.05),
-                                    lambda: self.game.install_update(), '#2f7fbf', 0.9)
-        self.update_button.enabled = False
-        self.credits_text = label(m, '', (a / 2 - 0.03, -0.44), 0.7, '#888888', origin=(0.5, 0))
+        self.menu = Entity(parent=camera.ui, z=-1)
+        backdrop(self.menu, 0.35)
+        self.menu_win = Window(self.menu, 'BLOCKHOLD')
+        self.refresh_menu()
+
+    def set_menu_tab(self, tab):
+        self.menu_tab = tab
         self.refresh_menu()
 
     def refresh_menu(self):
-        for c in list(self.cards.children):
-            destroy(c)
-        g = self.game
-        n = len(ABILITIES)
-        for i, ab in enumerate(ABILITIES):
-            x = (i - (n - 1) / 2) * 0.36
-            selected = g.ability_id == ab['id']
-            b = button(self.cards, '', (x, 0.07), (0.33, 0.24), lambda a=ab: self.pick_ability(a['id']),
-                       '#3c4555' if selected else DARK)
-            if selected:
-                quad(self.cards, ab['color'], (0.34, 0.25), (x, 0.07), z=0.02)
-            label(self.cards, ab['name'], (x - 0.15, 0.175), 1.3, ab['color'], z=-0.1)
-            label(self.cards, ab['desc'], (x - 0.15, 0.13), 0.85, '#dddddd', wordwrap=30, z=-0.1)
-            label(self.cards, f"Cooldown {ab['cooldown']}s", (x - 0.15, -0.025), 0.8, '#999999', z=-0.1)
+        win, g = self.menu_win, self.game
+        win.set_tabs(self.MENU_TABS, self.menu_tab, self.set_menu_tab)
+        win.clear()
+        getattr(self, f'menu_{self.menu_tab}')(win, g)
+        self.update_menu(force=True)
+
+    def menu_play(self, win, g):
+        b, y = win.body, win.top
+        text(b, 'CHOOSE YOUR ABILITY', win.left, y, 0.85, MUTED)
+        y -= 0.035
+        for ab in ABILITIES:
+            on = g.ability_id == ab['id']
+            FlatButton(b, ab['name'].upper(), win.left, y, 0.54, 0.052, lambda a=ab: self.pick_ability(a['id']),
+                       fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=1.05, align='left',
+                       right=f"{ab['cooldown']}s", hover=0.15 if on else -0.06)
+            y -= 0.062
+        text(b, g.ability['desc'], win.left, y - 0.005, 0.85, MUTED, wordwrap=62)
+        y -= 0.085
+        hline(b, win.left, y, 0.54)
+        s = g.save
+        y -= 0.03
+        pair(b, win.left, y, 'Best wave', s['best_wave'], 0.15, 0.95)
+        pair(b, win.left + 0.28, y, 'Best score', s['best_score'], 0.16, 0.95)
+        pair(b, win.left, y - 0.05, 'Total kills', s['total_kills'], 0.15, 0.95)
+        pair(b, win.left + 0.28, y - 0.05, 'Games', s['games'], 0.16, 0.95)
+
+        x, y = win.right_col + 0.03, win.top
+        text(b, 'MILESTONES', x, y, 0.85, MUTED)
+        y -= 0.04
+        for label, frac, value in milestones(s):
+            stat_row(b, x, y, 0.38, label, frac, value, GREEN if frac >= 1 else TEAL)
+            y -= 0.072
+        win.bottom_left('QUIT', g.quit, 'gear', lambda: self.set_menu_tab('settings'))
+        win.bottom_right('PLAY', g.start_game, 'keyboard', lambda: self.set_menu_tab('controls'))
+
+    CONTROLS = [
+        [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
+         ('Jump', 'Space'), ('Sprint', 'Shift'), ('Reload', 'R')],
+        [('Ability', 'Q'), ('Switch weapon', '1-9 / wheel'), ('Shop', 'B'), ('Next wave', 'N'),
+         ('Pause', 'Esc'), ('Mute', 'M'), ('Fullscreen', 'F11'), ('Turn 3D model', 'F8 / F9')],
+    ]
+
+    def menu_controls(self, win, g):
+        b = win.body
+        for col_i, rows in enumerate(self.CONTROLS):
+            x = win.left if col_i == 0 else win.right_col + 0.03
+            y = win.top
+            for i, (action, key) in enumerate(rows):
+                if i == 4:
+                    hline(b, x, y + 0.012, 0.5)
+                    y -= 0.022
+                text(b, action, x, y, 1.05, INK)
+                text(b, key, x + 0.25, y + 0.002, 1.15, TEAL)
+                y -= 0.055
+        win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
+        win.bottom_right('PLAY', g.start_game)
+
+    def menu_settings(self, win, g):
+        b = win.body
+        self.settings_rows(b, win.right_col + 0.03, win.top, g)
+        x, y = win.left, win.top
+        text(b, 'OPTIONS', x, y, 0.85, MUTED)
+        y -= 0.04
+        for label, on, toggle in (('Fullscreen', window.fullscreen, g.toggle_fullscreen),
+                                  ('Check for updates on start', g.auto_update, g.toggle_auto_update),
+                                  ('Sound', not g.sounds.muted, g.toggle_mute)):
+            text(b, label, x, y - 0.012, 1.05, INK)
+            FlatButton(b, 'ON' if on else 'OFF', x + 0.42, y, 0.12, 0.045,
+                       lambda t=toggle: (t(), self.refresh_menu()), fill=TEAL if on else NAVY,
+                       edge=INK, size=0.95)
+            y -= 0.07
+        hline(b, x, y + 0.01, 0.54)
+        text(b, 'Settings and records are saved in the .blockhold folder in your home folder.',
+             x, y - 0.02, 0.8, MUTED, wordwrap=62)
+        win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
+        win.bottom_right('PLAY', g.start_game)
+
+    def settings_rows(self, parent, x, y, g):
+        text(parent, 'SETTINGS', x, y, 0.85, MUTED)
+        y -= 0.045
+        FlatSlider(parent, x, y, 0.38, 'Mouse sensitivity', 10, 120, round(g.sensitivity), lambda v: f'{v}',
+                   g.set_sensitivity)
+        FlatSlider(parent, x, y - 0.085, 0.38, 'Volume', 0, 100, round(g.sounds.volume * 100), lambda v: f'{v}%',
+                   lambda v: g.set_volume(v / 100))
+        FlatSlider(parent, x, y - 0.17, 0.38, 'Field of view', 70, 110, round(g.fov), lambda v: f'{v}°', g.set_fov)
+
+    def menu_about(self, win, g):
+        b, u = win.body, g.updater
+        x, y = win.left, win.top
+        text(b, 'VERSION', x, y, 0.85, MUTED)
+        pair(b, x, y - 0.045, 'Installed', f'v{u.local}', 0.25, 1.05)
+        pair(b, x, y - 0.095, 'Newest on GitHub', f'v{u.remote}' if u.remote else '?', 0.25, 1.05)
+        self.about_status = text(b, '', x, y - 0.15, 0.95, TEAL, wordwrap=60)
+        if u.status == 'available':
+            notes = '\n'.join('- ' + (n if len(n) <= 60 else n[:58] + '...') for n in u.notes[:5])
+            text(b, notes, x, y - 0.2, 0.8, INK)
+            FlatButton(b, 'UPDATE NOW', x, win.btn_y + BTN_H + 0.03, 0.3, 0.055, g.install_update,
+                       fill=TEAL, edge=INK, icon_name='download', size=1.0)
+        xr, y = win.right_col + 0.03, win.top
+        text(b, '3D MODEL CREDITS', xr, y, 0.85, MUTED)
         from .custom_models import credits
         lines = credits()
-        self.credits_text.text = ('3D models: ' + ';  '.join(lines)) if lines else ''
-        s = g.save
-        self.records.text = (f"Best wave {s['best_wave']}   ·   Best score {s['best_score']}   ·   "
-                             f"Total kills {s['total_kills']}   ·   Games {s['games']}")
+        text(b, '\n'.join(lines) if lines else 'No downloaded models yet.\nGet the recommended pack with:\n'
+             'python tools/sketchfab_guns.py pack', xr, y - 0.04, 0.85, INK, wordwrap=55)
+        hline(b, xr, y - 0.3, 0.5)
+        text(b, 'Made with Python and the Ursina engine.\nAll sounds and textures are made by code.',
+             xr, y - 0.325, 0.85, MUTED)
+        win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
+        win.bottom_right('PLAY', g.start_game)
 
-    def update_menu(self):
+    def update_menu(self, force=False):
         u = getattr(self.game, 'updater', None)
         if u is None:
             return
         status = {
-            'idle': '', 'checking': 'Checking for updates...', 'up_to_date': 'Up to date',
-            'offline': 'Could not check for updates', 'installing': 'Downloading update...',
-            'installed': f'Updated to v{u.local}! Restarting...', 'failed': u.message[:120],
-        }
-        if u.status == 'available':
-            notes = [n if len(n) <= 38 else n[:36] + '...' for n in u.notes[:5]]
-            text = f'Update available: v{u.remote}\n' + '\n'.join('- ' + n for n in notes)
-        else:
-            text = status.get(u.status, '')
-        self.set_text(self.version_text, f'BLOCKHOLD v{u.local}\n{text}')
-        self.update_button.enabled = u.status == 'available'
+            'idle': '', 'checking': 'Checking GitHub for updates...', 'up_to_date': 'You have the newest version.',
+            'offline': 'Could not check for updates.', 'installing': 'Downloading the update...',
+            'installed': f'Updated to v{u.local}! Restarting...', 'failed': u.message[:160],
+            'available': f'Version {u.remote} is ready to install:',
+        }.get(u.status, '')
+        right = 'UPDATE AVAILABLE' if u.status == 'available' else f'v{u.local}'
+        self.set_text(self.menu_win.right, right)
+        self.menu_win.right.color = C(TEAL if u.status == 'available' else INK)
+        if self.menu_tab == 'about':
+            if u.status != self._update_status and not force:
+                self._update_status = u.status
+                self.refresh_menu()          # show / hide the update button
+                return
+            self.set_text(self.about_status, status)
+        self._update_status = u.status
 
     def pick_ability(self, aid):
         self.game.ability_id = aid
@@ -263,34 +569,36 @@ class UI:
 
     # ── pause ────────────────────────────────────────────────────────────────
     def build_pause(self):
-        p = self.pause = Entity(parent=camera.ui, z=-1, enabled=False)
-        quad(p, ucolor.Color(0.04, 0.05, 0.08, 0.75), (4, 1), z=1)
-        label(p, 'PAUSED', (0, 0.25), 4, origin=(0, 0))
-        g = self.game
-        self.sens = Slider(10, 120, default=g.sensitivity, step=1, text='Mouse sensitivity', parent=p,
-                           position=(-0.25, 0.1), dynamic=True)
-        self.sens.on_value_changed = lambda: g.set_sensitivity(self.sens.value)
-        self.vol = Slider(0, 100, default=round(g.sounds.volume * 100), step=1, text='Volume', parent=p,
-                          position=(-0.25, 0.03), dynamic=True)
-        self.vol.on_value_changed = lambda: g.set_volume(self.vol.value / 100)
-        button(p, 'RESUME', (0, -0.08), (0.3, 0.08), lambda: g.resume(), '#4f8a2b', 1.5)
-        button(p, 'Quit to menu', (0, -0.18), (0.22, 0.055), lambda: g.to_menu())
+        self.pause = Entity(parent=camera.ui, z=-1, enabled=False)
+        backdrop(self.pause, 0.6)
+        self.pause_win = Window(self.pause, 'PAUSED')
+
+    def show_pause(self):
+        g, win = self.game, self.pause_win
+        win.clear()
+        win.right.text = f'WAVE {g.wave_number}'
+        b, x, y = win.body, win.left, win.top
+        text(b, 'THIS RUN', x, y, 0.85, MUTED)
+        t = g.time
+        rows = [('Wave', g.wave_number), ('Kills', g.kills), ('Score', g.score), ('Coins', g.coins),
+                ('Time', f'{int(t // 60)}:{int(t % 60):02d}'), ('Weapons', len(g.weapons.owned))]
+        y -= 0.045
+        for i, (label, value) in enumerate(rows):
+            if i == 3:
+                hline(b, x, y + 0.012, 0.54)
+                y -= 0.022
+            pair(b, x, y, label, value, 0.25, 1.1)
+            y -= 0.058
+        self.settings_rows(b, win.right_col + 0.03, win.top, g)
+        win.bottom_left('MAIN MENU', g.to_menu, 'home', g.to_menu)
+        win.bottom_right('RESUME', g.resume, fill=TEAL)
+        self.pause.enabled = True
 
     # ── shop ─────────────────────────────────────────────────────────────────
     def build_shop(self):
-        s = self.shop = Entity(parent=camera.ui, z=-1, enabled=False)
-        quad(s, ucolor.Color(0.04, 0.05, 0.08, 0.88), (4, 1), z=1)
-        self.shop_title = label(s, '', (0, 0.44), 2.6, YELLOW, origin=(0, 0))
-        self.shop_stats = label(s, '', (0, 0.39), 0.9, '#cccccc', origin=(0, 0))
-        self.shop_tab = 'weapons'
-        self.shop_sel = None
-        self.tab_buttons = {
-            'weapons': button(s, 'WEAPONS', (-0.11, 0.33), (0.2, 0.05), lambda: self.set_tab('weapons')),
-            'player': button(s, 'PLAYER', (0.11, 0.33), (0.2, 0.05), lambda: self.set_tab('player')),
-        }
-        self.shop_list = Entity(parent=s)
-        button(s, 'Close (B)', (-0.2, -0.455), (0.2, 0.05), lambda: self.game.close_shop())
-        button(s, 'START NEXT WAVE', (0.12, -0.455), (0.36, 0.06), lambda: self.game.shop_start_wave(), '#4f8a2b', 1.2)
+        self.shop = Entity(parent=camera.ui, z=-1, enabled=False)
+        backdrop(self.shop, 0.55)
+        self.shop_win = Window(self.shop, 'SHOP')
 
     def set_tab(self, tab):
         self.shop_tab = tab
@@ -300,146 +608,188 @@ class UI:
         self.shop_sel = wid
         self.refresh_shop()
 
-    def shop_row(self, x, y, title, desc, price, state, on_click, w=0.58, h=0.072, selected=False):
-        """state: 'ok' | 'poor' | 'owned'"""
-        cont = self.shop_list
-        colour = '#4a5468' if selected else ('#262b34' if state == 'owned' else '#363c48')
-        b = button(cont, '', (x + w / 2, y), (w, h), on_click, colour)
-        tall = h >= 0.06
-        label(cont, title, (x + 0.015, y + (0.028 if tall else 0.012)), 1.0 if tall else 0.9,
-              '#888888' if state == 'owned' and not selected else YELLOW, z=-0.1)
-        if desc:
-            label(cont, desc, (x + 0.015, y - (0.002 if tall else 0.006)), 0.72, '#bbbbbb', z=-0.1)
-        pc = {'ok': '#f2c230', 'poor': '#ff6a6a', 'owned': '#7dff8a'}[state]
-        label(cont, price, (x + w - 0.015, y), 1.0, pc, origin=(0.5, 0), z=-0.1)
-        return b
-
-    def weapon_lines(self, d):
-        w = self.game.weapons
-        dm = 1 + 0.15 * w.level(d, 'damage')
-        lines = []
-        if d.get('projectile'):
-            lines.append(f"Blast damage {round(d['projectile']['damage'] * dm)}  (radius {d['projectile']['radius']}m)")
-        elif d.get('pellets', 1) > 1:
-            lines.append(f"Damage {w.stat(d, 'damage'):.0f} x {d['pellets']} pellets")
-        else:
-            lines.append(f"Damage {w.stat(d, 'damage'):.0f}")
-        lines.append(f"{'Swings' if d.get('melee') else 'Fire rate'} {w.stat(d, 'rate'):.1f} per second")
-        if d.get('melee'):
-            lines.append(f"Reach {w.stat(d, 'range'):.1f}m" + (f",  hits up to {d['cleave']} enemies" if d.get('cleave') else ''))
-        else:
-            lines.append(f"Magazine {w.stat(d, 'mag')}   Reload {w.stat(d, 'reload'):.1f}s")
-        if d.get('pierce') is True:
-            lines.append('Goes through every enemy in a line')
-        elif d.get('pierce'):
-            lines.append(f"Goes through {d['pierce']} enemies")
-        if d.get('scope'):
-            lines.append('Scope: hold right-click to zoom')
-        if d.get('headshot'):
-            lines.append(f"Headshots x{d['headshot']}")
-        if d.get('burn'):
-            lines.append(f"Burns: {d['burn']['dps'] * dm:.0f} damage/s for {d['burn']['seconds']}s")
-        if d.get('slow'):
-            lines.append(f"Freezes: {round((1 - d['slow']['mult']) * 100)}% slower for {d['slow']['seconds']}s")
-        if d.get('chain'):
-            lines.append(f"Lightning jumps to {d['chain']['count']} more enemies")
-        if d.get('spinup'):
-            lines.append(f"Spins up for {d['spinup']}s before full speed")
-        if d.get('move_mult', 1) != 1:
-            lines.append(f"You move {round((1 - d['move_mult']) * 100)}% slower holding it")
-        return lines
-
     def refresh_shop(self):
-        g, p, w = self.game, self.game.player, self.game.weapons
-        for c in list(self.shop_list.children):
-            destroy(c)
-        self.shop_title.text = f'SHOP      {g.coins} coins'
-        self.shop_stats.text = (f'Health {math.ceil(p.health)}/{p.max_health}    Damage {round(p.damage_mult * 100)}%    '
-                                f'Speed {round(p.speed_mult * 100)}%    Regen {p.regen:.1f}/s    Armor {round(p.armor * 100)}%')
-        for tab, b in self.tab_buttons.items():
-            b.color = col('#4f6a9a' if tab == self.shop_tab else DARK)
+        g, win = self.game, self.shop_win
+        win.set_tabs([('weapons', 'WEAPONS'), ('player', 'PLAYER')], self.shop_tab, self.set_tab)
+        win.clear()
+        win.right.text = f'{g.coins} coins'
         if self.shop_tab == 'player':
-            self.refresh_player_tab()
+            self.shop_player(win, g)
         else:
-            self.refresh_weapon_tab()
+            self.shop_weapons(win, g)
+        win.bottom_left('CLOSE', g.close_shop, 'cross', g.close_shop)
 
-    def refresh_weapon_tab(self):
-        g, w = self.game, self.game.weapons
+    def weapon_specials(self, d, w):
+        dm = 1 + 0.15 * w.level(d, 'damage')
+        out = []
+        if d.get('pellets', 1) > 1:
+            out.append(f"{d['pellets']} pellets")
+        if d.get('projectile'):
+            out.append(f"explodes ({d['projectile']['radius']}m)")
+        if d.get('pierce') is True:
+            out.append('goes through everything')
+        elif d.get('pierce'):
+            out.append(f"goes through {d['pierce']}")
+        if d.get('cleave'):
+            out.append(f"hits {d['cleave']} at once")
+        if d.get('headshot'):
+            out.append(f"headshots x{d['headshot']}")
+        if d.get('scope'):
+            out.append('scope')
+        if d.get('burn'):
+            out.append(f"burns {d['burn']['dps'] * dm:.0f}/s")
+        if d.get('slow'):
+            out.append(f"freezes {round((1 - d['slow']['mult']) * 100)}%")
+        if d.get('chain'):
+            out.append(f"chains to {d['chain']['count']}")
+        if d.get('spinup'):
+            out.append('spins up')
+        if d.get('move_mult', 1) != 1:
+            out.append(f"{round((1 - d['move_mult']) * 100)}% slower walk")
+        return '  /  '.join(out)
+
+    def shop_weapons(self, win, g):
+        w, b = g.weapons, win.body
         if self.shop_sel is None or not w.get_def(self.shop_sel):
             self.shop_sel = next((d['id'] for d in WEAPONS if not w.owns(d['id'])), WEAPONS[0]['id'])
-        cat = w.get_def(self.shop_sel).get('category', 'special')
-        for i, (cid, cname) in enumerate(CATEGORIES):
-            bx, by = -0.75 + (i % 4) * 0.126 + 0.06, 0.27 - (i // 4) * 0.048
-            b = button(self.shop_list, cname, (bx, by), (0.12, 0.042),
-                       lambda c=cid: self.select_weapon(next(d['id'] for d in WEAPONS if d.get('category') == c)),
-                       '#4f6a9a' if cid == cat else '#2a303b', 0.8)
-        y = 0.16
-        for d in WEAPONS:
-            if d.get('category') != cat:
-                continue
-            owned = w.owns(d['id'])
-            lvl = w.total_level(d)
-            title = d['name'] + (f'   +{lvl}' if lvl else '')
-            price = ('EQUIPPED' if w.held is d else 'OWNED') if owned else str(d['price'])
-            state = 'owned' if owned else ('ok' if g.coins >= d['price'] else 'poor')
-            self.shop_row(-0.75, y, title, '', price, state, lambda wid=d['id']: self.select_weapon(wid),
-                          w=0.5, h=0.044, selected=d['id'] == self.shop_sel)
-            y -= 0.05
-        owned_count = sum(1 for d in WEAPONS if w.owns(d['id']))
-        label(self.shop_list, f'{owned_count} / {len(WEAPONS)} weapons owned', (-0.75, -0.4), 0.8, '#888888')
-
         d = w.get_def(self.shop_sel)
-        cont, x = self.shop_list, -0.2
-        quad(cont, '#1c2029', (0.92, 0.68), (x + 0.46, -0.06), z=0.02)
-        label(cont, d['name'], (x + 0.03, 0.26), 2.0, YELLOW)
-        label(cont, d['desc'], (x + 0.03, 0.2), 0.9, '#dddddd', wordwrap=60)
-        label(cont, '\n'.join(self.weapon_lines(d)), (x + 0.03, 0.15), 0.9, '#9ad0ff')
+        cat = d.get('category', 'special')
+
+        # left: categories + weapon list
+        x, y = win.left, win.top + 0.01
+        for i, (cid, cname) in enumerate(CATEGORIES):
+            on = cid == cat
+            FlatButton(b, cname, x + (i % 4) * 0.137, y - (i // 4) * 0.05, 0.128, 0.042,
+                       lambda c=cid: self.select_weapon(next(o['id'] for o in WEAPONS if o.get('category') == c)),
+                       fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.85,
+                       hover=0.15 if on else -0.06)
+        y -= 0.115
+        for o in WEAPONS:
+            if o.get('category') != cat:
+                continue
+            owned, sel = w.owns(o['id']), o['id'] == self.shop_sel
+            lvl = w.total_level(o)
+            price = ('EQUIPPED' if w.held is o else 'OWNED') if owned else f"{o['price']}"
+            fg = PAPER if sel else (MUTED if owned else INK)
+            FlatButton(b, o['name'] + (f'  +{lvl}' if lvl else ''), x, y, 0.54, 0.05, lambda wid=o['id']: self.select_weapon(wid),
+                       fill=INK if sel else PAPER, edge=INK if sel else LINE, fg=fg, size=1.0, align='left',
+                       right=price, hover=0.15 if sel else -0.06)
+            y -= 0.058
+        owned_count = sum(1 for o in WEAPONS if w.owns(o['id']))
+        text(b, f'{owned_count} / {len(WEAPONS)} weapons owned', x, win.btn_y + 0.045, 0.8, MUTED)
+
+        # right: details, stat bars with their upgrade buttons
+        xr, y = win.right_col + 0.03, win.top + 0.01
+        text(b, d['name'].upper(), xr, y, 1.9, INK)
+        text(b, d['desc'], xr, y - 0.052, 0.85, MUTED, wordwrap=62)
+        specials = self.weapon_specials(d, w)
+        if specials:
+            text(b, specials, xr, y - 0.085, 0.8, TEAL, wordwrap=70)
         owned = w.owns(d['id'])
-        if not owned:
-            ok = g.coins >= d['price']
-            button(cont, f"BUY  -  {d['price']} coins", (x + 0.46, -0.1), (0.4, 0.07),
-                   lambda: g.buy_weapon(d['id']), '#4f8a2b' if ok else '#5a3030', 1.2)
-            return
-        if w.held is not d:
-            button(cont, 'EQUIP', (x + 0.8, 0.255), (0.14, 0.045), lambda: (w.equip(w.owned.index(d)), self.refresh_shop()), '#4f6a9a')
-        label(cont, 'UPGRADES', (x + 0.03, -0.035), 1.0, '#aaaaaa')
-        y = -0.085
-        for u in w.upgrades_for(d):
-            lv = w.level(d, u['id'])
-            maxed = lv >= u['max']
-            price = w.upgrade_price(d, u['id'])
-            pips = '#' * lv + '-' * (u['max'] - lv)
-            state = 'owned' if maxed else ('ok' if g.coins >= price else 'poor')
-            self.shop_row(x + 0.03, y, f"{u['name']}   [{pips}]", u['desc'], 'MAX' if maxed else str(price), state,
-                          lambda uid=u['id']: g.buy_weapon_upgrade(d['id'], uid), w=0.86, h=0.06)
+        ups = {u['id']: u for u in w.upgrades_for(d)}
+        rows = [('damage', 'Damage', *self.dmg_stat(d, w))]
+        rows.append(('rate', 'Swing speed' if d.get('melee') else 'Fire rate',
+                     clamp01(w.stat(d, 'rate') / 24), f"{w.stat(d, 'rate'):.1f}/s"))
+        if d.get('melee'):
+            rows.append(('range', 'Reach', clamp01(w.stat(d, 'range') / 4), f"{w.stat(d, 'range'):.1f}m"))
+        else:
+            rows.append(('mag', 'Magazine', clamp01(w.stat(d, 'mag') / 120), str(w.stat(d, 'mag'))))
+            rows.append(('reload', 'Reload', clamp01(1.0 / w.stat(d, 'reload')), f"{w.stat(d, 'reload'):.1f}s"))
+            rows.append((None, 'Accuracy', clamp01(1 - d.get('spread', 0) / 0.09), f"{round(clamp01(1 - d.get('spread', 0) / 0.09) * 100)}%"))
+        y -= 0.135
+        for uid, label, frac, value in rows:
+            u = ups.get(uid)
+            lv = w.level(d, uid) if u else 0
+            text(b, label, xr, y, 0.95, INK)
+            if u:
+                for k in range(u['max']):     # level pips
+                    box(b, xr + 0.15 + k * 0.022, y - 0.004, 0.016, 0.012, TEAL if k < lv else C(LINE, 0.35))
+            bar(b, xr, y - 0.03, 0.3, 0.018, frac)
+            text(b, value, xr + 0.315, y - 0.039, 0.95, INK, origin=(-0.5, 0))
+            if u and owned:
+                price = w.upgrade_price(d, uid)
+                maxed = lv >= u['max']
+                ok = g.coins >= price and not maxed
+                FlatButton(b, 'MAX' if maxed else str(price), xr + 0.43, y + 0.002, 0.15, 0.048,
+                           lambda i=uid: g.buy_weapon_upgrade(d['id'], i), fill=TEAL if ok else NAVY, edge=INK,
+                           icon_name=None if maxed else 'arrow_up', size=0.9)
             y -= 0.068
 
-    def refresh_player_tab(self):
-        g, p = self.game, self.game.player
-        y = 0.25
+        # bottom right: buy / equip + start wave
+        if not owned:
+            ok = g.coins >= d['price']
+            win.bottom_right(f"BUY  {d['price']}", lambda: g.buy_weapon(d['id']), 'play', g.shop_start_wave,
+                             fill=GREEN if ok else NAVY, w=0.3)
+        elif w.held is not d:
+            win.bottom_right('EQUIP', lambda: (w.equip(w.owned.index(d)), self.refresh_shop()), 'play',
+                             g.shop_start_wave, fill=SLATE, w=0.3)
+        else:
+            win.bottom_right('START WAVE', g.shop_start_wave, fill=TEAL, w=0.3)
+
+    def dmg_stat(self, d, w):
+        dm = 1 + 0.15 * w.level(d, 'damage')
+        if d.get('projectile'):
+            v = d['projectile']['damage'] * dm
+            return clamp01(math.sqrt(v / 450)), f'{v:.0f}'
+        v = w.stat(d, 'damage') * d.get('pellets', 1)
+        label = f"{w.stat(d, 'damage'):.0f}x{d['pellets']}" if d.get('pellets', 1) > 1 else f'{v:.0f}'
+        return clamp01(math.sqrt(v / 450)), label
+
+    def shop_player(self, win, g):
+        p, b = g.player, win.body
+        text(b, (f'Health {math.ceil(p.health)}/{p.max_health}     Damage {round(p.damage_mult * 100)}%     '
+                 f'Speed {round(p.speed_mult * 100)}%     Regen {p.regen:.1f}/s     Armor {round(p.armor * 100)}%'),
+             win.left, win.top + 0.01, 0.9, MUTED)
         for i, u in enumerate(UPGRADES):
+            x = win.left if i % 2 == 0 else win.right_col + 0.03
+            y = win.top - 0.04 - (i // 2) * 0.115
             lvl = g.upgrade_levels.get(u['id'], 0)
             price = g.upgrade_price(u)
             maxed = lvl >= u['max']
             useless = u['id'] == 'medkit' and p.health >= p.max_health
-            title = u['name'] if u.get('consumable') else f"{u['name']}  (lvl {lvl}/{u['max']})"
-            self.shop_row(-0.6 + (i % 2) * 0.62, y - (i // 2) * 0.09, title, u['desc'], 'MAX' if maxed else str(price),
-                          'owned' if maxed else ('ok' if g.coins >= price and not useless else 'poor'),
-                          lambda uid=u['id']: g.buy_upgrade(uid))
+            text(b, u['name'], x, y, 1.05, INK)
+            text(b, u['desc'], x, y - 0.03, 0.78, MUTED)
+            if u.get('consumable'):
+                bar(b, x, y - 0.06, 0.34, 0.016, p.health / p.max_health, RED)
+                value = f'{math.ceil(p.health)} hp'
+            else:
+                bar(b, x, y - 0.06, 0.34, 0.016, lvl / u['max'], GREEN if maxed else TEAL)
+                value = f"{lvl}/{u['max']}"
+            text(b, value, x + 0.355, y - 0.068, 0.9, INK, origin=(-0.5, 0))
+            ok = g.coins >= price and not maxed and not useless
+            FlatButton(b, 'MAX' if maxed else str(price), x + 0.45, y - 0.005, 0.13, 0.05,
+                       lambda uid=u['id']: g.buy_upgrade(uid), fill=TEAL if ok else NAVY, edge=INK,
+                       icon_name=None if maxed else 'cart', size=0.9)
+        win.bottom_right('START WAVE', g.shop_start_wave, fill=TEAL, w=0.3)
 
     # ── game over ────────────────────────────────────────────────────────────
     def build_dead(self):
-        d = self.dead = Entity(parent=camera.ui, z=-1, enabled=False)
-        quad(d, ucolor.Color(0.08, 0.02, 0.02, 0.8), (4, 1), z=1)
-        label(d, 'YOU FELL', (0, 0.25), 5, '#ff5a5a', origin=(0, 0))
-        self.record = label(d, '* NEW RECORD *', (0, 0.15), 1.5, '#ffd54a', origin=(0, 0))
-        self.dead_stats = label(d, '', (0, 0.05), 1.6, origin=(0, 0))
-        button(d, 'PLAY AGAIN', (0, -0.1), (0.32, 0.085), lambda: self.game.start_game(), '#4f8a2b', 1.5)
-        button(d, 'Main menu', (0, -0.2), (0.2, 0.055), lambda: self.game.to_menu())
+        self.dead = Entity(parent=camera.ui, z=-1, enabled=False)
+        backdrop(self.dead, 0.6)
+        self.dead_win = Window(self.dead, 'YOU FELL')
 
     def show_dead(self, stats, record):
+        g, win = self.game, self.dead_win
+        win.clear()
+        win.right.text = f"WAVE {stats['wave']}"
+        b, x, y = win.body, win.left, win.top
+        text(b, 'THIS RUN', x, y, 0.85, MUTED)
         t = stats['time']
-        self.dead_stats.text = (f"Wave {stats['wave']}     Kills {stats['kills']}     "
-                                f"Score {stats['score']}     Time {int(t // 60)}:{int(t % 60):02d}")
-        self.record.enabled = record
+        y -= 0.05
+        for label, value in (('Wave reached', stats['wave']), ('Zombies defeated', stats['kills']),
+                             ('Score', stats['score']), ('Time survived', f'{int(t // 60)}:{int(t % 60):02d}')):
+            pair(b, x, y, label, value, 0.3, 1.15)
+            y -= 0.065
+        hline(b, x, y + 0.015, 0.54)
+        if record:
+            glyph(b, 'star', x + 0.02, y - 0.03, 0.04, AMBER)
+            text(b, 'NEW PERSONAL BEST!', x + 0.05, y - 0.03, 1.2, AMBER, origin=(-0.5, 0))
+        xr, y = win.right_col + 0.03, win.top
+        text(b, 'MILESTONES', xr, y, 0.85, MUTED)
+        y -= 0.04
+        for label, frac, value in milestones(g.save):
+            stat_row(b, xr, y, 0.38, label, frac, value, GREEN if frac >= 1 else TEAL)
+            y -= 0.072
+        win.bottom_left('MAIN MENU', g.to_menu, 'home', g.to_menu)
+        win.bottom_right('PLAY AGAIN', g.start_game, fill=TEAL)
         self.dead.enabled = True

@@ -562,3 +562,108 @@ def scope_texture():
             elif abs(x - c) < 1 or abs(y - c) < 1:
                 px[x, y] = (0, 0, 0, 230 if d > 0.08 else 0)
     return Texture(img)
+
+
+# ── flat UI icons ────────────────────────────────────────────────────────────
+#  Simple white glyphs drawn with Pillow (big, then shrunk for smooth edges).
+
+def _icon_shapes(name, d, S):
+    from PIL import ImageDraw  # noqa: F401  (d is an ImageDraw)
+    on, off = 255, 0
+    c = S / 2
+    if name == 'play':
+        d.polygon([(S * .28, S * .2), (S * .82, S * .5), (S * .28, S * .8)], fill=on)
+    elif name == 'pause':
+        d.rectangle([S * .25, S * .2, S * .42, S * .8], fill=on)
+        d.rectangle([S * .58, S * .2, S * .75, S * .8], fill=on)
+    elif name == 'cross':
+        w = int(S * .14)
+        d.line([(S * .22, S * .22), (S * .78, S * .78)], fill=on, width=w)
+        d.line([(S * .78, S * .22), (S * .22, S * .78)], fill=on, width=w)
+    elif name == 'home':
+        d.polygon([(c, S * .14), (S * .9, S * .52), (S * .78, S * .52), (S * .78, S * .86), (S * .58, S * .86),
+                   (S * .58, S * .62), (S * .42, S * .62), (S * .42, S * .86), (S * .22, S * .86), (S * .22, S * .52),
+                   (S * .1, S * .52)], fill=on)
+    elif name == 'gear':
+        for i in range(8):
+            a = i / 8 * math.tau
+            pts = []
+            for r, da in ((S * .3, -.2), (S * .44, -.13), (S * .44, .13), (S * .3, .2)):
+                pts.append((c + math.cos(a + da) * r, c + math.sin(a + da) * r))
+            d.polygon(pts, fill=on)
+        d.ellipse([c - S * .32, c - S * .32, c + S * .32, c + S * .32], fill=on)
+        d.ellipse([c - S * .13, c - S * .13, c + S * .13, c + S * .13], fill=off)
+    elif name == 'cart':
+        d.polygon([(S * .2, S * .3), (S * .9, S * .3), (S * .8, S * .62), (S * .3, S * .62)], fill=on)
+        d.line([(S * .06, S * .18), (S * .2, S * .18), (S * .32, S * .72), (S * .82, S * .72)], fill=on, width=int(S * .07))
+        for x in (.36, .76):
+            d.ellipse([S * (x - .08), S * .76, S * (x + .08), S * .92], fill=on)
+    elif name == 'skull':
+        d.ellipse([S * .16, S * .1, S * .84, S * .72], fill=on)
+        d.rectangle([S * .32, S * .6, S * .68, S * .88], fill=on)
+        d.ellipse([S * .27, S * .34, S * .45, S * .54], fill=off)
+        d.ellipse([S * .55, S * .34, S * .73, S * .54], fill=off)
+        d.polygon([(c, S * .55), (S * .45, S * .66), (S * .55, S * .66)], fill=off)
+        for x in (.44, .56):
+            d.rectangle([S * (x - .02), S * .74, S * (x + .02), S * .88], fill=off)
+    elif name == 'star':
+        pts = []
+        for i in range(10):
+            r = S * (.44 if i % 2 == 0 else .18)
+            a = -math.pi / 2 + i * math.pi / 5
+            pts.append((c + math.cos(a) * r, c + 0.04 * S + math.sin(a) * r))
+        d.polygon(pts, fill=on)
+    elif name == 'download':
+        d.rectangle([S * .42, S * .1, S * .58, S * .5], fill=on)
+        d.polygon([(S * .24, S * .44), (S * .76, S * .44), (c, S * .72)], fill=on)
+        d.rectangle([S * .12, S * .78, S * .88, S * .9], fill=on)
+        d.rectangle([S * .12, S * .6, S * .24, S * .9], fill=on)
+        d.rectangle([S * .76, S * .6, S * .88, S * .9], fill=on)
+    elif name == 'keyboard':
+        d.rounded_rectangle([S * .06, S * .24, S * .94, S * .76], radius=S * .06, fill=on)
+        for row, y in enumerate((.32, .45)):
+            for i in range(7):
+                x = .13 + i * .107
+                d.rectangle([S * x, S * y, S * (x + .07), S * (y + .08)], fill=off)
+        d.rectangle([S * .26, S * .59, S * .74, S * .67], fill=off)
+    elif name == 'coin':
+        d.ellipse([S * .08, S * .08, S * .92, S * .92], fill=on)
+        d.ellipse([S * .2, S * .2, S * .8, S * .8], fill=off)
+        d.ellipse([S * .25, S * .25, S * .75, S * .75], fill=on)
+        d.rectangle([S * .44, S * .34, S * .56, S * .66], fill=off)
+    elif name == 'trophy':
+        d.pieslice([S * .2, S * -.1, S * .8, S * .62], 0, 180, fill=on)
+        d.rectangle([S * .44, S * .5, S * .56, S * .74], fill=on)
+        d.rectangle([S * .28, S * .74, S * .72, S * .86], fill=on)
+        d.arc([S * .04, S * .2, S * .32, S * .5], 90, 270, fill=on, width=int(S * .06))
+        d.arc([S * .68, S * .2, S * .96, S * .5], 270, 90, fill=on, width=int(S * .06))
+    elif name == 'heart':
+        d.ellipse([S * .1, S * .16, S * .52, S * .58], fill=on)
+        d.ellipse([S * .48, S * .16, S * .9, S * .58], fill=on)
+        d.polygon([(S * .13, S * .45), (S * .87, S * .45), (c, S * .88)], fill=on)
+    elif name == 'bolt':
+        d.polygon([(S * .58, S * .06), (S * .22, S * .56), (S * .46, S * .56), (S * .38, S * .94),
+                   (S * .78, S * .4), (S * .54, S * .4)], fill=on)
+    elif name == 'arrow_up':
+        d.polygon([(c, S * .12), (S * .86, S * .52), (S * .64, S * .52), (S * .64, S * .88),
+                   (S * .36, S * .88), (S * .36, S * .52), (S * .14, S * .52)], fill=on)
+    else:
+        raise KeyError(name)
+
+
+_icon_cache = {}
+
+
+def icon(name, size=64):
+    if name not in _icon_cache:
+        from PIL import ImageDraw
+        S = size * 4
+        mask = Image.new('L', (S, S), 0)
+        _icon_shapes(name, ImageDraw.Draw(mask), S)
+        mask = mask.resize((size, size), Image.LANCZOS)
+        img = Image.new('RGBA', (size, size), (255, 255, 255, 0))
+        img.putalpha(mask)
+        t = Texture(img)
+        t.filtering = 'bilinear'
+        _icon_cache[name] = t
+    return _icon_cache[name]

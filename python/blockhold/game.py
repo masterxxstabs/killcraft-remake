@@ -48,11 +48,16 @@ class Game(Entity):
         camera.fov = 90
         camera.clip_plane_near = 0.05
         self.save = load_json(SAVE_FILE, dict(best_wave=0, best_score=0, total_kills=0, games=0))
-        st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id']))
+        st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
+                                           fov=90, auto_update=True, muted=False))
         self.sensitivity = st['sensitivity']
+        self.fov = st['fov']
+        self.auto_update = st['auto_update']
+        camera.fov = self.fov
         self.ability_id = st['ability']
         self.sounds = Sounds()
         self.sounds.volume = st['volume']
+        self.sounds.muted = st['muted']
 
         self.state = 'menu'
         self.phase = 'intermission'
@@ -80,7 +85,7 @@ class Game(Entity):
         self.apply_sky(NORMAL_SKY, instant=True)
         self.show_cursor(True)
         self.updater = Updater()
-        if check_updates:
+        if check_updates and self.auto_update:
             self.updater.check_async()
 
     def install_update(self):
@@ -99,10 +104,28 @@ class Game(Entity):
         return next((a for a in ABILITIES if a['id'] == self.ability_id), ABILITIES[0])
 
     def save_settings(self):
-        write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id))
+        write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id,
+                                       fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
+        self.save_settings()
+
+    def set_fov(self, v):
+        self.fov = v
+        if not self.aiming:
+            camera.fov = v
+        self.save_settings()
+
+    def toggle_fullscreen(self):
+        window.fullscreen = not window.fullscreen
+
+    def toggle_auto_update(self):
+        self.auto_update = not self.auto_update
+        self.save_settings()
+
+    def toggle_mute(self):
+        self.sounds.toggle_mute()
         self.save_settings()
 
     def set_volume(self, v):
@@ -142,7 +165,7 @@ class Game(Entity):
 
     def to_menu(self):
         self.aiming = False
-        camera.fov = 90
+        camera.fov = self.fov
         self.state = 'menu'
         self.shop_open = False
         for screen in (self.ui.hud, self.ui.pause, self.ui.dead, self.ui.shop):
@@ -155,13 +178,13 @@ class Game(Entity):
 
     def pause(self):
         self.aiming = False
-        camera.fov = 90
+        camera.fov = self.fov
         self.ui.scope.enabled = False
         self.weapons.set_visible(True)
         self.state = 'paused'
         self.weapons.trigger(False)
         self.ui.hud.enabled = False
-        self.ui.pause.enabled = True
+        self.ui.show_pause()
         self.show_cursor(True)
 
     def resume(self):
@@ -213,7 +236,7 @@ class Game(Entity):
             return
         self.shop_open = True
         self.aiming = False
-        camera.fov = 90
+        camera.fov = self.fov
         self.ui.scope.enabled = False
         self.weapons.trigger(False)
         self.ui.refresh_shop()
@@ -301,7 +324,7 @@ class Game(Entity):
     def on_player_death(self):
         self.weapons.trigger(False)
         self.aiming = False
-        camera.fov = 90
+        camera.fov = self.fov
         self.state = 'dead'
         self.sounds.play('game_over')
         s = self.save
@@ -328,7 +351,7 @@ class Game(Entity):
     def update_aim(self, dt):
         d = self.weapons.d
         can_aim = self.aiming and not d.get('melee') and self.can_act() and self.weapons.reloading <= 0
-        target = (28 if d.get('scope') else 62) if can_aim else 90
+        target = (28 if d.get('scope') else self.fov * 0.68) if can_aim else self.fov
         camera.fov += (target - camera.fov) * min(1, dt * 12)
         scoped = can_aim and d.get('scope') and camera.fov < 45
         self.ui.scope.enabled = bool(scoped)
@@ -356,7 +379,7 @@ class Game(Entity):
         if key == 'f11':
             window.fullscreen = not window.fullscreen
         if key == 'm':
-            self.sounds.toggle_mute()
+            self.toggle_mute()
         if self.state == 'paused':
             if key == 'escape':
                 self.resume()
@@ -433,7 +456,7 @@ class Game(Entity):
             self.update_aim(dt)
             if mouse.locked and not self.shop_open:
                 v = mouse.velocity
-                sens = self.sensitivity * camera.fov / 90     # slower aiming when zoomed in
+                sens = self.sensitivity * camera.fov / self.fov     # slower aiming when zoomed in
                 p.look(v[0] * sens, v[1] * sens)
             p.update(dt, {} if self.shop_open else self.keys())
             self.weapons.update(dt)
