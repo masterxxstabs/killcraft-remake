@@ -46,6 +46,55 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 Your best wave, best score and total kills are saved in a `.blockhold` folder in your
 home folder.
 
+## Maps and the map editor
+
+Pick a map on the main menu's **MAPS** tab: the random arena, the example maps **Village**
+and **Forest Camp**, or one you made. Press **NEW MAP** or **EDIT THIS MAP** to open the
+editor.
+
+![The map editor](docs/editor.jpg)
+
+**The palette (left)** has tabs for the things you can place:
+
+| Tab | What's in it |
+| --- | --- |
+| Trees | pine, snowy pine, oak, autumn tree, birch, dead tree, stump |
+| Shrubs | bush, flower bush, tall grass, fern, flowers, mushrooms, rocks, boulder, hedge |
+| Buildings | house, log cabin, ruined house, watchtower, market stall, well, tent, stone wall, fence, sandbags |
+| Props | crate, barrel, hay bale, log pile, lamp post, bench, campfire, car wreck, signpost, rubble |
+| Special | **zombie grave** (zombies climb out of these) and the **player start** |
+| Paths | dirt, gravel, cobblestone, road, sand, wood floor |
+| Blocks | stone, brick, planks, crate, log, obsidian and leaves columns, 1–4 high |
+
+**Editor controls**
+
+| Key | Action |
+| --- | --- |
+| Left click | place. Drag to paint paths, draw lines of fences or walls, or scatter trees and shrubs |
+| Right click | erase (whatever the selected tool places) |
+| ERASER button | erase everything under the brush |
+| R | turn buildings and props 90° |
+| [ and ] | brush size 1×1, 3×3, 5×5 (paths, blocks, eraser) |
+| 1–4 | block height |
+| W A S D / arrows | move the camera |
+| Q / E | turn the camera |
+| Mouse wheel | zoom |
+| Ctrl+Z | undo |
+| Esc | leave the editor |
+
+The preview turns red where something won't fit. Trees and shrubs get a random turn and size,
+so drag across the map to scatter a forest. **PLAY TEST** drops you into your map, and **Esc →
+EDITOR** brings you back. **SAVE** writes `maps/<name>.json`. Change the name at the top to
+save a copy instead of overwriting.
+
+If a map has no zombie graves, zombies climb over the outer wall like in the random arena.
+
+**Add your own assets:** everything in the palette lives in `blockhold/data/assets.py`. Each
+asset is a short function made of low-poly shapes (boxes, cylinders, cones, lumpy blobs,
+roofs, grass blades) plus a list of cells you can't walk through. Copy one, change the
+shapes and colours, and it shows up in the editor. Maps are plain JSON, so you can share them
+by sending the file.
+
 ## Weapons and upgrades
 
 There are 26 weapons, in 8 shop categories:
@@ -192,7 +241,11 @@ are drawn in code in `blockhold/textures.py`. Change the colours there, or add a
 | --- | --- |
 | `main.py` | starts the game |
 | `blockhold/game.py` | main loop, input, waves, shop, saving |
-| `blockhold/world.py` | builds the block arena; collisions and line-of-sight |
+| `blockhold/world.py` | builds the arena from a map (or at random); collisions and line-of-sight |
+| `blockhold/editor.py` | the map editor |
+| `blockhold/maps.py` | saving, loading and previewing maps |
+| `blockhold/lowpoly.py` | builds the flat-shaded low-poly models |
+| `blockhold/data/assets.py` | every placeable asset (trees, buildings, props...) |
 | `blockhold/player.py` | movement, jumping and health |
 | `blockhold/weapons.py` | shooting, special effects, weapon upgrades and the gun you hold |
 | `blockhold/custom_models.py` | loads downloaded 3D gun models and fits them in your hand |

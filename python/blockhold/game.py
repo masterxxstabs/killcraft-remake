@@ -4,7 +4,7 @@ import math
 import random
 import time as pytime
 from pathlib import Path
-from ursina import Entity, application, camera, color as ucolor, held_keys, invoke, mouse, scene, time as utime, window
+from ursina import Entity, Vec3, application, camera, color as ucolor, held_keys, invoke, mouse, scene, time as utime, window
 
 from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
@@ -21,6 +21,7 @@ from .updater import Updater, restart
 from .ui import UI
 from .weapons import Weapons
 from .world import World
+from . import maps
 
 SAVE_DIR = Path.home() / '.blockhold'
 SAVE_FILE = SAVE_DIR / 'save.json'
@@ -49,10 +50,13 @@ class Game(Entity):
         camera.clip_plane_near = 0.05
         self.save = load_json(SAVE_FILE, dict(best_wave=0, best_score=0, total_kills=0, games=0))
         st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
-                                           fov=90, auto_update=True, muted=False))
+                                           fov=90, auto_update=True, muted=False, map=None))
         self.sensitivity = st['sensitivity']
         self.fov = st['fov']
         self.auto_update = st['auto_update']
+        self.map_stem = st['map'] if st['map'] in [m for m, _ in maps.list_maps()] else None
+        self.editor = None
+        self.from_editor = None      # map data to return to after a play test
         camera.fov = self.fov
         self.ability_id = st['ability']
         self.sounds = Sounds()
@@ -105,7 +109,8 @@ class Game(Entity):
 
     def save_settings(self):
         write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id,
-                                       fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted))
+                                       fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted,
+                                       map=self.map_stem))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
@@ -140,7 +145,18 @@ class Game(Entity):
         application.quit()
 
     # ── flow ─────────────────────────────────────────────────────────────────
-    def start_game(self):
+    def select_map(self, stem):
+        self.map_stem = stem
+        self.save_settings()
+
+    def start_game(self, map_data=None, from_editor=False):
+        """Start a run on map_data, or on the map picked in the menu (None = random arena)."""
+        if map_data is None and not from_editor and self.map_stem:
+            try:
+                map_data = maps.load_map(self.map_stem)
+            except Exception as e:
+                print('could not load map', self.map_stem, e)
+        self.from_editor = map_data if from_editor else None
         for screen in (self.ui.menu, self.ui.dead, self.ui.pause, self.ui.shop):
             screen.enabled = False
         self.ui.hud.enabled = True
@@ -149,8 +165,9 @@ class Game(Entity):
         self.pickups.clear()
         self.effects.clear()
         self.world.destroy()
-        self.world = World()
+        self.world = World(map_data=map_data)
         self.player.reset()
+        self.player.position = Vec3(self.world.player_spawn)
         self.weapons.reset()
         self.weapons.set_visible(True)
         self.coins = self.score = self.kills = self.wave_number = self.remaining = 0
@@ -164,6 +181,15 @@ class Game(Entity):
         self.show_cursor(False)
 
     def to_menu(self):
+        if self.from_editor is not None:            # play test: go back to the editor
+            data, self.from_editor = self.from_editor, None
+            for screen in (self.ui.hud, self.ui.pause, self.ui.dead, self.ui.shop):
+                screen.enabled = False
+            self.enemies.clear()
+            self.projectiles.clear()
+            self.pickups.clear()
+            self.open_editor(data)
+            return
         self.aiming = False
         camera.fov = self.fov
         self.state = 'menu'
@@ -175,6 +201,23 @@ class Game(Entity):
         self.ui.menu.enabled = True
         self.apply_sky(NORMAL_SKY)
         self.show_cursor(True)
+
+    # ── map editor ───────────────────────────────────────────────────────────
+    def open_editor(self, map_data=None, stem=None):
+        from .editor import Editor
+        self.ui.menu.enabled = False
+        self.weapons.set_visible(False)
+        self.state = 'editor'
+        self.world.destroy()
+        self.editor = Editor(self, map_data, stem)
+        self.show_cursor(True)
+
+    def close_editor(self):
+        if self.editor:
+            self.editor.close()
+            self.editor = None
+        self.world = World()
+        self.to_menu()
 
     def pause(self):
         self.aiming = False
@@ -380,6 +423,9 @@ class Game(Entity):
             window.fullscreen = not window.fullscreen
         if key == 'm':
             self.toggle_mute()
+        if self.state == 'editor':
+            self.editor.input(key)
+            return
         if self.state == 'paused':
             if key == 'escape':
                 self.resume()
@@ -437,6 +483,8 @@ class Game(Entity):
         self.blend_sky(min(1, dt * 1.5))
         if self.state in ('playing', 'dead'):
             self.simulate(dt)
+        elif self.state == 'editor':
+            self.editor.update(dt)
         elif self.state == 'menu':
             self.ui.update_menu()
             if self.updater.status == 'installed' and not getattr(self, '_restarting', False):

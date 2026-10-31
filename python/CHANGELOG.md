@@ -3,6 +3,14 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.4.0
+- Map editor! Build your own maps from the new MAPS tab
+- 38 low-poly assets: trees, shrubs, houses, cabins, ruins, towers, fences, props and more
+- Paint paths (dirt, gravel, cobblestone, road, sand, wood floor) and block walls
+- Zombie graves: zombies climb out of them on your maps
+- Two example maps: Village and Forest Camp
+- Play-test a map straight from the editor
+
 ## 1.3.0
 - Brand-new flat-design menus, shop, pause and game-over screens
 - Shop shows weapon stats as bars, with upgrade buttons right next to them

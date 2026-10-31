@@ -667,3 +667,47 @@ def icon(name, size=64):
         t.filtering = 'bilinear'
         _icon_cache[name] = t
     return _icon_cache[name]
+
+
+# ── ground path tiles (map editor) ───────────────────────────────────────────
+def _gravel(px, rnd, s, sh):
+    for _ in range(40):
+        x, y = int(rnd() * s), int(rnd() * s)
+        px[x, y] = sh(rnd() < 0.5 and '#6e6c68' or '#a9a7a2')
+
+
+def _cobble(px, rnd, s, sh):
+    mortar = sh('#5a5a5c')
+    for y in range(s):
+        for x in range(s):
+            if y % 5 == 0 or (x + (4 if (y // 5) % 2 else 0)) % 6 == 0:
+                px[x, y] = mortar
+
+
+def _road(px, rnd, s, sh):
+    for _ in range(16):
+        px[int(rnd() * s), int(rnd() * s)] = sh('#4a4b52')
+
+
+def _sand(px, rnd, s, sh):
+    for _ in range(18):
+        px[int(rnd() * s), int(rnd() * s)] = sh('#c4ae76')
+
+
+PATH_TILES = {
+    'dirt': lambda: pixel_image('#7a5a3a', 0.16, 211),
+    'gravel': lambda: pixel_image('#8c8a85', 0.08, 213, draw=_gravel),
+    'cobble': lambda: pixel_image('#86868a', 0.12, 217, draw=_cobble),
+    'road': lambda: pixel_image('#3a3b40', 0.06, 219, draw=_road),
+    'sand': lambda: pixel_image('#d8c48f', 0.07, 223, draw=_sand),
+    'floor': TILES['planks'],
+}
+
+_path_atlas = None
+
+
+def path_atlas():
+    global _path_atlas
+    if _path_atlas is None:
+        _path_atlas = Atlas(PATH_TILES)
+    return _path_atlas

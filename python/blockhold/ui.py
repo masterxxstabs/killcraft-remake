@@ -6,7 +6,8 @@ Change the colours in the PALETTE section to restyle everything at once.
 """
 import math
 import time as pytime
-from ursina import Button, Entity, Text, camera, color as ucolor, destroy, held_keys, mouse, window
+from ursina import Button, Entity, Text, Texture, camera, color as ucolor, destroy, held_keys, mouse, window
+from . import maps
 from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
 from .data.weapons import CATEGORIES, WEAPONS
@@ -418,7 +419,8 @@ class UI:
         self.adrenaline.alpha = 0.8 if p.buffs.get('adrenaline', 0) > 0 else 0
 
     # ── main menu ────────────────────────────────────────────────────────────
-    MENU_TABS = [('play', 'PLAY'), ('controls', 'CONTROLS'), ('settings', 'SETTINGS'), ('about', 'ABOUT')]
+    MENU_TABS = [('play', 'PLAY'), ('maps', 'MAPS'), ('controls', 'CONTROLS'), ('settings', 'SETTINGS'),
+                 ('about', 'ABOUT')]
 
     def build_menu(self):
         self.menu = Entity(parent=camera.ui, z=-1)
@@ -456,6 +458,12 @@ class UI:
         pair(b, win.left + 0.28, y, 'Best score', s['best_score'], 0.16, 0.95)
         pair(b, win.left, y - 0.05, 'Total kills', s['total_kills'], 0.15, 0.95)
         pair(b, win.left + 0.28, y - 0.05, 'Games', s['games'], 0.16, 0.95)
+        hline(b, win.left, y - 0.1, 0.54)
+        names = dict(maps.list_maps())
+        text(b, 'Map', win.left, y - 0.125, 0.95, INK)
+        text(b, names.get(g.map_stem, 'Random arena'), win.left + 0.15, y - 0.122, 1.1, TEAL)
+        FlatButton(b, 'CHANGE', win.left + 0.42, y - 0.115, 0.12, 0.04, lambda: self.set_menu_tab('maps'),
+                   fill=PAPER, edge=INK, fg=INK, size=0.8, hover=-0.06)
 
         x, y = win.right_col + 0.03, win.top
         text(b, 'MILESTONES', x, y, 0.85, MUTED)
@@ -465,6 +473,48 @@ class UI:
             y -= 0.072
         win.bottom_left('QUIT', g.quit, 'gear', lambda: self.set_menu_tab('settings'))
         win.bottom_right('PLAY', g.start_game, 'keyboard', lambda: self.set_menu_tab('controls'))
+
+    def menu_maps(self, win, g):
+        b, x, y = win.body, win.left, win.top
+        text(b, 'CHOOSE A MAP', x, y, 0.85, MUTED)
+        y -= 0.035
+        options = [(None, 'Random arena')] + maps.list_maps()
+        for stem, name in options[:9]:
+            on = g.map_stem == stem
+            FlatButton(b, name, x, y, 0.54, 0.048, lambda s=stem: (g.select_map(s), self.refresh_menu()),
+                       fill=INK if on else PAPER, edge=INK if on else LINE, fg=PAPER if on else INK, size=1.0,
+                       align='left', right='new every game' if stem is None else '', hover=0.15 if on else -0.06)
+            y -= 0.055
+        if len(options) > 9:
+            text(b, f'+ {len(options) - 9} more in the maps folder', x, y, 0.8, MUTED)
+
+        xr, y = win.right_col + 0.03, win.top
+        text(b, 'PREVIEW', xr, y, 0.85, MUTED)
+        size = 0.3
+        if g.map_stem is None:
+            box(b, xr, y - 0.035, size, size, NAVY)
+            text(b, '?', xr + size / 2, y - 0.035 - size / 2, 5, PAPER, origin=(0, 0))
+            info = 'A new random arena every game,\nwith block trees, crates and ruins.'
+        else:
+            data = maps.load_map(g.map_stem)
+            img = maps.preview_image(data)
+            box(b, xr - EDGE, y - 0.035 + EDGE, size + 2 * EDGE, size + 2 * EDGE, INK, z=0.001)
+            Entity(parent=b, model='quad', texture=Texture(img), origin=(-0.5, 0.5), position=(xr, y - 0.035, -0.001),
+                   scale=(size, size))
+            graves = sum(1 for p in data.get('props', []) if p[0] == 'zombie_grave')
+            info = (f"{len(data.get('props', []))} objects\n{len(data.get('paths', []))} path tiles\n"
+                    f"{graves} zombie graves\nmaps/{g.map_stem}.json")
+        text(b, info, xr + size + 0.03, y - 0.04, 0.85, INK)
+        by = y - size - 0.07
+        if g.map_stem is not None:
+            FlatButton(b, 'EDIT THIS MAP', xr, by, 0.25, 0.055, lambda: g.open_editor(maps.load_map(g.map_stem), g.map_stem),
+                       fill=SLATE, edge=SLATE_EDGE, size=1.0)
+        FlatButton(b, 'NEW MAP', xr + (0.27 if g.map_stem is not None else 0), by, 0.2, 0.055, lambda: g.open_editor(),
+                   fill=TEAL, edge=INK, size=1.0)
+        text(b, 'Build your own maps with trees, buildings, paths and zombie graves.', xr, by - 0.08, 0.8, MUTED,
+             wordwrap=55)
+        win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
+        win.bottom_right('PLAY', g.start_game)
 
     CONTROLS = [
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
@@ -590,7 +640,7 @@ class UI:
             pair(b, x, y, label, value, 0.25, 1.1)
             y -= 0.058
         self.settings_rows(b, win.right_col + 0.03, win.top, g)
-        win.bottom_left('MAIN MENU', g.to_menu, 'home', g.to_menu)
+        win.bottom_left('EDITOR' if g.from_editor is not None else 'MAIN MENU', g.to_menu, 'home', g.to_menu)
         win.bottom_right('RESUME', g.resume, fill=TEAL)
         self.pause.enabled = True
 
@@ -790,6 +840,7 @@ class UI:
         for label, frac, value in milestones(g.save):
             stat_row(b, xr, y, 0.38, label, frac, value, GREEN if frac >= 1 else TEAL)
             y -= 0.072
-        win.bottom_left('MAIN MENU', g.to_menu, 'home', g.to_menu)
-        win.bottom_right('PLAY AGAIN', g.start_game, fill=TEAL)
+        win.bottom_left('EDITOR' if g.from_editor is not None else 'MAIN MENU', g.to_menu, 'home', g.to_menu)
+        win.bottom_right('PLAY AGAIN', lambda: g.start_game(g.from_editor, from_editor=g.from_editor is not None),
+                         fill=TEAL)
         self.dead.enabled = True
