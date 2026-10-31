@@ -10,7 +10,7 @@ In game, F8 turns the held model 90 degrees and F9 rolls it, and saves the resul
 """
 import json
 from pathlib import Path
-from panda3d.core import Filename
+from panda3d.core import Filename, GeomVertexReader, LPoint3f
 from ursina import application
 
 HERE = Path(__file__).resolve().parent
@@ -54,6 +54,37 @@ def _size(np, relative_to):
     return a, b
 
 
+def _sample_points(model, relative_to, per_geom=3000):
+    """A sample of the model's vertex positions, in relative_to's space."""
+    pts = []
+    for gnp in model.findAllMatches('**/+GeomNode'):
+        mat = gnp.getMat(relative_to)
+        for geom in gnp.node().getGeoms():
+            vdata = geom.getVertexData()
+            reader = GeomVertexReader(vdata, 'vertex')
+            rows = vdata.getNumRows()
+            for i in range(0, rows, max(1, rows // per_geom)):
+                reader.setRow(i)
+                pts.append(mat.xformPoint(LPoint3f(reader.getData3())))
+    return pts
+
+
+def _muzzle_is_forward(model, relative_to):
+    """Guns have their grip / stock hanging lower than the barrel, so the end
+    that reaches lowest is the back. True if the barrel already points +z."""
+    pts = _sample_points(model, relative_to)
+    if len(pts) < 8:
+        return True
+    zs = [p.z for p in pts]
+    lo, hi = min(zs), max(zs)
+    cut = (hi - lo) * 0.3
+    back = [p.y for p in pts if p.z < lo + cut]
+    front = [p.y for p in pts if p.z > hi - cut]
+    if not back or not front:
+        return True
+    return min(back) <= min(front)
+
+
 def load(d, parent, lights):
     """Attach the downloaded model for weapon d under parent. Returns the node or None."""
     path = find(d['id'])
@@ -81,6 +112,9 @@ def load(d, parent, lights):
         size = b - a
         longest = max(range(3), key=lambda i: size[i])
         rotation = [90, 0, 0] if longest == 0 else [0, 90, 0] if longest == 1 else [0, 0, 0]
+        model.setHpr(*rotation)
+        if not _muzzle_is_forward(model, fit):      # barrel pointing at us: turn around
+            rotation[0] = (rotation[0] + 180) % 360
         _auto_rotation[d['id']] = rotation
     model.setHpr(*rotation)
 

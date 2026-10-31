@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 RATE = 22050
-VERSION = 1
+VERSION = 2
 HERE = Path(__file__).resolve().parent
 CUSTOM_DIR = HERE.parent / 'sounds'
 CACHE_DIR = HERE / '_generated_sounds'
@@ -91,6 +91,11 @@ RECIPES = {
     'shoot_nailgun': lambda: mix(noise(0.06, 3500, 'band', vol=0.5), tone(900, 0.04, vol=0.08, to=400)),
     'shoot_scatter': lambda: mix(noise(0.3, 1400, vol=0.9, sweep=150), tone(90, 0.2, vol=0.35, to=40)),
     'shoot_railspike': lambda: mix(tone(1800, 0.35, 'saw', vol=0.2, to=120), noise(0.25, 5000, 'high', vol=0.3)),
+    'shoot_rifle': lambda: mix(noise(0.18, 3000, vol=0.75, sweep=300), tone(140, 0.12, vol=0.25, to=50),
+                               (0.03, noise(0.25, 600, vol=0.25, sweep=120))),
+    'shoot_suppressed': lambda: mix(noise(0.08, 900, 'band', vol=0.45, sweep=300), tone(220, 0.05, 'sine', vol=0.1, to=90)),
+    'shoot_sniper': lambda: mix(noise(0.6, 2200, vol=1.0, sweep=80), tone(60, 0.5, 'sine', vol=0.6, to=28),
+                                (0.08, noise(0.9, 500, vol=0.35, sweep=60))),
     'shoot_firework': lambda: noise(0.4, 800, 'band', vol=0.6, sweep=3000),
     'swing': lambda: noise(0.15, 600, 'band', vol=0.4, attack=0.03, sweep=1800),
     'hit': lambda: tone(520, 0.05, vol=0.15, to=300),

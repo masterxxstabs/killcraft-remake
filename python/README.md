@@ -30,7 +30,8 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | Key | Action |
 | --- | --- |
 | WASD / arrow keys | move |
-| Mouse | aim; left click to shoot (hold for automatic weapons) |
+| Mouse | look; left click to shoot (hold for automatic weapons) |
+| Right mouse | aim down sights (snipers zoom with a scope) |
 | Space / Shift | jump / sprint |
 | 1–9 or mouse wheel | switch weapon |
 | R | reload |
@@ -47,20 +48,18 @@ home folder.
 
 ## Weapons and upgrades
 
-There are 14 weapons. Two are melee (Rusty Wrench, Fire Axe). Others have special effects:
+There are 26 weapons, in 8 shop categories:
 
-| Weapon | Special |
+| Category | Weapons |
 | --- | --- |
-| Six-Shooter | huge damage, 2.5x headshots |
-| Buzz SMG / Nail Gun / Ranger Rifle | automatic |
-| Scattercannon | 9 pellets per shot |
-| Fire Axe | each swing hits up to 3 enemies |
-| Torch | flamethrower cone that sets enemies on fire |
-| Railspike | goes through every enemy in a line |
-| Frostbite | freeze ray that slows enemies |
-| Arc Caster | lightning jumps to 4 more enemies |
-| Firework Launcher | explosive rockets |
-| Shredder | minigun that spins up, but slows you down |
+| Melee | Rusty Wrench, Fire Axe (hits up to 3 enemies) |
+| Pistols | Pebble Pistol, Glock 17, M1911, Six-Shooter, Desert Eagle |
+| SMGs | Nail Gun, Uzi, Buzz SMG, MP5 |
+| Rifles | Ranger Rifle, AR-15 (red dot), AK-47, AS Val (silenced), SCAR-H (goes through 2 enemies) |
+| Shotguns | Remington 870, Scattercannon |
+| Snipers | Railspike, Barrett M82 (both have a scope) |
+| Heavy | Firework Launcher (rockets), M249 SAW (100-round belt), Shredder (minigun) |
+| Special | Torch (sets enemies on fire), Frostbite (freezes them), Arc Caster (chain lightning) |
 
 Between waves, the shop's **Weapons** tab lets you buy guns and upgrade each one separately:
 damage, fire rate, magazine size and reload speed (melee weapons get reach instead). The
@@ -72,7 +71,42 @@ and more.
 Every weapon has a textured block model. You can swap any of them for a real 3D model from
 [Sketchfab](https://sketchfab.com/search?features=downloadable&q=tag%3Agun&sort_by=-likeCount&type=models).
 
-1. Make a free Sketchfab account. Your **API token** is under Settings → Password & API.
+### The recommended pack (one command)
+
+`tools/model_pack.json` lists hand-picked free models for the 12 real guns. Most are from
+TastyTony's low-poly series, so they match each other. Each gun has backup models in case
+one becomes unavailable.
+
+| Weapon | First choice |
+| --- | --- |
+| M1911 | [Low-Poly M1911](https://sketchfab.com/3d-models/low-poly-m1911-117f542d21954ae0a59afaedadcff338) by TastyTony |
+| AS Val | [Low-Poly AS Val](https://sketchfab.com/3d-models/low-poly-as-val-ed889df2d45c4dd0bcea2e66513c4b57) by TastyTony |
+| SCAR-H | [Low-Poly FN SCAR H](https://sketchfab.com/3d-models/low-poly-fn-scar-h-c52bc2a8ddaa47caa34e94d69ff72d96) by TastyTony |
+| AK-47 | [Low-Poly AK-47 Type 2](https://sketchfab.com/3d-models/low-poly-ak-47-type-2-a7260926fb0a40f8bba5f651b03d23f1) by TastyTony |
+| AR-15 | [Low Poly AR-15](https://sketchfab.com/3d-models/low-poly-ar-15-0b2d1112411f44d3871f9acc327c7a91) by Polyte |
+| Glock 17 | [Low-Poly G17](https://sketchfab.com/3d-models/low-poly-g17-60efc54ac59e47d18bdff94b2f5144ff) by TastyTony |
+| Desert Eagle | [Low-Poly Desert Eagle](https://sketchfab.com/3d-models/low-poly-desert-eagle-b81da261345f4462b2c4412352162287) by TastyTony |
+| MP5 | [Low-Poly HK MP5](https://sketchfab.com/3d-models/low-poly-hk-mp5-80980f757c2c463ebc73460a31611652) by TastyTony |
+| Uzi | [Low-Poly IMI Uzi](https://sketchfab.com/3d-models/low-poly-imi-uzi-d9f0070b3c924caf8fe47e41881389f0) by TastyTony |
+| Remington 870 | [Low-Poly Remington 870](https://sketchfab.com/3d-models/low-poly-remington-870-4f441ff2e32f4cc19610054daa4beee7) by Wolfosito |
+| Barrett M82 | [Low-Poly Barrett M82A1](https://sketchfab.com/3d-models/low-poly-barrett-m82a1-9c7027e5a64e40e9ae927adb0872b6d8) by TastyTony |
+| M249 SAW | [Low-Poly M249 SAW](https://sketchfab.com/3d-models/low-poly-m249-saw-76011c365636451c90a8e3a46c2d8ca5) by TastyTony |
+
+You need a free Sketchfab account. Your **API token** is under Settings → Password & API.
+Then run:
+
+```bash
+python tools/sketchfab_guns.py pack
+```
+
+It checks every model's licence on Sketchfab before downloading. If one isn't freely
+shareable, it moves on to the backup. Weapons that already have a model are left alone
+(add `--force` to replace them). Each download asks for your token the first time and can
+remember it.
+
+### Picking your own models
+
+1. Make a free Sketchfab account and copy your API token (see above).
 2. Run the downloader and answer its questions:
 
    ```bash
@@ -81,10 +115,13 @@ Every weapon has a textured block model. You can swap any of them for a real 3D 
 
    It lists the most-liked downloadable guns, you pick one, then pick which weapon it
    replaces. It saves the model to `models/<weapon id>/`.
-3. Start the game and hold that weapon. If the model faces the wrong way, press **F8** to
-   turn it or **F9** to roll it. Your fix is saved.
+3. Start the game and hold that weapon. The game turns the model so the barrel points
+   forward. If it still faces the wrong way, press **F8** to turn it or **F9** to roll it.
+   Your fix is saved. To nudge size or position, edit `scale` / `offset` in
+   `models/<weapon id>/model.json`.
 
-Other commands: `search <words>`, `get <model link> <weapon id>`, `list`, `remove <weapon id>`.
+Other commands: `pack`, `search <words>`, `get <model link> <weapon id>`, `list`,
+`remove <weapon id>`.
 Run `python tools/sketchfab_guns.py --help` for details.
 
 **Licences:** by default the tool only shows models you're allowed to share: CC0, CC-BY and

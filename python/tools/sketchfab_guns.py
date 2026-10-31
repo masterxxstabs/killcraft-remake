@@ -7,6 +7,7 @@ Easiest: just run it and answer the questions
     python tools/sketchfab_guns.py
 
 Or use commands:
+    python tools/sketchfab_guns.py pack                      # download the recommended model pack
     python tools/sketchfab_guns.py search                    # most-liked downloadable guns
     python tools/sketchfab_guns.py search shotgun            # search for words
     python tools/sketchfab_guns.py get <model uid or link> <weapon id>
@@ -40,6 +41,7 @@ from pathlib import Path
 GAME_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = GAME_DIR / 'models'
 TOKEN_FILE = Path.home() / '.blockhold' / 'sketchfab_token'
+PACK_FILE = Path(__file__).resolve().parent / 'model_pack.json'
 API = os.environ.get('SKETCHFAB_API', 'https://api.sketchfab.com/v3')
 SAFE_LICENSES = ('cc0', 'by', 'by-sa')
 
@@ -55,6 +57,14 @@ LICENSE_SLUGS = {
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+class ModelError(Exception):
+    """A model could not be downloaded (bad licence, missing file, network...)."""
+
+
+class TokenError(ModelError):
+    """Sketchfab rejected the API token."""
+
+
 def weapon_ids():
     sys.path.insert(0, str(GAME_DIR))
     from blockhold.data.weapons import WEAPONS
@@ -125,7 +135,7 @@ def parse_uid(text):
     """Accepts a uid or any Sketchfab model link."""
     m = re.search(r'([0-9a-f]{32})', text)
     if not m:
-        sys.exit(f'That does not look like a Sketchfab model link or uid: {text}')
+        raise ModelError(f'That does not look like a Sketchfab model link or uid: {text}')
     return m.group(1)
 
 
@@ -166,23 +176,36 @@ def print_results(results):
               f"{m['likes']:5d} likes{heavy}\n     {m['url']}")
 
 
-def get(uid, weapon, token):
+def get(uid, weapon, token, licenses=None, quiet=False):
+    """Download model `uid` for `weapon`. With `licenses`, refuse any other licence."""
     ids = [w for w, _ in weapon_ids()]
     if weapon not in ids:
-        sys.exit(f"Unknown weapon '{weapon}'. Weapons: {', '.join(ids)}")
-    info = request(f'{API}/models/{uid}')
+        raise ModelError(f"Unknown weapon '{weapon}'. Weapons: {', '.join(ids)}")
+    try:
+        info = request(f'{API}/models/{uid}')
+    except urllib.error.HTTPError as e:
+        raise ModelError(f'model not found on Sketchfab (HTTP {e.code})')
+    except urllib.error.URLError as e:
+        raise ModelError(f'could not reach Sketchfab: {e.reason}')
     slug = license_slug(info.get('license'))
     lic = info.get('license') or {}
     user = info.get('user') or {}
-    print(f"\n{info.get('name')} by {user.get('displayName') or user.get('username')}  -  licence: {lic.get('label', slug)}")
+    author = user.get('displayName') or user.get('username')
+    if licenses is not None and slug not in licenses:
+        raise ModelError(f"licence is {lic.get('label', slug)}, which isn't on the allowed list")
+    if not info.get('isDownloadable', True):
+        raise ModelError('the author has turned off downloads for this model')
+    print(f"\n{info.get('name')} by {author}  -  licence: {lic.get('label', slug)}")
     if slug not in SAFE_LICENSES:
         print(f"  Note: this licence ({slug}) has extra rules. Check {lic.get('url', 'the model page')} before sharing the game.")
     try:
         dl = request(f'{API}/models/{uid}/download', token)
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            sys.exit('Sketchfab said no: check your API token (and that the model is downloadable).')
-        raise
+        if e.code == 401:
+            raise TokenError('Sketchfab said no: check your API token.')
+        raise ModelError(f'download refused (HTTP {e.code})')
+    except urllib.error.URLError as e:
+        raise ModelError(f'could not reach Sketchfab: {e.reason}')
     target = MODELS_DIR / weapon
     tmp = Path(tempfile.mkdtemp(prefix='blockhold_'))
     try:
@@ -196,27 +219,62 @@ def get(uid, weapon, token):
             with zipfile.ZipFile(tmp / 'model.zip') as z:
                 for name in z.namelist():           # don't let a bad zip write outside the folder
                     if name.startswith('/') or '..' in Path(name).parts:
-                        sys.exit(f'Refusing suspicious file in archive: {name}')
+                        raise ModelError(f'refusing suspicious file in archive: {name}')
                 z.extractall(tmp / 'unzipped')
             files = list((tmp / 'unzipped').iterdir())
         else:
-            sys.exit('Sketchfab did not offer a glTF / GLB download for this model.')
+            raise ModelError('Sketchfab did not offer a glTF / GLB download for this model')
         if target.exists():
             shutil.rmtree(target)
         target.mkdir(parents=True)
         for f in files:
             shutil.move(str(f), target / f.name)
+    except (urllib.error.URLError, zipfile.BadZipFile, OSError) as e:
+        raise ModelError(f'download failed: {e}')
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     meta = dict(
-        uid=uid, name=info.get('name'), author=user.get('displayName') or user.get('username'),
+        uid=uid, name=info.get('name'), author=author,
         author_url=user.get('profileUrl'), license=lic.get('label', slug), license_slug=slug,
         license_url=lic.get('url'), source_url=info.get('viewerUrl') or f'https://sketchfab.com/3d-models/{uid}',
     )
     (target / 'model.json').write_text(json.dumps(meta, indent=2))
     write_credits()
-    print(f'\nDone! Saved to {target}')
-    print('Start the game and hold that weapon. If the model points the wrong way, press F8 (turn) or F9 (roll).')
+    if not quiet:
+        print(f'\nDone! Saved to {target}')
+        print('Start the game and hold that weapon. If the model points the wrong way, press F8 (turn) or F9 (roll).')
+    return meta
+
+
+def pack(token, licenses=SAFE_LICENSES, force=False, only=None):
+    """Download every model in model_pack.json, trying backups when needed."""
+    entries = json.loads(PACK_FILE.read_text())['models']
+    if only:
+        entries = [e for e in entries if e['weapon'] in only]
+    summary = []
+    for entry in entries:
+        wid = entry['weapon']
+        if (MODELS_DIR / wid).is_dir() and not force:
+            summary.append((wid, 'kept the model you already have (use --force to replace it)'))
+            continue
+        print(f"\n=== {wid}: {entry.get('pick', '')}")
+        result = None
+        for url in entry['urls']:
+            try:
+                meta = get(parse_uid(url), wid, token, licenses=licenses, quiet=True)
+                result = f"{meta['name']} by {meta['author']} ({meta['license']})"
+                break
+            except TokenError:
+                raise
+            except ModelError as e:
+                print(f'  skipped {url}\n    because: {e}')
+        summary.append((wid, result or 'FAILED: none of its models could be downloaded'))
+    print('\n' + '=' * 70)
+    for wid, text in summary:
+        print(f'{wid:10s} {text}')
+    print(f"\nCredits written to {MODELS_DIR / 'CREDITS.md'}. Start the game to see your new guns!")
+    print('If a model points the wrong way, hold it in game and press F8 (turn) or F9 (roll).')
+    return summary
 
 
 def list_models():
@@ -244,6 +302,8 @@ def write_credits():
     lines = ['# 3D model credits', '', 'Models downloaded from Sketchfab for BLOCKHOLD.', '']
     for f in sorted(MODELS_DIR.glob('*/model.json')):
         m = json.loads(f.read_text())
+        if not m.get('author'):          # your own model, or just a rotation fix
+            continue
         lines.append(f"- **{f.parent.name}**: [{m.get('name')}]({m.get('source_url')}) by "
                      f"[{m.get('author')}]({m.get('author_url')}), licence: [{m.get('license')}]({m.get('license_url')})")
     MODELS_DIR.mkdir(exist_ok=True)
@@ -252,6 +312,10 @@ def write_credits():
 
 def interactive(licenses):
     print('BLOCKHOLD gun model downloader (models from sketchfab.com)\n')
+    names = ', '.join(e['weapon'] for e in json.loads(PACK_FILE.read_text())['models'])
+    if input(f'Download the recommended model pack ({names})? (y/n) ').lower().startswith('y'):
+        pack(get_token(), licenses)
+        return
     words = input('Search for (leave empty for the most-liked guns): ').strip()
     cursor = None
     while True:
@@ -278,22 +342,27 @@ def interactive(licenses):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('command', nargs='?', choices=['search', 'get', 'list', 'remove', 'credits'])
+    ap.add_argument('command', nargs='?', choices=['pack', 'search', 'get', 'list', 'remove', 'credits'])
     ap.add_argument('args', nargs='*')
     ap.add_argument('--license', default=','.join(SAFE_LICENSES),
                     help="comma list of licences to show (cc0,by,by-sa,by-nc,...) or 'any'")
     ap.add_argument('--token', help='Sketchfab API token (otherwise asked for)')
+    ap.add_argument('--force', action='store_true', help='pack: replace models you already have')
     a = ap.parse_args()
     licenses = 'any' if a.license == 'any' else tuple(a.license.split(','))
     try:
         if a.command is None:
             interactive(licenses)
+        elif a.command == 'pack':
+            pack(a.token or get_token(), licenses, force=a.force, only=a.args or None)
         elif a.command == 'search':
             print_results(search(' '.join(a.args), licenses)[0])
         elif a.command == 'get':
             if len(a.args) != 2:
                 sys.exit('Usage: get <model uid or link> <weapon id>')
             get(parse_uid(a.args[0]), a.args[1], a.token or get_token())
+        elif a.command == 'remove' and not a.args:
+            sys.exit('Usage: remove <weapon id>')
         elif a.command == 'list':
             list_models()
         elif a.command == 'remove':
@@ -301,6 +370,8 @@ def main():
         elif a.command == 'credits':
             write_credits()
             print(f"Wrote {MODELS_DIR / 'CREDITS.md'}")
+    except ModelError as e:
+        sys.exit(str(e))
     except urllib.error.URLError as e:
         sys.exit(f'Could not reach Sketchfab: {e}')
 

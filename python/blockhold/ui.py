@@ -4,9 +4,9 @@ import time as pytime
 from ursina import Button, Entity, Slider, Text, Vec2, camera, color as ucolor, destroy, window
 from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
-from .data.weapons import WEAPONS
+from .data.weapons import CATEGORIES, WEAPONS
 from .render import col
-from .textures import vignette_texture
+from .textures import scope_texture, vignette_texture
 
 YELLOW = '#ffe066'
 DARK = '#2c313c'
@@ -66,6 +66,10 @@ class UI:
         a = window.aspect_ratio
         L, R, T, B = -a / 2, a / 2, 0.5, -0.5
         h = self.hud = Entity(parent=camera.ui, enabled=False)
+        self.scope = Entity(parent=h, enabled=False)
+        Entity(parent=self.scope, model='quad', texture=scope_texture(), scale=(1, 1), z=0.9)
+        quad(self.scope, '#000000', (a, 1), (-0.499, 0), origin=(0.5, 0), z=0.9)
+        quad(self.scope, '#000000', (a, 1), (0.499, 0), origin=(-0.5, 0), z=0.9)
         self.vignette = Entity(parent=h, model='quad', texture=vignette_texture(), scale=(a, 1), z=1, color=ucolor.Color(1, 1, 1, 0))
         self.adrenaline = Entity(parent=h, model='quad', texture=vignette_texture((255, 60, 110)), scale=(a, 1), z=1, color=ucolor.Color(1, 1, 1, 0))
         # crosshair + hitmarker
@@ -200,7 +204,7 @@ class UI:
         self.cards = Entity(parent=m)
         button(m, 'PLAY', (0, -0.12), (0.32, 0.085), lambda: self.game.start_game(), '#4f8a2b', 1.6)
         self.records = label(m, '', (0, -0.2), 1.0, '#aaaaaa', origin=(0, 0))
-        label(m, 'WASD move · mouse aim/shoot · Space jump · Shift sprint · 1-6 / wheel switch weapon\n'
+        label(m, 'WASD move · left-click shoot · right-click aim · Space jump · Shift sprint · 1-9 / wheel switch weapon\n'
                  'R reload · Q ability · B shop (between waves) · N start wave · M mute · F11 fullscreen · Esc pause',
               (0, -0.3), 0.85, '#bbbbbb', origin=(0, 0))
         button(m, 'Quit', (0, -0.41), (0.14, 0.05), lambda: self.game.quit(), DARK, 0.9)
@@ -325,8 +329,12 @@ class UI:
             lines.append(f"Reach {w.stat(d, 'range'):.1f}m" + (f",  hits up to {d['cleave']} enemies" if d.get('cleave') else ''))
         else:
             lines.append(f"Magazine {w.stat(d, 'mag')}   Reload {w.stat(d, 'reload'):.1f}s")
-        if d.get('pierce'):
-            lines.append('Goes through enemies')
+        if d.get('pierce') is True:
+            lines.append('Goes through every enemy in a line')
+        elif d.get('pierce'):
+            lines.append(f"Goes through {d['pierce']} enemies")
+        if d.get('scope'):
+            lines.append('Scope: hold right-click to zoom')
         if d.get('headshot'):
             lines.append(f"Headshots x{d['headshot']}")
         if d.get('burn'):
@@ -359,16 +367,26 @@ class UI:
         g, w = self.game, self.game.weapons
         if self.shop_sel is None or not w.get_def(self.shop_sel):
             self.shop_sel = next((d['id'] for d in WEAPONS if not w.owns(d['id'])), WEAPONS[0]['id'])
-        y = 0.27
+        cat = w.get_def(self.shop_sel).get('category', 'special')
+        for i, (cid, cname) in enumerate(CATEGORIES):
+            bx, by = -0.75 + (i % 4) * 0.126 + 0.06, 0.27 - (i // 4) * 0.048
+            b = button(self.shop_list, cname, (bx, by), (0.12, 0.042),
+                       lambda c=cid: self.select_weapon(next(d['id'] for d in WEAPONS if d.get('category') == c)),
+                       '#4f6a9a' if cid == cat else '#2a303b', 0.8)
+        y = 0.16
         for d in WEAPONS:
+            if d.get('category') != cat:
+                continue
             owned = w.owns(d['id'])
             lvl = w.total_level(d)
             title = d['name'] + (f'   +{lvl}' if lvl else '')
             price = ('EQUIPPED' if w.held is d else 'OWNED') if owned else str(d['price'])
             state = 'owned' if owned else ('ok' if g.coins >= d['price'] else 'poor')
             self.shop_row(-0.75, y, title, '', price, state, lambda wid=d['id']: self.select_weapon(wid),
-                          w=0.5, h=0.04, selected=d['id'] == self.shop_sel)
-            y -= 0.045
+                          w=0.5, h=0.044, selected=d['id'] == self.shop_sel)
+            y -= 0.05
+        owned_count = sum(1 for d in WEAPONS if w.owns(d['id']))
+        label(self.shop_list, f'{owned_count} / {len(WEAPONS)} weapons owned', (-0.75, -0.4), 0.8, '#888888')
 
         d = w.get_def(self.shop_sel)
         cont, x = self.shop_list, -0.2

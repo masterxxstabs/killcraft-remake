@@ -36,7 +36,7 @@ class Effects:
             self.rings.append(dict(e=e, life=0, max=1, r=1))
         self.numbers = []
         for _ in range(30):
-            t = Text('', parent=camera.ui, origin=(0, 0), scale=1.4, enabled=False)
+            t = Text('', parent=game.ui.hud, origin=(0, 0), scale=1.4, enabled=False)   # hides with the HUD
             self.numbers.append(dict(t=t, pos=Vec3(0, 0, 0), life=0, max=1))
         self._p = 0
         self._t = 0

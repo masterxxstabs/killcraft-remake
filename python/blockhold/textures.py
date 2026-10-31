@@ -296,6 +296,7 @@ WEAPON_TILES = {
     'blade': lambda: pixel_image('#b9c0c8', 0.04, 163, draw=_blade),
     'tape': lambda: pixel_image('#9a9a9a', 0.15, 167),
     'frost': lambda: pixel_image('#9fdcff', 0.08, 173, draw=_combine(_frost, _edges(0, 0.85))),
+    'tan': lambda: pixel_image('#a8916a', 0.06, 199, draw=_combine(_scratches('#c2ad85', 4), _edges(0, 0.75))),
     'gold': lambda: pixel_image('#e6b830', 0.08, 179, draw=_combine(_scratches('#fff0a0', 5), _edges(0, 0.7))),
     'glow_cyan': lambda: pixel_image('#5fe0ff', 0.1, 181, draw=_glow('#5fe0ff')),
     'glow_green': lambda: pixel_image('#8cff3a', 0.1, 191, draw=_glow('#8cff3a')),
@@ -543,3 +544,21 @@ def zombie_skin(kind, colors, look):
     if kind not in _skin_cache:
         _skin_cache[kind] = Atlas(skin_tiles(colors, look))
     return _skin_cache[kind]
+
+
+def scope_texture():
+    """Black sniper-scope mask with a clear circle and crosshair."""
+    size = 256
+    img = Image.new('RGBA', (size, size))
+    px = img.load()
+    c = size / 2
+    for y in range(size):
+        for x in range(size):
+            d = ((x - c) ** 2 + (y - c) ** 2) ** 0.5 / c
+            if d > 0.96:
+                px[x, y] = (0, 0, 0, 255)
+            elif d > 0.92:
+                px[x, y] = (0, 0, 0, int(255 * (d - 0.92) / 0.04))
+            elif abs(x - c) < 1 or abs(y - c) < 1:
+                px[x, y] = (0, 0, 0, 230 if d > 0.08 else 0)
+    return Texture(img)

@@ -58,6 +58,7 @@ class Game(Entity):
         self.phase = 'intermission'
         self.shop_open = False
         self.god_mode = False
+        self.aiming = False
         self.shake_amt = 0
         self.coins = self.score = self.kills = self.wave_number = self.remaining = 0
         self.time = 0
@@ -140,6 +141,8 @@ class Game(Entity):
         self.show_cursor(False)
 
     def to_menu(self):
+        self.aiming = False
+        camera.fov = 90
         self.state = 'menu'
         self.shop_open = False
         for screen in (self.ui.hud, self.ui.pause, self.ui.dead, self.ui.shop):
@@ -151,6 +154,10 @@ class Game(Entity):
         self.show_cursor(True)
 
     def pause(self):
+        self.aiming = False
+        camera.fov = 90
+        self.ui.scope.enabled = False
+        self.weapons.set_visible(True)
         self.state = 'paused'
         self.weapons.trigger(False)
         self.ui.hud.enabled = False
@@ -205,6 +212,9 @@ class Game(Entity):
             self.ui.banner('SHOP CLOSED', '#ff7070', 1.2, 'The shop opens between waves')
             return
         self.shop_open = True
+        self.aiming = False
+        camera.fov = 90
+        self.ui.scope.enabled = False
         self.weapons.trigger(False)
         self.ui.refresh_shop()
         self.ui.hud.enabled = False
@@ -290,6 +300,8 @@ class Game(Entity):
 
     def on_player_death(self):
         self.weapons.trigger(False)
+        self.aiming = False
+        camera.fov = 90
         self.state = 'dead'
         self.sounds.play('game_over')
         s = self.save
@@ -309,6 +321,18 @@ class Game(Entity):
             self.ui.show_dead(stats, record)
             self.show_cursor(True)
         invoke(show, delay=1.2)
+
+    def is_scoped(self):
+        return self.aiming and self.weapons.d.get('scope') and camera.fov < 45
+
+    def update_aim(self, dt):
+        d = self.weapons.d
+        can_aim = self.aiming and not d.get('melee') and self.can_act() and self.weapons.reloading <= 0
+        target = (28 if d.get('scope') else 62) if can_aim else 90
+        camera.fov += (target - camera.fov) * min(1, dt * 12)
+        scoped = can_aim and d.get('scope') and camera.fov < 45
+        self.ui.scope.enabled = bool(scoped)
+        self.weapons.set_visible(not scoped)
 
     def shake(self, n):
         self.shake_amt = min(0.6, self.shake_amt + n)
@@ -351,6 +375,10 @@ class Game(Entity):
             self.weapons.trigger(True)
         elif key == 'left mouse up':
             self.weapons.trigger(False)
+        elif key == 'right mouse down':
+            self.aiming = True
+        elif key == 'right mouse up':
+            self.aiming = False
         elif key in '123456789' and len(key) == 1:
             self.weapons.equip(int(key) - 1)
         elif key == 'scroll down':
@@ -402,9 +430,11 @@ class Game(Entity):
         p = self.player
         if self.state == 'playing' and not p.dead:
             self.time += dt
+            self.update_aim(dt)
             if mouse.locked and not self.shop_open:
                 v = mouse.velocity
-                p.look(v[0] * self.sensitivity, v[1] * self.sensitivity)
+                sens = self.sensitivity * camera.fov / 90     # slower aiming when zoomed in
+                p.look(v[0] * sens, v[1] * sens)
             p.update(dt, {} if self.shop_open else self.keys())
             self.weapons.update(dt)
 

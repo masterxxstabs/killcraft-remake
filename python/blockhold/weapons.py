@@ -241,7 +241,12 @@ class Weapons:
         bob_x = math.sin(p.bob) * 0.015 if p.moving else 0
         bob_y = abs(math.cos(p.bob)) * 0.012 if p.moving else 0
         rl = math.sin((1 - self.reloading / self.reload_total) * math.pi) if self.reloading > 0 else 0
-        self.holder.position = (0.21 + bob_x, -0.22 + bob_y - self.switch_anim * 0.8 - rl * 0.1, 0.46 - self.kick * 0.06)
+        aim = 1 if (g.aiming and not d.get('melee') and self.reloading <= 0) else 0
+        self.aim_t = getattr(self, 'aim_t', 0) + (aim - getattr(self, 'aim_t', 0)) * min(1, dt * 12)
+        a = self.aim_t
+        hx, hy, hz = d.get('hold') or ((0.19, -0.165, 0.42) if d.get('length', 0.5) < 0.35 else (0.21, -0.22, 0.46))
+        self.holder.position = (hx * (1 - a) + bob_x * (1 - a), hy + 0.05 * a + bob_y - self.switch_anim * 0.8 - rl * 0.1,
+                                hz - self.kick * 0.06)
         sw = math.sin(self.swing * math.pi) if d.get('melee') else 0
         self.holder.rotation = (-self.kick * 14 + rl * 35 + sw * 80, -sw * 35, -rl * 17)
         self.flash.position = self.muzzle * 1.0
@@ -353,13 +358,15 @@ class Weapons:
         for _ in range(d.get('pellets', 1)):
             direction = Vec3(fwd)
             if d.get('spread'):
-                s = d['spread']
+                s = d['spread'] * (0.45 if g.aiming else 1)
                 direction += Vec3((random.random() - 0.5) * 2 * s, (random.random() - 0.5) * 2 * s, (random.random() - 0.5) * 2 * s)
                 direction = direction.normalized()
             wall = g.world.raycast(eye, direction, d['range'])
             end = eye + direction * wall
             stopped = False
             first = None
+            pierce = d.get('pierce')
+            can_hit = math.inf if pierce is True else (pierce or 1)
             for dist, e, head in g.enemies.raycast(eye, direction, wall):
                 mult = d.get('headshot', 2) if head else 1
                 flat = Vec3(direction.x, 0, direction.z)
@@ -367,7 +374,8 @@ class Weapons:
                 self.on_hit(d, e, dm)
                 any_hit, any_head = True, any_head or head
                 first = first or e
-                if not d.get('pierce'):
+                can_hit -= 1
+                if can_hit <= 0:
                     end = eye + direction * dist
                     stopped = True
                     break
