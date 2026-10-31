@@ -225,6 +225,8 @@ def milestones(save):
         ('Defeat 1,000 zombies', save['total_kills'] / 1000, f"{round(clamp01(save['total_kills'] / 1000) * 100)}%"),
         ('Defeat 10,000 zombies', save['total_kills'] / 10000, f"{round(clamp01(save['total_kills'] / 10000) * 100)}%"),
         ('Play 25 games', save['games'] / 25, f"{min(save['games'], 25)}/25"),
+        ('???' if not save.get('lance') else 'Claim the Hollow Lance', 1 if save.get('lance') else 0,
+         'found!' if save.get('lance') else '?'),
     ]
 
 
@@ -284,6 +286,10 @@ class UI:
         self.wave = text(h, '0', L + 0.09, T - 0.088, 2.6, PAPER, origin=(0, 0))
         frame(h, L + 0.15 - EDGE, T - 0.03, 0.3, 0.095, PAPER, INK)
         self.remaining = text(h, '', L + 0.17, T - 0.0775, 1.15, INK, origin=(-0.5, 0))
+        self.quest_box = Entity(parent=h, enabled=False)
+        box(self.quest_box, L + 0.03, T - 0.135, 0.412, 0.042, INK, z=0.003)
+        glyph(self.quest_box, 'skull', L + 0.052, T - 0.156, 0.026, '#d6a3ff')
+        self.quest_text = text(self.quest_box, '', L + 0.075, T - 0.156, 0.9, '#d6a3ff', origin=(-0.5, 0))
 
         # top right: coins, score, kill feed
         frame(h, R - 0.33, T - 0.03, 0.3, 0.095, PAPER, INK)
@@ -291,6 +297,7 @@ class UI:
         self.coins = text(h, '', R - 0.05, T - 0.066, 2.0, INK, origin=(0.5, 0))
         self.score = text(h, '', R - 0.05, T - 0.103, 0.85, MUTED, origin=(0.5, 0))
         self.feed_box = box(h, R - 0.33, T - 0.135, 0.3, 0.1, INK, z=0.003)
+        self.feed_right = R - 0.03
         self.feed_text = text(h, '', R - 0.045, T - 0.145, 0.85, PAPER, origin=(0.5, 0.5))
 
         # banner (wave messages)
@@ -398,12 +405,20 @@ class UI:
         else:
             self.set_text(self.remaining, f'Next wave in {math.ceil(g.intermission)}s')
         self.hint.enabled = g.phase == 'intermission' and not g.shop_open
+        tracker = g.quest.tracker() if getattr(g, 'quest', None) else ''
+        self.quest_box.enabled = bool(tracker)
+        if tracker:
+            self.set_text(self.quest_text, tracker)
 
         now = pytime.time()
         self.feed = [f for f in self.feed if now - f[1] < 3]
         self.set_text(self.feed_text, '\n'.join(f[0] for f in self.feed))
         self.feed_box.enabled = bool(self.feed)
         self.feed_box.scale_y = 0.02 + 0.0245 * len(self.feed)
+        if self.feed:                       # widen the box for long messages
+            w = max(0.3, 0.0088 * max(len(f[0]) for f in self.feed) + 0.03)
+            self.feed_box.scale_x = w
+            self.feed_box.x = self.feed_right - w
 
         a = g.ability
         cd = max(0, p.ability_cd)
@@ -489,7 +504,7 @@ class UI:
         y -= 0.04
         for label, frac, value in milestones(s):
             stat_row(b, x, y, 0.38, label, frac, value, GREEN if frac >= 1 else TEAL)
-            y -= 0.072
+            y -= 0.063
         win.bottom_left('QUIT', g.quit, 'gear', lambda: self.set_menu_tab('settings'))
         win.bottom_right('PLAY', g.start_game, 'keyboard', lambda: self.set_menu_tab('controls'))
 
@@ -721,8 +736,8 @@ class UI:
 
     def shop_weapons(self, win, g):
         w, b = g.weapons, win.body
-        if self.shop_sel is None or not w.get_def(self.shop_sel):
-            self.shop_sel = next((d['id'] for d in WEAPONS if not w.owns(d['id'])), WEAPONS[0]['id'])
+        if self.shop_sel is None or not w.get_def(self.shop_sel) or (w.get_def(self.shop_sel).get('hidden') and not w.owns(self.shop_sel)):
+            self.shop_sel = next((d['id'] for d in WEAPONS if not w.owns(d['id']) and not d.get('hidden')), WEAPONS[0]['id'])
         d = w.get_def(self.shop_sel)
         cat = d.get('category', 'special')
 
@@ -736,7 +751,7 @@ class UI:
                        hover=0.15 if on else -0.06)
         y -= 0.115
         for o in WEAPONS:
-            if o.get('category') != cat:
+            if o.get('category') != cat or (o.get('hidden') and not w.owns(o['id'])):
                 continue
             owned, sel = w.owns(o['id']), o['id'] == self.shop_sel
             lvl = w.total_level(o)
@@ -746,8 +761,9 @@ class UI:
                        fill=INK if sel else PAPER, edge=INK if sel else LINE, fg=fg, size=1.0, align='left',
                        right=price, hover=0.15 if sel else -0.06)
             y -= 0.058
-        owned_count = sum(1 for o in WEAPONS if w.owns(o['id']))
-        text(b, f'{owned_count} / {len(WEAPONS)} weapons owned', x, win.btn_y + 0.045, 0.8, MUTED)
+        owned_count = sum(1 for o in WEAPONS if w.owns(o['id']) and not o.get('hidden'))
+        total = sum(1 for o in WEAPONS if not o.get('hidden'))
+        text(b, f'{owned_count} / {total} weapons owned', x, win.btn_y + 0.045, 0.8, MUTED)
 
         # right: details, stat bars with their upgrade buttons
         xr, y = win.right_col + 0.03, win.top + 0.01
@@ -961,7 +977,7 @@ class UI:
         y -= 0.04
         for label, frac, value in milestones(g.save):
             stat_row(b, xr, y, 0.38, label, frac, value, GREEN if frac >= 1 else TEAL)
-            y -= 0.072
+            y -= 0.063
         win.bottom_left('EDITOR' if g.from_editor is not None else 'MAIN MENU', g.to_menu, 'home', g.to_menu)
         win.bottom_right('PLAY AGAIN', lambda: g.start_game(g.from_editor, from_editor=g.from_editor is not None),
                          fill=TEAL)

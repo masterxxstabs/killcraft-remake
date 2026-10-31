@@ -171,6 +171,7 @@ class Game(Entity):
         self.clear_allies()
         self.world.destroy()
         self.world = World(map_data=map_data)
+        self.start_quest()
         self.player.reset()
         self.player.position = Vec3(self.world.player_spawn)
         self.weapons.reset()
@@ -186,6 +187,7 @@ class Game(Entity):
 
     def to_menu(self):
         self.clear_allies()
+        self.end_quest()
         if self.from_editor is not None:            # play test: go back to the editor
             data, self.from_editor = self.from_editor, None
             for screen in (self.ui.hud, self.ui.pause, self.ui.dead, self.ui.shop):
@@ -390,6 +392,19 @@ class Game(Entity):
         self.events.emit('ally_hired', ally=ally, player=p)
         self.sounds.play('buy')
         self.ui.refresh_shop()
+
+    def start_quest(self):
+        from .quests import HollowLanceQuest
+        self.end_quest()
+        self.quest = HollowLanceQuest(self)
+
+    def end_quest(self):
+        if getattr(self, 'quest', None):
+            self.quest.destroy()
+        self.quest = None
+
+    def save_progress(self):
+        write_json(SAVE_FILE, self.save)
 
     def clear_allies(self):
         for a in self.allies:
@@ -642,6 +657,8 @@ class Game(Entity):
                 p.look(v[0] * sens, v[1] * sens)
             inp = PlayerInput() if self.shop_open else self.local_input()
             self.update_revives(dt, inp)
+            if self.quest:
+                self.quest.update(dt, inp.use)
             p.update(dt, inp)
             p.apply_camera(dt)
             self.weapons.update(dt)

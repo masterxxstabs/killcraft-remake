@@ -36,6 +36,8 @@
 #    spinup      seconds to reach full fire rate (miniguns)
 #    move_mult   your movement speed while holding it
 #    scope       True = right-click zooms in a long way (sniper scope)
+#    hidden      True = not sold in the shop (secret weapons)
+#    lifesteal   health you get back for every hit
 #
 #  The 3D model is a list of boxes:  (material, (width, height, length), (x, y, z))
 #    x = right, y = up, z = forward. The hand holds the gun at (0, 0, 0).
@@ -478,6 +480,27 @@ WEAPONS = [
         muzzle=(0, 0.03, 0.58),
     ),
 ]
+
+# The secret reward of the Hollow Lance quest (quests.py). Not sold in the shop.
+WEAPONS.append(dict(
+    id='hollow_lance', category='special', name='The Hollow Lance', hidden=True,
+    desc='Forged from the Herald. Pierces, chains, and heals you on every hit.',
+    price=0, damage=150, rate=3, mag=12, reload=1.6, spread=0, range=120, pierce=True, headshot=2,
+    chain=dict(count=3, range=8, falloff=0.7), lifesteal=3, knockback=4, sound='railspike', tracer='#d6a3ff',
+    length=0.8,
+    model=[
+        ('black', (0.06, 0.09, 0.42), (0, 0.02, 0.14)),
+        ('glow_purple', (0.03, 0.03, 0.62), (0, 0.06, 0.38)),
+        ('gold', (0.1, 0.1, 0.04), (0, 0.04, 0.22)),
+        ('gold', (0.1, 0.1, 0.04), (0, 0.04, 0.42)),
+        ('gold', (0.08, 0.08, 0.04), (0, 0.04, 0.6)),
+        ('glow_purple', (0.07, 0.07, 0.07), (0, 0.06, 0.72)),
+        ('black', (0.05, 0.13, 0.06), (0, -0.09, 0.0)),
+        ('gold', (0.02, 0.16, 0.02), (0, 0.12, 0.72)),
+        ('gold', (0.16, 0.02, 0.02), (0, 0.06, 0.72)),
+    ],
+    muzzle=(0, 0.06, 0.76),
+))
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  WEAPON UPGRADES  (bought per weapon in the shop)

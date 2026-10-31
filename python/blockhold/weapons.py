@@ -61,7 +61,7 @@ class Weapons:
         self.owned_camos = {'factory'}
         self.held = None
         for d in self.defs:
-            if d['price'] == 0:
+            if d['price'] == 0 and not d.get('hidden'):
                 self.give(d['id'], equip=False)
         self.cooldown = 0
         self.reloading = 0
@@ -381,6 +381,9 @@ class Weapons:
 
     def on_hit(self, d, e, dm):
         """Status effects after a hit."""
+        if d.get('lifesteal'):
+            o = self.owner
+            o.health = min(o.max_health, o.health + d['lifesteal'])
         if e.dead:
             return
         if d.get('burn'):
@@ -448,6 +451,8 @@ class Weapons:
                 direction = direction.normalized()
             rng = self.stat(d, 'range')
             wall = g.world.raycast(eye, direction, rng)
+            if getattr(g, 'quest', None):
+                g.quest.on_shot(eye, direction, wall)
             end = eye + direction * wall
             stopped = False
             first = None

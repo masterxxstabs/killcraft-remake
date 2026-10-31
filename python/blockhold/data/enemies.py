@@ -61,4 +61,12 @@ ENEMIES = {
         look=dict(hair='#111116', top='robe', mouth='open', blood=False, extras=['crown', 'cape']),
         ranged=dict(range=30, rate=0.35, speed=15, damage=14, count=5, spread=0.22, color='#ff8c1a'),
     ),
+    # summoned by the secret altar (see quests.py) - never appears in normal waves
+    'hollow_herald': dict(
+        name='The Hollow Herald', hp=1700, speed=3.4, damage=28, attack_rate=1.0, reach=2.8, scale=2.1,
+        coins=(150, 200), score=800, pose='reach', boss=True,
+        colors=dict(skin='#3a2456', shirt='#1b1030', pants='#120a20', eyes='#e0a8ff'),
+        look=dict(hair='#0a0612', top='robe', mouth='open', blood=False, extras=['crown', 'cape']),
+        ranged=dict(range=28, rate=0.5, speed=17, damage=12, count=3, spread=0.15, color='#c07bff'),
+    ),
 }
