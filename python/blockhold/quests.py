@@ -10,10 +10,10 @@ Everything is driven by the event bus, so it will also work in co-op later.
 """
 import math
 import random
-from ursina import Entity, Vec3, destroy
+from ursina import Entity, Vec3
 from .lowpoly import LowPoly
 from .net import new_id
-from .render import col, node
+from .render import col, node, destroy
 
 SOULS_NEEDED = 20
 ALTAR_RADIUS = 7.5

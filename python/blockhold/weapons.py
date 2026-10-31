@@ -4,18 +4,40 @@ never pokes through walls."""
 import math
 import random
 from panda3d.core import AmbientLight, Camera as PandaCamera, DirectionalLight, NodePath, PerspectiveLens
-from ursina import Vec3, application, camera, destroy, invoke, window
+from ursina import Vec3, application, camera, invoke, window
 from . import custom_models
 from .data.attachments import ATTACHMENTS
 from .data.gun_models import MODELS
 from .data.weapons import PRICE_GROWTH, WEAPON_UPGRADES, WEAPONS, weapon_upgrade_price
 from .gunsmith import Smith
-from .render import block, col, node, set_fog, init_light_inputs, set_glow
+from .render import block, col, node, set_fog, init_light_inputs, set_glow, destroy
 from .textures import weapon_atlas
 
 UPGRADES_BY_ID = {u['id']: u for u in WEAPON_UPGRADES}
 MOUNT_FOR_SLOT = {'optic': 'optic', 'muzzle': 'muzzle', 'under': 'under'}
 _slot_cache = {}
+
+
+HOLD_SHORT = (0.15, -0.12, 0.38)    # where pistols are held (camera space)
+HOLD_LONG = (0.14, -0.135, 0.42)    # and everything longer
+VM_SCALE = 0.5                      # size of the gun in your hands
+TWO_HANDED = {'rifle', 'smg', 'shotgun', 'sniper', 'heavy', 'special'}
+SKIN, SLEEVE = '#c48a5c', '#2a2d35'
+_arm_tex = {}
+
+
+def arm_texture(kind):
+    """Blocky pixel textures for the hands and sleeves."""
+    if kind not in _arm_tex:
+        from ursina import Texture
+        from .textures import pixel_image
+
+        def seam(px, rnd, s, sh):            # a darker stitch line down the sleeve
+            for y in range(s):
+                px[s // 2, y] = sh('#1c1e24')
+        img = pixel_image(SKIN, 0.07, 401) if kind == 'skin' else pixel_image(SLEEVE, 0.12, 403, draw=seam)
+        _arm_tex[kind] = Texture(img)
+    return _arm_tex[kind]
 
 
 _flash = None
@@ -64,7 +86,7 @@ class Weapons:
         self.lights = [self.vm_root.attachNewNode(amb), self.vm_root.attachNewNode(sun)]
         self.lights[1].setHpr(-30, -40, 0)
         self.holder = node(self.vm_root)
-        self.holder.scale = 0.6
+        self.holder.scale = VM_SCALE
         self.model = None
         self.spinner = None
         self.flash = node(self.holder, enabled=False)            # a star-shaped muzzle flash
@@ -251,6 +273,14 @@ class Weapons:
         self.equip((self.current + direction) % n)
 
     def build_model(self, d):
+        self.grip_at = self.support_at = None
+        self.sight_h = 0.06              # how high the sights are above the grip (for aiming)
+        g = self._build_gun(d)
+        if self.custom is None:
+            self.build_arms(d, g)
+        return g
+
+    def _build_gun(self, d):
         g = node(self.holder)
         self.spinner = None
         self.custom = None
@@ -262,6 +292,18 @@ class Weapons:
         if d['id'] in MODELS:
             s = self.gun_smith(d)
             node(g, model=s.build())
+            self.grip_at = s.mounts.get('grip')
+            optic = s.mounts.get('optic')
+            if optic is not None and self.attach.get(d['id'], {}).get('optic'):
+                self.sight_h = optic[0] + 0.035      # looking through the red dot / scope
+            elif 'sight' in s.mounts:
+                self.sight_h = s.mounts['sight']
+            elif optic is not None:
+                self.sight_h = optic[0] + 0.015
+            under = s.mounts.get('under')
+            if under is not None:
+                drop = 0.07 if any(a.get('name', '').lower().startswith('foregrip') for a in self.fitted(d)) else 0.0
+                self.support_at = (under[0] - drop, under[1])
             m = s.mounts.get('muzzle_end') or s.mounts.get('muzzle') or (0, 0, d.get('length', 0.4))
             self.muzzle = Vec3(*m)
             return g
@@ -281,6 +323,49 @@ class Weapons:
             g.rotation_x = -30
         self.muzzle = Vec3(*d.get('muzzle', (0, 0, d.get('length', 0.4))))
         return g
+
+    # ── the arms holding the gun ─────────────────────────────────────────────
+    def hold_pos(self, d):
+        return d.get('hold') or (HOLD_SHORT if d.get('length', 0.5) < 0.35 else HOLD_LONG)
+
+    def build_arms(self, d, g):
+        """Blocky arms like the original: a hand on the grip, a dark sleeve running off the
+        bottom of the screen, and a second hand under the barrel for two-handed guns."""
+        hx, hy, hz = self.hold_pos(d)
+        k = self.holder.scale_x
+
+        def from_camera(x, y, z):            # a point in front of the camera -> gun space
+            return Vec3((x - hx) / k, (y - hy) / k, (z - hz) / k)
+
+        melee = d.get('melee')
+        arms = node(self.holder if melee else g)
+        skin, sleeve = arm_texture('skin'), arm_texture('sleeve')
+        if melee:
+            gy, gz = -0.01, 0.02
+        else:
+            gy, gz = self.grip_at or (-0.015, -0.02)
+        hand = Vec3(0.0, gy - 0.045, gz - 0.012)
+        block(arms, size=(0.052, 0.078, 0.066), center=hand, texture=skin)                            # fist
+        block(arms, size=(0.016, 0.022, 0.05), center=hand + Vec3(-0.027, 0.03, 0.02), texture=skin)  # thumb
+        if not melee:
+            block(arms, size=(0.014, 0.016, 0.03), center=hand + Vec3(-0.02, 0.036, 0.052), texture=skin)  # trigger finger
+        self._sleeve(arms, hand + Vec3(0.004, -0.03, -0.03), from_camera(0.36, -0.44, 0.1), sleeve)
+        two_handed = d.get('category') in TWO_HANDED and not melee
+        if two_handed:
+            sy, sz = self.support_at or (-0.035, max(0.16, d.get('length', 0.6) * 0.45))
+            hand2 = Vec3(0.0, sy - 0.035, sz)
+            block(arms, size=(0.05, 0.06, 0.08), center=hand2, texture=skin)
+            block(arms, size=(0.016, 0.03, 0.06), center=hand2 + Vec3(-0.026, 0.035, 0.0), texture=skin)  # fingers up the side
+            self._sleeve(arms, hand2 + Vec3(-0.004, -0.028, -0.035), from_camera(-0.1, -0.48, 0.12), sleeve)
+
+    @staticmethod
+    def _sleeve(parent, start, end, tex):
+        from panda3d.core import Point3
+        pivot = node(parent, position=start)
+        pivot.lookAt(parent, Point3(end.x, end.y, end.z))
+        length = (end - start).length()
+        block(pivot, size=(0.078, 0.078, length), center=(0, 0, length / 2), texture=tex)
+        block(pivot, size=(0.086, 0.086, 0.035), center=(0, 0, 0.02), color='#55595f')       # cuff
 
     def rotate_custom(self, axis):
         """F8 / F9: turn a downloaded model that's facing the wrong way (saved to its model.json)."""
@@ -349,8 +434,9 @@ class Weapons:
         aim = 1 if (g.aiming and not d.get('melee') and self.reloading <= 0) else 0
         self.aim_t = getattr(self, 'aim_t', 0) + (aim - getattr(self, 'aim_t', 0)) * min(1, dt * 12)
         a = self.aim_t
-        hx, hy, hz = d.get('hold') or ((0.19, -0.165, 0.42) if d.get('length', 0.5) < 0.35 else (0.21, -0.22, 0.46))
-        self.holder.position = (hx * (1 - a) + bob_x * (1 - a), hy + 0.05 * a + bob_y - self.switch_anim * 0.8 - rl * 0.1,
+        hx, hy, hz = self.hold_pos(d)
+        aim_y = -getattr(self, 'sight_h', 0.06) * self.holder.scale_x     # sights on the crosshair when aiming
+        self.holder.position = (hx * (1 - a) + bob_x * (1 - a), hy * (1 - a) + aim_y * a + bob_y - self.switch_anim * 0.8 - rl * 0.1,
                                 hz - self.kick * 0.06)
         sw = math.sin(self.swing * math.pi) if d.get('melee') else 0
         self.holder.rotation = (-self.kick * 14 + rl * 35 + sw * 80, -sw * 35, -rl * 17)

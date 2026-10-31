@@ -8,10 +8,10 @@ import math
 import random
 import time as pytime
 from panda3d.core import NodePath, TransparencyAttrib
-from ursina import Mesh, Vec2, Vec3, color as ucolor, destroy
+from ursina import Mesh, Vec2, Vec3, color as ucolor
 from .data.assets import ASSETS, PATHS
 from .lowpoly import LowPoly
-from .render import WORLD_SHADER, add_box, node, set_glow
+from .render import WORLD_SHADER, add_box, node, set_glow, destroy
 from .textures import Atlas
 from .world_textures import smooth_texture
 

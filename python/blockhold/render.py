@@ -1,6 +1,6 @@
 """Rendering helpers: the world shader (texture * vertex colour * fog) and
 cube meshes with Minecraft-style baked face shading."""
-from ursina import Entity, Mesh, Shader, Vec2, Vec3, color as ucolor
+from ursina import Entity, Mesh, Shader, Vec2, Vec3, color as ucolor, destroy as _ursina_destroy
 
 MAX_LIGHTS = 8
 
@@ -162,3 +162,61 @@ def block(parent=None, size=(1, 1, 1), center=(0, 0, 0), color='#ffffff', textur
     e = Entity(parent=parent, model=box_mesh(size, center, uv_rects), shader=WORLD_SHADER,
                color=col(color) if isinstance(color, str) else color, texture=texture, **kw)
     return e
+
+
+def destroy(entity, delay=0):
+    """Destroy an entity AND every entity inside it.
+
+    Ursina 8's destroy() only removes the entity you give it: child entities stay in
+    scene.entities forever (and keep getting update() calls), which slowly leaked
+    thousands of entities over a long game (zombie body parts, shop buttons, name tags).
+    """
+    if entity is None:
+        return
+    if delay:
+        from ursina import invoke
+        return invoke(destroy, entity, delay=delay)
+    for child in list(getattr(entity, 'children', None) or []):
+        destroy(child)
+    if hasattr(entity, 'isEmpty') and entity.isEmpty():
+        # its node is already gone (removed some other way): just make Ursina forget it
+        from ursina import scene
+        if entity in scene.entities and entity not in scene._entities_marked_for_removal:
+            scene._entities_marked_for_removal.append(entity)
+        return
+    _ursina_destroy(entity)
+
+
+def _fix_ursina_text_fonts():
+    """Ursina 8 bug: every new Text re-adds the font folder to Panda's model path and
+    clear()s the shared font (throwing away its glyph cache), so each label leaked
+    about 75 KB, which added up to gigabytes over a long game (the shop rebuilds dozens
+    of labels each time). Set each font up once and reuse it."""
+    from ursina.text import Text
+    original = Text.font_setter
+    fonts = {}
+
+    def font_setter(self, value):
+        font = fonts.get(value)
+        if font is None:
+            original(self, value)
+            fonts[value] = getattr(self, '_font', None)
+            return
+        self._font = font
+        if self.text:
+            self.text = self.raw_text
+
+    def resolution_setter(self, value):
+        font = getattr(self, '_font', None)
+        if font is None or abs(font.getPixelsPerUnit() - value) < 1e-6:
+            return                                  # same font, same resolution: nothing to do
+        font.clear()
+        font.setPixelsPerUnit(value)
+
+    Text.font_setter = font_setter
+    Text.font = property(Text.font_getter, font_setter)
+    Text.resolution_setter = resolution_setter
+    Text.resolution = property(Text.resolution_getter, resolution_setter)
+
+
+_fix_ursina_text_fonts()

@@ -7,12 +7,12 @@ by holding E nearby, and everyone gets back up when the wave ends.
 import math
 import random
 from panda3d.core import Point3
-from ursina import Entity, Text, Vec3, application, color as ucolor, destroy
+from ursina import Entity, Text, Vec3, application, color as ucolor
 from .data.allies import ALLY_TYPES
 from .data.gun_models import MODELS
 from .gunsmith import Smith
 from .net import new_id
-from .render import block, col, node
+from .render import block, col, node, destroy
 from .textures import zombie_skin
 
 

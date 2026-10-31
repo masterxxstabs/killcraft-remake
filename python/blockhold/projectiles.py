@@ -1,7 +1,7 @@
 """Rockets fired by the player and goo spat by enemies."""
 import random
-from ursina import Vec3, destroy
-from .render import block
+from ursina import Vec3
+from .render import block, destroy
 from .net import new_id
 
 

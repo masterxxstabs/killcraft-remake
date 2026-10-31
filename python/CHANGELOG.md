@@ -3,6 +3,13 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.8.0
+- First-person arms like the original: blocky hands on the grip (and under the barrel for two-handed guns) with dark sleeves
+- Guns resized and moved up so you can see the whole weapon
+- Aiming down the sights now lines the sights (or red dot / holo) up with the crosshair
+- Smaller, cleaner ammo counter that no longer covers your gun
+- Fixed two memory leaks that made long games slower and slower (tested over 100 waves)
+
 ## 1.7.0
 - New look inspired by the original game: a dark, foggy dusk with a torch lighting up the ground around you
 - Real lights: muzzle flashes, explosions, rockets, campfires, lamp posts, workbench lanterns, crystals and power-ups light up their surroundings

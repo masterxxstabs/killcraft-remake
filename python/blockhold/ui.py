@@ -6,7 +6,7 @@ Change the colours in the PALETTE section to restyle everything at once.
 """
 import math
 import time as pytime
-from ursina import Button, Entity, Text, Texture, camera, color as ucolor, destroy, held_keys, mouse, window
+from ursina import Button, Entity, Text, Texture, camera, color as ucolor, held_keys, mouse, window
 from . import maps
 from .data.attachments import ATTACHMENTS, SLOT_NAMES
 from .data.gun_models import MODELS as GUN_MODELS
@@ -16,7 +16,7 @@ from .data.upgrades import UPGRADES
 from .data.weapons import CATEGORIES, WEAPONS
 from .data.resources import RESOURCES
 from .data.atmosphere import ATMOSPHERES
-from .render import col
+from .render import col, destroy
 from .textures import icon, scope_texture, vignette_texture
 
 # ── PALETTE ──────────────────────────────────────────────────────────────────
@@ -360,18 +360,20 @@ class UI:
 
         # bottom right: mined resources (shown once you have some)
         self.res_box = Entity(parent=h, enabled=False)
-        box(self.res_box, R - 0.38, B + 0.2, 0.35, 0.038, INK, z=0.003)
+        box(self.res_box, R - 0.33, B + 0.142, 0.3, 0.032, INK, z=0.003)
         self.res_text = {}
         for i, (rid, r) in enumerate(RESOURCES.items()):
-            x = R - 0.372 + i * 0.0855
-            box(self.res_box, x, B + 0.189, 0.016, 0.016, r['color'], z=0.001)
-            self.res_text[rid] = text(self.res_box, '0', x + 0.024, B + 0.181, 0.85, PAPER, origin=(-0.5, 0))
+            x = R - 0.322 + i * 0.074
+            box(self.res_box, x, B + 0.133, 0.014, 0.014, r['color'], z=0.001)
+            self.res_text[rid] = text(self.res_box, '0', x + 0.02, B + 0.126, 0.72, PAPER, origin=(-0.5, 0))
 
         # bottom right: weapon
-        frame(h, R - 0.38, B + 0.155, 0.35, 0.125, PAPER, INK)
-        self.weapon_name = text(h, '', R - 0.36, B + 0.13, 1.05, INK, origin=(-0.5, 0))
-        self.ammo = text(h, '', R - 0.05, B + 0.08, 2.4, INK, origin=(0.5, 0))
-        self.slots = text(h, '', R - 0.36, B + 0.06, 0.8, MUTED, origin=(-0.5, 0))
+        # bottom right: a compact weapon box (name, slots, ammo) that stays clear of the gun
+        frame(h, R - 0.33, B + 0.105, 0.3, 0.075, PAPER, INK)
+        self.weapon_name = text(h, '', R - 0.318, B + 0.085, 0.72, INK, origin=(-0.5, 0))
+        self.slots = text(h, '', R - 0.318, B + 0.051, 0.58, MUTED, origin=(-0.5, 0))
+        box(h, R - 0.156, B + 0.094, 0.003, 0.053, LINE, z=-0.005)
+        self.ammo = text(h, '', R - 0.093, B + 0.067, 1.5, INK, origin=(0, 0))
 
     def update_weapon(self):
         w = getattr(self.game, 'weapons', None)
@@ -379,13 +381,18 @@ class UI:
             return
         d, st = w.d, w.state[w.d['id']]
         lvl = w.total_level(d)
-        self.set_text(self.weapon_name, d['name'].upper() + (f'  +{lvl}' if lvl else ''))
+        name = d['name'].upper() + (f'  +{lvl}' if lvl else '')
+        self.set_text(self.weapon_name, name)
+        self.weapon_name.scale = 0.72 if len(name) <= 13 else max(0.46, 0.72 * 13 / len(name))   # long names shrink to fit
         if d.get('melee'):
             self.set_text(self.ammo, '--')
+            self.ammo.scale = 1.5
             self.ammo.color = C(INK)
         else:
             mag = w.stat(d, 'mag')
-            self.set_text(self.ammo, f"{st['ammo']}/{mag}")
+            label = f"{st['ammo']}/{mag}"
+            self.set_text(self.ammo, label)
+            self.ammo.scale = 1.5 if len(label) <= 5 else (1.28 if len(label) == 6 else 1.1)
             self.ammo.color = C(RED) if st['ammo'] <= math.ceil(mag * 0.25) else C(INK)
         self.set_text(self.slots, '  '.join(f'[{i + 1}]' if o is w.held else f'{i + 1}' for i, o in enumerate(w.owned[:9])))
 

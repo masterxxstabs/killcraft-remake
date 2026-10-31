@@ -2,9 +2,9 @@
 import math
 import random
 from panda3d.core import Point3, Vec3 as PVec3
-from ursina import Vec3, application, destroy
+from ursina import Vec3, application
 from .data.enemies import ENEMIES
-from .render import block, col, node
+from .render import block, col, node, destroy
 from .textures import zombie_skin
 from .net import new_id
 

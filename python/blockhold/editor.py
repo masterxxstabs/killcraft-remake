@@ -14,10 +14,10 @@ import math
 import random
 import time as pytime
 from panda3d.core import Point2, Point3, TransparencyAttrib
-from ursina import Entity, InputField, Mesh, Vec3, application, camera, color as ucolor, destroy, held_keys, mouse, scene, window
+from ursina import Entity, InputField, Mesh, Vec3, application, camera, color as ucolor, held_keys, mouse, scene, window
 from . import maps
 from .data.assets import ASSETS, ASSET_CATEGORIES, BLOCKS, PATHS
-from .render import WORLD_SHADER, col, node, set_fog
+from .render import WORLD_SHADER, col, node, set_fog, destroy
 from .ui import (BTN_H, EDGE, GREEN, INK, LINE, MUTED, NAVY, PAPER, RED, SLATE, TEAL, C, FlatButton, Window, box,
                  frame, glyph, text)
 from .world import World, prototype, rotate_cell

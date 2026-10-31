@@ -156,6 +156,7 @@ class Smith:
 
     def grip(self, z, y_top, length=0.11, angle=18, width=0.034, mat='polymer', slot='furniture', back=0.035):
         """A pistol grip hanging from (z, y_top), leaning back by `angle` degrees."""
+        self.mounts.setdefault('grip', (y_top, z - back * 0.6))   # where the hand holds it (the first grip)
         t = math.tan(math.radians(angle))
         pts = [(z - back, y_top), (z + 0.012, y_top), (z + 0.012 - length * t, y_top - length),
                (z - back - length * t - 0.006, y_top - length + 0.006), (z - back - length * t * 0.95, y_top - length * 0.55)]
@@ -192,10 +193,12 @@ class Smith:
             self.box(-width / 2 - 0.003, width / 2 + 0.003, by - 0.008, by, bz0 - 0.004, bz1 + 0.004, mat, slot)
 
     def iron_front(self, z, y, mat='black'):
+        self.mounts.setdefault('sight', y + 0.04)      # height of the sight line (for aiming)
         self.side([(z - 0.012, y), (z + 0.012, y), (z + 0.006, y + 0.035), (z - 0.006, y + 0.035)], 0.012, mat, 'metal')
         self.box(-0.0025, 0.0025, y + 0.03, y + 0.045, z - 0.003, z + 0.003, mat, 'metal')
 
     def iron_rear(self, z, y, mat='black'):
+        self.mounts.setdefault('sight', y + 0.02)
         self.box(-0.012, 0.012, y, y + 0.025, z - 0.01, z + 0.01, mat, 'metal')
         self.box(-0.004, 0.004, y + 0.012, y + 0.026, z - 0.011, z + 0.011, 'rubber', 'metal')
 

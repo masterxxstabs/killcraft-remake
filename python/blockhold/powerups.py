@@ -6,11 +6,11 @@ powerup_ended.
 """
 import math
 import random
-from ursina import Entity, Text, Vec3, destroy
+from ursina import Entity, Text, Vec3
 from .data.powerups import POWERUPS, DROP_CHANCE, DROP_COOLDOWN, MAX_ON_GROUND, LIFETIME, BLAST_RADIUS
 from .lowpoly import LowPoly
 from .net import new_id
-from .render import node, col
+from .render import node, col, destroy
 
 _meshes = {}
 

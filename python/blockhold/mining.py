@@ -6,11 +6,11 @@ node grows back after a while. Resources belong to the player who mined them.
 Events: node_spawned, node_mined, node_broken.
 """
 import random
-from ursina import Vec3, destroy
+from ursina import Vec3
 from .data.resources import RESOURCES, NODE_TYPES, MINE_DAMAGE, RANDOM_NODE_COUNT, RESPAWN_TIME, draw_node
 from .lowpoly import LowPoly
 from .net import new_id
-from .render import node
+from .render import node, destroy
 
 _meshes = {}
 VARIANTS = 3
