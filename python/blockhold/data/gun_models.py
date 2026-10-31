@@ -350,3 +350,39 @@ MODELS = {
     'remington': remington, 'scatter': scatter, 'barrett': barrett, 'm249': m249, 'nailgun': nailgun,
     'firework': firework,
 }
+
+
+def hollow_lance(s):
+    """The Easter egg reward: a rifle grown from the Herald's bones around a glowing soul core."""
+    import math
+    s.side([(-0.1, 0.07), (0.27, 0.07), (0.34, 0.045), (0.34, 0.0), (0.06, -0.02), (-0.1, -0.012)],
+           0.05, 'obsidian', 'main')                                                       # receiver
+    s.tube(-0.08, 0.66, 0.011, 'glow_purple', y=0.03, sides=8)                              # the soul core
+    for k in range(5):                                                                      # glowing vents
+        z = -0.04 + k * 0.065
+        s.box(-0.0262, 0.0262, 0.022, 0.044, z, z + 0.032, 'glow_purple', 'metal')
+    for k in range(4):                                                                      # vertebrae spikes
+        z = -0.06 + k * 0.085
+        s.side([(z, 0.068), (z + 0.045, 0.068), (z + 0.008, 0.115)], 0.014, 'bone', 'furniture')
+    s.tube(0.33, 0.345, 0.036, 'gold', y=0.03, sides=10)
+    s.tube(0.345, 0.66, 0.016, 'obsidian', y=0.03, sides=8)                                 # barrel
+    for k in range(5):                                                                      # bone ribs
+        z = 0.37 + k * 0.055
+        s.tube(z, z + 0.022, 0.03 - k * 0.002, 'bone', 'furniture', y=0.03, sides=8)
+    s.tube(0.65, 0.665, 0.03, 'gold', y=0.03, sides=10)
+    for a in (90, 210, 330):                                                                # three fangs
+        x, y = math.cos(math.radians(a)) * 0.026, 0.03 + math.sin(math.radians(a)) * 0.026
+        s.tube(0.66, 0.79, 0.011, 'bone', 'furniture', y=y, x=x, sides=6, r1=0.002)
+    s.tube(0.7, 0.73, 0.001, 'glow_purple', y=0.03, sides=6, r1=0.017)                      # floating crystal
+    s.tube(0.73, 0.77, 0.017, 'glow_purple', y=0.03, sides=6, r1=0.001)
+    s.mount('muzzle_end', (0, 0.03, 0.78))
+    s.grip(0.02, -0.012, length=0.11, angle=18, width=0.034, mat='bone', slot='furniture')
+    s.trigger_guard(0.02, 0.09, -0.014, mat='gold')
+    s.magazine(0.13, -0.012, 0.075, depth=0.05, width=0.03, mat='obsidian')                 # soul canister
+    s.box(-0.0165, 0.0165, -0.07, -0.025, 0.142, 0.168, 'glow_purple', 'metal')
+    s.side([(-0.1, 0.062), (-0.1, -0.012), (-0.3, -0.06), (-0.345, -0.045), (-0.345, 0.05), (-0.22, 0.068)],
+           0.036, 'bone', 'furniture')                                                     # spine stock
+    s.box(-0.022, 0.022, -0.068, 0.058, -0.36, -0.345, 'obsidian', 'metal', bevel=0.006)
+
+
+MODELS["hollow_lance"] = hollow_lance

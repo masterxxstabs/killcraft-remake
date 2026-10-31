@@ -22,7 +22,8 @@ MATERIALS = {
     'green': ('#52ff6e', 0.2), 'orange': ('#d9682b', 0.2), 'yellow': ('#e8c23a', 0.2),
     'white': ('#e8e8e4', 0.2), 'glow_cyan': ('#7fe7ff', 0.0), 'glow_purple': ('#c07bff', 0.0),
     'glow_orange': ('#ff9a3c', 0.0), 'frost': ('#a8e2ff', 0.5), 'red_paint': ('#a8242e', 0.35),
-    'copper': ('#b8733a', 0.7),
+    'copper': ('#b8733a', 0.7), 'bone': ('#d9d0b4', 0.15), 'obsidian': ('#1c1428', 0.65),
+    'gold': ('#d9a92b', 0.9),
 }
 
 # Camos repaint the 'main' and 'furniture' parts of a gun. Each face picks a
