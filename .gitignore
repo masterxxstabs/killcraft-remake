@@ -2,3 +2,4 @@ node_modules/
 __pycache__/
 *.pyc
 python/blockhold/_generated_sounds/
+python/_backup/

@@ -64,7 +64,9 @@ class Player:
 
     @property
     def move_speed(self):
-        return 5.6 * self.speed_mult * (1.5 if self.buffs.get('adrenaline', 0) > 0 else 1)
+        weapons = getattr(self.game, 'weapons', None)
+        held = weapons.d.get('move_mult', 1) if weapons and weapons.held else 1
+        return 5.6 * self.speed_mult * held * (1.5 if self.buffs.get('adrenaline', 0) > 0 else 1)
 
     def update(self, dt, keys):
         world = self.game.world

@@ -17,6 +17,7 @@ from .player import Player
 from .projectiles import Projectiles
 from .render import col, hex_rgb, node, set_fog
 from .sounds import Sounds
+from .updater import Updater, restart
 from .ui import UI
 from .weapons import Weapons
 from .world import World
@@ -42,7 +43,7 @@ def write_json(path, data):
 
 
 class Game(Entity):
-    def __init__(self):
+    def __init__(self, check_updates=False):
         super().__init__()
         camera.fov = 90
         camera.clip_plane_near = 0.05
@@ -77,6 +78,19 @@ class Game(Entity):
         self.weapons.set_visible(False)
         self.apply_sky(NORMAL_SKY, instant=True)
         self.show_cursor(True)
+        self.updater = Updater()
+        if check_updates:
+            self.updater.check_async()
+
+    def install_update(self):
+        if self.updater.status != 'available':
+            return
+        self.updater.install_async()
+
+    def finish_update(self):
+        """Called once the update is installed: start the new version."""
+        restart()
+        application.quit()
 
     # ── settings / saving ────────────────────────────────────────────────────
     @property
@@ -219,6 +233,20 @@ class Game(Entity):
             return
         self.coins -= d['price']
         self.weapons.give(wid)
+        self.ui.shop_sel = wid
+        self.sounds.play('buy')
+        self.ui.refresh_shop()
+
+    def buy_weapon_upgrade(self, wid, uid):
+        w = self.weapons
+        d = w.get_def(wid)
+        u = next(x for x in w.upgrades_for(d) if x['id'] == uid)
+        price = w.upgrade_price(d, uid)
+        if not w.owns(wid) or w.level(d, uid) >= u['max'] or self.coins < price:
+            self.sounds.play('deny')
+            return
+        self.coins -= price
+        w.upgrade(d, uid)
         self.sounds.play('buy')
         self.ui.refresh_shop()
 
@@ -331,6 +359,10 @@ class Game(Entity):
             self.weapons.cycle(-1)
         elif key == 'r':
             self.weapons.start_reload()
+        elif key == 'f8':
+            self.weapons.rotate_custom('yaw')
+        elif key == 'f9':
+            self.weapons.rotate_custom('roll')
         elif key == 'q':
             self.use_ability()
         elif key == 'b':
@@ -355,6 +387,10 @@ class Game(Entity):
         if self.state in ('playing', 'dead'):
             self.simulate(dt)
         elif self.state == 'menu':
+            self.ui.update_menu()
+            if self.updater.status == 'installed' and not getattr(self, '_restarting', False):
+                self._restarting = True
+                invoke(self.finish_update, delay=1.5)
             t = pytime.time() * 0.08
             x, z = math.cos(t) * 26, math.sin(t) * 26
             camera.position = (x, 14, z)

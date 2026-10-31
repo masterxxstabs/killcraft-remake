@@ -23,11 +23,11 @@ class Effects:
         self.game = game
         self.root = node()
         self.particles = []
-        for _ in range(160):
+        for _ in range(220):
             e = block(self.root, color=ucolor.white, enabled=False)
             self.particles.append(dict(e=e, v=Vec3(0, 0, 0), life=0, max=1, g=0, s=0.1))
         self.tracers = []
-        for _ in range(40):
+        for _ in range(80):
             e = block(self.root, size=(1, 1, 1), center=(0, 0, 0.5), color=ucolor.white, enabled=False)
             self.tracers.append(dict(e=e, life=0, max=1))
         self.rings = []
@@ -57,6 +57,36 @@ class Effects:
             e.color = c
             e.scale = p['s']
             e.rotation = (random.random() * 90, random.random() * 90, 0)
+
+    def spray(self, pos, direction, colors, count=3, speed=14, spread=0.2, life=0.5, size=0.18, gravity=-4):
+        """Particles shot forward in a cone (flamethrower)."""
+        for _ in range(count):
+            p = self.particles[self._p]
+            self._p = (self._p + 1) % len(self.particles)
+            d = Vec3(direction) + Vec3((random.random() - 0.5) * 2 * spread, (random.random() - 0.5) * 2 * spread,
+                                       (random.random() - 0.5) * 2 * spread)
+            d = d.normalized()
+            p.update(v=d * speed * (0.7 + random.random() * 0.5), life=life * (0.7 + random.random() * 0.5),
+                     max=life, g=gravity, s=size * (0.6 + random.random() * 0.8))
+            e = p['e']
+            e.enabled = True
+            e.position = pos
+            e.color = col(random.choice(colors))
+            e.scale = p['s']
+
+    def lightning(self, start, end, color='#c07bff', segments=5, life=0.12):
+        """A jagged bolt made of short tracers."""
+        pts = [Vec3(start)]
+        d = end - start
+        jitter = min(0.6, d.length() * 0.08)
+        for i in range(1, segments):
+            t = i / segments
+            pts.append(start + d * t + Vec3((random.random() - 0.5) * 2 * jitter, (random.random() - 0.5) * 2 * jitter,
+                                            (random.random() - 0.5) * 2 * jitter))
+        pts.append(Vec3(end))
+        for a, b in zip(pts, pts[1:]):
+            self.tracer(a, b, color, 0.045, life)
+        self.burst(end, color, 3, speed=3, size=0.08, life=0.3)
 
     def tracer(self, start, end, color='#fff2a8', width=0.025, life=0.07):
         t = self.tracers[self._t]

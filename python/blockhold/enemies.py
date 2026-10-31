@@ -5,10 +5,7 @@ from panda3d.core import Point3, Vec3 as PVec3
 from ursina import Vec3, application, destroy
 from .data.enemies import ENEMIES
 from .render import block, col, node
-from .textures import face_texture
-
-_face_cache = {}
-SKIN_UV = (0.01, 0.01, 0.06, 0.06)       # a plain-skin pixel of the face texture
+from .textures import zombie_skin
 
 # Hitboxes in the enemy's own (unscaled) space: (min, max)
 HEAD_BOX = ((-0.27, 1.45, -0.27), (0.27, 1.99, 0.27))
@@ -62,36 +59,60 @@ class Enemy:
         self.detour_side = 1
         self.last_pos = Vec3(pos)
         self.groan_t = 3 + random.random() * 8
+        self.burn_dps = 0       # damage per second while burning
+        self.burn_t = 0
+        self.burn_tick = 0
+        self.slow_mult = 1      # speed multiplier while frozen
+        self.slow_t = 0
         self.build()
 
-    # ── model ────────────────────────────────────────────────────────────────
+    # ── model ──────────────────────────────────────────────────────────────
     def build(self):
-        c = self.d['colors']
-        if self.kind not in _face_cache:
-            _face_cache[self.kind] = face_texture(c['skin'], c['eyes'])
+        skin = zombie_skin(self.kind, self.d['colors'], self.d.get('look', {}))
+        tex = skin.texture
+
+        def faces(front, side, back=None, top=None, bottom=None):
+            r = skin.rect
+            return {'north': r(front), 'south': r(back or front), 'east': r(side), 'west': r(side),
+                    'top': r(top or side), 'bottom': r(bottom or side)}
+
+        def part(parent, size, center, uv):
+            return block(parent, size=size, center=center, texture=tex, uv_rects=uv)
+
         self.root = node(self.game.world_root)
         self.body = node(self.root, scale=self.scale)
-        skin, shirt, pants = c['skin'], c['shirt'], c['pants']
-        block(self.body, size=(0.5, 0.72, 0.28), center=(0, 1.11, 0), color=shirt)
-        head_uv = {f: SKIN_UV for f in ('top', 'bottom', 'east', 'west', 'south')}
-        head_uv['north'] = (0, 0, 1, 1)
-        self.head = block(self.body, size=(0.5, 0.5, 0.5), center=(0, 1.72, 0), texture=_face_cache[self.kind], uv_rects=head_uv)
-        self.leg_l = self._limb(pants, 0.24, 0.75, -0.13, 0.75)
-        self.leg_r = self._limb(pants, 0.24, 0.75, 0.13, 0.75)
-        self.arm_l = self._limb(skin, 0.2, 0.72, -0.36, 1.44, sleeve=shirt)
-        self.arm_r = self._limb(skin, 0.2, 0.72, 0.36, 1.44, sleeve=shirt)
-        if self.d.get('boss'):
-            gold = '#e0b030'
-            block(self.body, size=(0.56, 0.12, 0.56), center=(0, 2.03, 0), color=gold)
+        part(self.body, (0.5, 0.72, 0.28), (0, 1.11, 0),
+             faces('torso_front', 'torso_side', 'torso_back', 'torso_top', 'torso_bottom'))
+        self.head = part(self.body, (0.5, 0.5, 0.5), (0, 1.72, 0),
+                         faces('head_front', 'head_side', 'head_back', 'head_top', 'head_bottom'))
+        leg = faces('leg_side', 'leg_side', 'leg_side', 'leg_top', 'leg_bottom')
+        arm = faces('arm_side', 'arm_side', 'arm_side', 'arm_top', 'arm_bottom')
+        self.leg_l = self._limb(0.24, 0.75, -0.13, 0.75, leg, part)
+        self.leg_r = self._limb(0.24, 0.75, 0.13, 0.75, leg, part)
+        self.arm_l = self._limb(0.2, 0.72, -0.36, 1.44, arm, part)
+        self.arm_r = self._limb(0.2, 0.72, 0.36, 1.44, arm, part)
+
+        extras = self.d.get('look', {}).get('extras', [])
+        if 'shoulder_pads' in extras:
+            pad = faces('pad', 'pad')
+            part(self.body, (0.3, 0.12, 0.34), (-0.37, 1.52, 0), pad)
+            part(self.body, (0.3, 0.12, 0.34), (0.37, 1.52, 0), pad)
+        if 'belly' in extras:
+            part(self.body, (0.42, 0.34, 0.14), (0, 0.98, 0.18), faces('belly', 'belly'))
+        if 'mohawk' in extras:
+            part(self.body, (0.1, 0.14, 0.44), (0, 2.03, -0.02), faces('hair', 'hair'))
+        if 'cape' in extras:
+            part(self.body, (0.6, 1.25, 0.04), (0, 0.95, -0.17), faces('cape', 'cape'))
+        if 'crown' in extras:
+            crown = faces('crown', 'crown')
+            part(self.body, (0.56, 0.12, 0.56), (0, 2.03, 0), crown)
             for x, z in ((-0.22, -0.22), (0.22, -0.22), (-0.22, 0.22), (0.22, 0.22), (0, 0.22)):
-                block(self.body, size=(0.09, 0.16, 0.09), center=(x, 2.15, z), color=gold)
+                part(self.body, (0.09, 0.16, 0.09), (x, 2.15, z), crown)
         self.root.position = self.position
 
-    def _limb(self, color, w, h, x, y, sleeve=None):
+    def _limb(self, w, h, x, y, uv, part):
         pivot = node(self.body, position=(x, y, 0))
-        block(pivot, size=(w, h, w), center=(0, -h / 2, 0), color=color)
-        if sleeve:
-            block(pivot, size=(w + 0.02, 0.24, w + 0.02), center=(0, -0.1, 0), color=sleeve)
+        part(pivot, (w, h, w), (0, -h / 2, 0), uv)
         return pivot
 
     def destroy(self):
@@ -123,6 +144,13 @@ class Enemy:
             return
         g = self.game
         self.hp -= amount
+        if amount < 0.01:          # finishing blow from burning: no number, no flash
+            if self.hp <= 0:
+                self.dead = True
+                self.hp = 0
+                g.sounds.play('death', pitch=0.8 + random.random() * 0.4)
+                g.on_enemy_killed(self, False)
+            return
         self.flash = 0.1
         if knock is not None:
             self.kb += knock / max(1, self.scale * self.scale)
@@ -135,6 +163,35 @@ class Enemy:
             self.hp = 0
             g.sounds.play('death', pitch=0.8 + random.random() * 0.4)
             g.on_enemy_killed(self, headshot)
+
+    def ignite(self, dps, seconds):
+        self.burn_dps = max(self.burn_dps, dps)
+        self.burn_t = max(self.burn_t, seconds)
+
+    def chill(self, mult, seconds):
+        self.slow_mult = min(self.slow_mult, mult) if self.slow_t > 0 else mult
+        self.slow_t = max(self.slow_t, seconds)
+
+    def update_status(self, dt):
+        g = self.game
+        if self.burn_t > 0:
+            self.burn_t -= dt
+            self.burn_tick -= dt
+            if random.random() < dt * 20:
+                g.effects.burst(self.chest_pos() + Vec3((random.random() - 0.5) * 0.4 * self.scale, 0, 0),
+                                random.choice(('#ff8c2a', '#ffcf3a', '#ff4a1a')), 1, speed=1.5, size=0.14, life=0.5, gravity=-6)
+            if self.burn_tick <= 0:
+                self.burn_tick = 0.25
+                dmg = self.burn_dps * 0.25
+                self.hp -= dmg
+                if self.hp <= 0:
+                    self.hurt(0.001)
+            if self.burn_t <= 0:
+                self.burn_dps = 0
+        if self.slow_t > 0:
+            self.slow_t -= dt
+            if self.slow_t <= 0:
+                self.slow_mult = 1
 
     def shoot(self, r):
         g = self.game
@@ -156,8 +213,16 @@ class Enemy:
         g = self.game
         if self.flash > 0:
             self.flash -= dt
-        k = 3 if self.flash > 0 else 1
-        self.root.setColorScale(k, k, k, 1)
+        if self.flash > 0:
+            self.root.setColorScale(3, 3, 3, 1)
+        elif self.slow_t > 0:
+            self.root.setColorScale(0.6, 0.85, 1.6, 1)
+        elif self.burn_t > 0:
+            self.root.setColorScale(1.4, 0.8, 0.6, 1)
+        else:
+            self.root.setColorScale(1, 1, 1, 1)
+        if not self.dead:
+            self.update_status(dt)
 
         if self.dead:
             self.death_t += dt
@@ -186,7 +251,7 @@ class Enemy:
         if dist > 1e-4:
             tx, tz = tx / dist, tz / dist
         mx, mz = tx, tz
-        speed = self.speed
+        speed = self.speed * (self.slow_mult if self.slow_t > 0 else 1)
 
         r = self.d.get('ranged')
         if r:

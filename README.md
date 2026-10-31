@@ -4,9 +4,11 @@ A blocky first-person wave survival game. Hold the arena, survive the waves, spe
 
 It comes in two versions with the same gameplay:
 
-- **Python version** in the [`python/`](python/) folder, built with the Ursina engine.
-  See [`python/README.md`](python/README.md) to install and run it.
-- **Browser version** (this folder): no install, just open `index.html`. Details below.
+- **Python version** in the [`python/`](python/) folder, built with the Ursina engine. This
+  is the main version. It has 14 weapons with upgrades, painted zombie skins, Sketchfab 3D
+  gun models and auto-updates. See [`python/README.md`](python/README.md).
+- **Browser version** (this folder): no install, just open `index.html`. It's the original
+  1.0 feature set and doesn't have the newer Python-only additions. Details below.
 
 ## Play (browser version)
 
