@@ -63,6 +63,9 @@ class Enemy:
         self.stuck_t = 0
         self.detour = 0
         self.nav_t = 0.0
+        self.progress_t = 0.0
+        self.best_d = math.inf     # closest it has got to its target (in flow-field steps)
+        self.no_progress = 0
         self.blocked = False      # True = a wall is in the way: follow the flow field
         self.detour_side = 1
         self.last_pos = Vec3(pos)
@@ -276,6 +279,8 @@ class Enemy:
         if r:
             self.ranged_cd -= dt
             can_see = dist < r['range'] and g.world.line_of_sight(self.head_pos(), self.target.eye())
+            if can_see:
+                self.no_progress = 0        # happy shooting from where it is
             if can_see and dist > 6 and not self.d.get('boss'):
                 side = 0.6 if math.sin(self.walk * 0.3) > 0 else -0.6
                 mx, mz = -tz * side, tx * side
@@ -321,7 +326,23 @@ class Enemy:
         self.position.z += (mz * speed + self.kb.z) * dt
         self.kb *= max(0, 1 - dt * 8)
         self.position.y = 0
-        self.position.x, self.position.z = g.world.collide(self.position, self.radius)
+        # walls use a slim radius so even big zombies fit through doorways (they clip a little)
+        self.position.x, self.position.z = g.world.collide(self.position, min(self.radius, 0.45))
+
+        # safety net: no progress towards the target for 10 s -> dig down and come up near it
+        self.progress_t += dt
+        if self.progress_t >= 1.0:
+            self.progress_t = 0.0
+            here = g.enemies.flow.steps_at(self.position.x, self.position.z)
+            if here is None:
+                here = dist
+            if dist < reach + 1.0 or here < self.best_d - 0.5:
+                self.best_d = min(self.best_d, here)
+                self.no_progress = 0
+            else:
+                self.no_progress += 1
+                if self.no_progress >= 10:
+                    self.resurface()
 
         self.stuck_t += dt
         if self.stuck_t > 0.6:
@@ -348,6 +369,20 @@ class Enemy:
         self.animate(dt, speed)
         self.root.position = self.position
         return True
+
+    def resurface(self):
+        """Stuck somewhere: sink into the ground and climb out of a spawn point near the target."""
+        g = self.game
+        g.effects.burst(Vec3(self.position.x, 0.2, self.position.z), '#6b4a2b', 8, speed=3, size=0.2)
+        t = self.target.position if self.target is not None else g.player.position
+        self.position = g.world.random_spawn(t, min_dist=8)
+        self.rise = 0.9
+        self.position.y = -self.height
+        self.best_d = math.inf
+        self.no_progress = 0
+        self.kb = Vec3(0, 0, 0)
+        self.root.position = self.position
+        g.events.emit('enemy_resurfaced', enemy=self)
 
     def face(self, target):
         want = math.degrees(math.atan2(target.x - self.position.x, target.z - self.position.z))
@@ -401,6 +436,18 @@ class FlowField:
                         dist[j] = d
                         queue.append((nx, nz))
         self.dist = dist
+
+    def steps_at(self, x, z):
+        """How many steps from (x, z) to the nearest target, or None if unknown / unreachable."""
+        if self.dist is None:
+            return None
+        w = self.world
+        gx, gz = w.to_grid(x, z)
+        if not w.inside(gx, gz):
+            return None
+        best = min(self.dist[(gz + dz) * w.n + gx + dx] for dx in (-1, 0, 1) for dz in (-1, 0, 1)
+                   if 0 <= gx + dx < w.n and 0 <= gz + dz < w.n)
+        return None if best >= self.INF else best
 
     def direction(self, x, z):
         """Unit (dx, dz) towards the next cell on the way, or None."""

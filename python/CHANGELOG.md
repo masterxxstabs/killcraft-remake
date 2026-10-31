@@ -9,6 +9,8 @@ To publish an update: bump the number in VERSION, add a section here, push to Gi
 - Aiming down the sights now lines the sights (or red dot / holo) up with the crosshair
 - Smaller, cleaner ammo counter that no longer covers your gun
 - Fixed two memory leaks that made long games slower and slower (tested over 100 waves)
+- Zombies now find their way around walls and through doors instead of getting stuck
+- A zombie that gets stuck anyway digs down and climbs out near you, so a wave can never hang
 
 ## 1.7.0
 - New look inspired by the original game: a dark, foggy dusk with a torch lighting up the ground around you

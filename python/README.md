@@ -59,6 +59,8 @@ clear) under Settings or in the pause menu. The presets are in `blockhold/data/a
 
 ![Dusk (top) and night (bottom)](docs/atmosphere.jpg)
 
+![First-person view: blocky arms holding an AK-47](docs/first_person.jpg)
+
 ## Maps and the map editor
 
 Pick a map on the main menu's **MAPS** tab: the random arena, the example maps **Village**
