@@ -6,12 +6,17 @@ without rebuilding everything.
 """
 import math
 import random
-from panda3d.core import NodePath
-from ursina import Mesh, Vec3, destroy
-from .data.assets import ASSETS
+import time as pytime
+from panda3d.core import NodePath, TransparencyAttrib
+from ursina import Mesh, Vec2, Vec3, color as ucolor, destroy
+from .data.assets import ASSETS, PATHS
 from .lowpoly import LowPoly
-from .render import WORLD_SHADER, add_box, node
-from .textures import Atlas, grass_texture, path_atlas
+from .render import WORLD_SHADER, add_box, node, set_glow
+from .textures import Atlas
+from .world_textures import smooth_texture
+
+PATH_ORDER = list(PATHS)
+SOFT_PATHS = {'dirt', 'gravel', 'sand'}     # these fade into the grass at the edges
 
 NEIGHBOURS = {
     'top': (0, 1, 0), 'bottom': (0, -1, 0), 'east': (1, 0, 0),
@@ -30,6 +35,10 @@ def prototype(aid, variant=0):
         ASSETS[aid]['build'](lp)
         holder = NodePath(f'proto_{aid}_{variant}')
         lp.mesh().reparentTo(holder)
+        glow = lp.glow_mesh()
+        if glow is not None:                  # lamp bulbs, flames: not darkened at night
+            glow.reparentTo(holder)
+            set_glow(glow, 1.0)
         _protos[key] = holder
     return _protos[key]
 
@@ -60,8 +69,8 @@ class World:
         self.ore_spawns = []              # (position, ore kind or 'random') from map markers
         self.benches = []                 # workbench positions
         self.rnd = random.Random(seed).random
-        self.atlas = Atlas()
-        self.paths_atlas = path_atlas()
+        self.atlas = Atlas(tile=32)
+        self.prop_lights = []              # (prop, light dict) for props that glow
         self.root = node()
         self.props_root = self.root.attachNewNode('props')
         self.block_chunks = {}
@@ -138,11 +147,13 @@ class World:
     def block_at(self, gx, y, gz):
         return self.columns.get((gx, gz), {}).get(y)
 
-    def free(self, gx, gz, pad=0):
+    def free(self, gx, gz, pad=0, paths_ok=True):
         for dx in range(-pad, pad + 1):
             for dz in range(-pad, pad + 1):
                 x, z = gx + dx, gz + dz
                 if not self.inside(x, z, 1) or self.heights[self.gidx(x, z)] > 0 or (x, z) in self.columns:
+                    return False
+                if not paths_ok and (x, z) in self.paths:
                     return False
         cx, cz = gx - self.half, gz - self.half
         return cx * cx + cz * cz > 30       # keep the middle clear for the player
@@ -158,7 +169,9 @@ class World:
             return
         else:
             self.paths[(gx, gz)] = kind
-        self.dirty_paths.add((gx // CHUNK, gz // CHUNK))
+        for dx in (-1, 0, 1):                     # soft edges depend on the cells around
+            for dz in (-1, 0, 1):
+                self.dirty_paths.add(((gx + dx) // CHUNK, (gz + dz) // CHUNK))
 
     # ── props ────────────────────────────────────────────────────────────────
     def add_prop(self, aid, x, z, rot=0.0, scale=1.0):
@@ -193,6 +206,8 @@ class World:
             self.ore_spawns.append((Vec3(x, 0, z), a['ore']))
         if a.get('station') == 'workbench':
             self.benches.append(Vec3(x, 0, z))
+        if a.get('light') and not self.editor:
+            self.prop_lights.append((p, a['light']))
         return p
 
     def remove_prop(self, p):
@@ -214,6 +229,7 @@ class World:
             self.ore_spawns = [s for s in self.ore_spawns if (s[0].x, s[0].z) != (p['x'], p['z'])]
         if a.get('station') == 'workbench':
             self.benches = [b for b in self.benches if (b.x, b.z) != (p['x'], p['z'])]
+        self.prop_lights = [pl for pl in self.prop_lights if pl[0] is not p]
 
     def set_dynamic_solid(self, gx, gz, h):
         """Make a cell solid up to height h (0 = back to normal) for things that come and go, like ore nodes."""
@@ -239,18 +255,45 @@ class World:
 
     # ── building meshes ──────────────────────────────────────────────────────
     def build_ground(self):
-        size = self.n + 60
-        gv, gt, gu, gc = [], [], [], []
-        add_box(gv, gt, gu, gc, (0, -0.5, 0), (size, 1, size), {'top': (0, 0, size, size)},
-                skip=('bottom', 'east', 'west', 'north', 'south'))
-        self.ground = node(self.root, model=Mesh(vertices=gv, triangles=gt, uvs=gu, colors=gc), texture=grass_texture())
+        step = 4
+        cells = (self.n + 64) // step
+        half = cells * step / 2
+        rnd = random.Random(self.n * 7 + 3)
+        coarse = [[rnd.random() for _ in range(cells // 3 + 3)] for _ in range(cells // 3 + 3)]
+        dry = [[rnd.random() for _ in range(cells // 2 + 3)] for _ in range(cells // 2 + 3)]
+
+        def smooth(grid, u, v):
+            i, j = int(u), int(v)
+            fu, fv = u - i, v - j
+            fu, fv = fu * fu * (3 - 2 * fu), fv * fv * (3 - 2 * fv)
+            a = grid[i][j] + (grid[i + 1][j] - grid[i][j]) * fu
+            b = grid[i][j + 1] + (grid[i + 1][j + 1] - grid[i][j + 1]) * fu
+            return a + (b - a) * fv
+
+        verts, uvs, cols, tris = [], [], [], []
+        for i in range(cells + 1):
+            for j in range(cells + 1):
+                x, z = -half + i * step, -half + j * step
+                verts.append(Vec3(x, 0, z))
+                uvs.append(Vec2(x / 4, z / 4))
+                f = 0.78 + 0.36 * smooth(coarse, i / 3, j / 3)
+                d = max(0.0, smooth(dry, i / 2, j / 2) - 0.55) * 1.6
+                cols.append(ucolor.Color(f * (1 + 0.18 * d), f * (1 + 0.08 * d), f * (1 - 0.12 * d), 1))
+        w = cells + 1
+        for i in range(cells):
+            for j in range(cells):
+                a, b, c, e = i * w + j, (i + 1) * w + j, (i + 1) * w + j + 1, i * w + j + 1
+                tris += [a, c, b, a, e, c]
+        self.ground = node(self.root, model=Mesh(vertices=verts, triangles=tris, uvs=uvs, colors=cols),
+                           texture=smooth_texture('grass'))
+        self.ground.setTwoSided(True)
 
     def build_walls(self):
         n = self.n
         for i in range(n):
             for x, z in ((i, 0), (i, n - 1), (0, i), (n - 1, i)):
                 if (x, z) not in self.columns:
-                    self.column('stone', x, z, 3, top='brick')
+                    self.column('mossy', x, z, 3)
 
     def flush(self):
         """Rebuild the meshes of every chunk that changed."""
@@ -284,22 +327,83 @@ class World:
             self.block_chunks[(cx, cz)] = node(self.root, model=Mesh(vertices=verts, triangles=tris, uvs=uvs, colors=cols),
                                                texture=self.atlas.texture)
 
+    def _path_alpha(self, gx, gz):
+        """How opaque the path is at grid corner (gx, gz): from the 4 cells around it."""
+        around = [(gx - 1, gz - 1), (gx, gz - 1), (gx - 1, gz), (gx, gz)]
+        n = sum(1 for c in around if c in self.paths)
+        if n == 4:
+            return 1.0
+        if n == 3:
+            return 0.75
+        if n == 2:
+            a, b, c, d = (p in self.paths for p in around)
+            return 0.4 if (a and b) or (c and d) or (a and c) or (b and d) else 0.25
+        return 0.0
+
+    @staticmethod
+    def _jitter(x, z):
+        h = math.sin(x * 12.9898 + z * 78.233) * 43758.5453
+        return h - math.floor(h)
+
     def _build_path_chunk(self, cx, cz):
-        old = self.path_chunks.pop((cx, cz), None)
-        if old:
+        for old in self.path_chunks.pop((cx, cz), []):
             destroy(old)
-        verts, tris, uvs, cols = [], [], [], []
+        meshes = {}
         for gx in range(cx * CHUNK, cx * CHUNK + CHUNK):
             for gz in range(cz * CHUNK, cz * CHUNK + CHUNK):
                 kind = self.paths.get((gx, gz))
                 if kind is None:
                     continue
-                centre = (gx - self.half + 0.5, 0.0, gz - self.half + 0.5)
-                add_box(verts, tris, uvs, cols, centre, (1, 0.04, 1), {'top': self.paths_atlas.rect(kind)},
-                        skip=('bottom', 'east', 'west', 'north', 'south'))
-        if verts:
-            self.path_chunks[(cx, cz)] = node(self.root, model=Mesh(vertices=verts, triangles=tris, uvs=uvs, colors=cols),
-                                              texture=self.paths_atlas.texture)
+                verts, uvs, cols, tris = meshes.setdefault(kind, ([], [], [], []))
+                soft = kind in SOFT_PATHS
+                x0, z0 = gx - self.half, gz - self.half
+                y = 0.02 + PATH_ORDER.index(kind) * 0.003 if kind in PATH_ORDER else 0.02
+                base = len(verts)
+                for iz in range(3):
+                    for ix in range(3):
+                        x, z = x0 + ix * 0.5, z0 + iz * 0.5
+                        if ix == 1 and iz == 1:
+                            a = 1.0
+                        elif ix == 1 or iz == 1:          # middle of an edge: the two cells beside it
+                            nx, nz = (gx + (ix - 1), gz) if iz == 1 else (gx, gz + (iz - 1))
+                            a = 1.0 if (nx, nz) in self.paths else (0.3 if soft else 0.9)
+                        else:                             # a corner: the four cells around it
+                            a = self._path_alpha(gx + ix // 2, gz + iz // 2)
+                            a = a if soft else max(a, 0.9)
+                        if soft and a < 1:
+                            a = max(0.0, min(1.0, a * (0.6 + 0.8 * self._jitter(x, z))))
+                        verts.append(Vec3(x, y, z))
+                        uvs.append(Vec2(x / 2, z / 2))
+                        cols.append(ucolor.Color(1, 1, 1, a))
+                for iz in range(2):
+                    for ix in range(2):
+                        a = base + iz * 3 + ix
+                        tris += [a, a + 3, a + 4, a, a + 4, a + 1]
+        nodes = []
+        for kind, (verts, uvs, cols, tris) in meshes.items():
+            e = node(self.root, model=Mesh(vertices=verts, triangles=tris, uvs=uvs, colors=cols),
+                     texture=smooth_texture('path_' + kind))
+            e.setTwoSided(True)
+            e.setTransparency(TransparencyAttrib.M_alpha)
+            e.setDepthWrite(False)
+            e.setBin('transparent', 0)
+            nodes.append(e)
+        if nodes:
+            self.path_chunks[(cx, cz)] = nodes
+
+    def lights(self):
+        """Light from lamp posts, campfires, workbench lanterns... (see Lighting)."""
+        t = pytime.time()
+        out = []
+        for p, l in self.prop_lights:
+            ox, oy, oz = l.get('at', (0, 1, 0))
+            r = math.radians(p['rot'])
+            s = p.get('scale', 1)
+            x = p['x'] + (ox * math.cos(r) + oz * math.sin(r)) * s
+            z = p['z'] + (-ox * math.sin(r) + oz * math.cos(r)) * s
+            k = 1 + l.get('flicker', 0) * (math.sin(t * 9 + p['x']) * 0.6 + math.sin(t * 23 + p['z']) * 0.4)
+            out.append((Vec3(x, oy * s, z), l['colour'], l['radius'], l['strength'] * k))
+        return out
 
     def destroy(self):
         destroy(self.root)
@@ -311,9 +415,26 @@ class World:
         def rand_cell(margin):
             return margin + int(r() * (n - margin * 2)), margin + int(r() * (n - margin * 2))
 
+        for k in range(3):                        # winding dirt tracks out from the middle
+            a = k * math.tau / 3 + r() * 1.2
+            x, z = (r() - 0.5) * 4, (r() - 0.5) * 4
+            turn = 0.0
+            for _ in range(80):
+                turn = turn * 0.9 + (r() - 0.5) * 0.35
+                a += turn
+                x += math.cos(a) * 0.7
+                z += math.sin(a) * 0.7
+                if abs(x) > self.half - 3 or abs(z) > self.half - 3:
+                    break
+                for dx in (-1, 0, 1):
+                    for dz in (-1, 0, 1):
+                        if dx * dx + dz * dz <= 1 or r() < 0.25:
+                            gx, gz = self.to_grid(x + dx * 0.8, z + dz * 0.8)
+                            if self.inside(gx, gz, 2):
+                                self.set_path(gx, gz, 'dirt')
         for _ in range(22):                       # block trees
             gx, gz = rand_cell(2)
-            if not self.free(gx, gz, 2):
+            if not self.free(gx, gz, 2, paths_ok=False):
                 continue
             h = 3 + int(r() * 3)
             self.column('log', gx, gz, h)
@@ -328,7 +449,7 @@ class World:
                                 self.place('leaves', gx + dx, y, gz + dz, solid=False)
         for _ in range(26):                       # crate piles
             gx, gz = rand_cell(2)
-            if not self.free(gx, gz, 1):
+            if not self.free(gx, gz, 1, paths_ok=False):
                 continue
             w, d = 1 + int(r() * 2), 1 + int(r() * 2)
             for dx in range(w):
@@ -338,29 +459,49 @@ class World:
             gx, gz = rand_cell(4)
             horiz, length = r() < 0.5, 4 + int(r() * 6)
             cells = [(gx + k, gz) if horiz else (gx, gz + k) for k in range(length)]
-            if not all(self.free(x, z, 1) for x, z in cells):
+            if not all(self.free(x, z, 1, paths_ok=False) for x, z in cells):
                 continue
             for x, z in cells:
-                self.column('planks' if r() < 0.3 else 'brick', x, z, 1 + int(r() * 3))
+                kind = 'mossy' if r() < 0.6 else ('brick' if r() < 0.6 else 'planks')
+                self.column(kind, x, z, 1 + int(r() * 3))
         for _ in range(12):                       # pillars
             gx, gz = rand_cell(3)
-            if not self.free(gx, gz, 1):
+            if not self.free(gx, gz, 1, paths_ok=False):
                 continue
             self.column('stone', gx, gz, 3 + int(r() * 3), top='obsidian')
         benches = 0
-        for _ in range(60):                       # two workbenches: one near the start, one further out
-            gx, gz = rand_cell(4)
-            cx, cz = gx - self.half, gz - self.half
-            dist = math.hypot(cx, cz)
-            if not (7 < dist < 12 if benches == 0 else dist > 16) or not self.free(gx, gz, 1):
+        for attempt in range(240):                # two workbenches: one near the start, one further out
+            a = r() * math.tau
+            dist = 7 + r() * 5 if benches == 0 else 16 + r() * max(2, self.half - 20)
+            gx, gz = self.to_grid(math.cos(a) * dist, math.sin(a) * dist)
+            if not self.free(gx, gz, 1, paths_ok=attempt > 140):    # crowded map: beside a track is fine
                 continue
             self.add_prop('workbench', gx - self.half + 0.5, gz - self.half + 0.5, (int(r() * 4)) * 90)
             benches += 1
             if benches == 2:
                 break
+        fires = 0
+        for _ in range(40):                       # a couple of campfires
+            gx, gz = rand_cell(5)
+            if fires < 2 and self.free(gx, gz, 1, paths_ok=False):
+                self.add_prop('campfire', gx - self.half + 0.5, gz - self.half + 0.5, r() * 360)
+                fires += 1
+        path_cells = sorted(self.paths)
+        lamps = 0
+        for _ in range(60):                       # lamp posts beside the tracks
+            if not path_cells or lamps >= 5:
+                break
+            gx, gz = path_cells[int(r() * len(path_cells))]
+            side = (2, 0) if r() < 0.5 else (0, 2)
+            gx, gz = gx + side[0] * (1 if r() < 0.5 else -1), gz + side[1] * (1 if r() < 0.5 else -1)
+            if self.free(gx, gz, 0, paths_ok=False) and all(
+                    math.hypot(p['x'] - (gx - self.half + 0.5), p['z'] - (gz - self.half + 0.5)) > 9
+                    for p in self.props if p['id'] == 'lamp_post'):
+                self.add_prop('lamp_post', gx - self.half + 0.5, gz - self.half + 0.5, int(r() * 4) * 90)
+                lamps += 1
         for _ in range(45):                       # low-poly bushes and flowers
             gx, gz = rand_cell(2)
-            if self.free(gx, gz, 0):
+            if self.free(gx, gz, 0, paths_ok=False):
                 aid = ('bush', 'tall_grass', 'flowers', 'fern', 'rock', 'flower_bush')[int(r() * 6)]
                 self.add_prop(aid, gx - self.half + 0.2 + r() * 0.6, gz - self.half + 0.2 + r() * 0.6,
                               r() * 360, 0.85 + r() * 0.35)

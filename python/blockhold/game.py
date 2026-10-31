@@ -8,7 +8,10 @@ from ursina import Entity, Vec3, application, camera, color as ucolor, held_keys
 
 from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
-from .data.waves import BOSS, INTERMISSION, NORMAL_SKY, build_wave
+from .data.waves import BOSS, INTERMISSION, build_wave
+from .data.atmosphere import ATMOSPHERES, DEFAULT_ATMOSPHERE, TORCH_COLOUR
+from .lighting import Lighting
+from .sky import Sky
 from .data.weapons import WEAPONS
 from .effects import Effects
 from .net import Events, PlayerInput
@@ -51,9 +54,13 @@ class Game(Entity):
         super().__init__()
         camera.fov = 90
         camera.clip_plane_near = 0.05
+        camera.clip_plane_far = 1000
         self.save = load_json(SAVE_FILE, dict(best_wave=0, best_score=0, total_kills=0, games=0))
         st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
-                                           fov=90, auto_update=True, muted=False, map=None))
+                                           fov=90, auto_update=True, muted=False, map=None,
+                                           atmosphere=DEFAULT_ATMOSPHERE))
+        self.atmosphere_id = st['atmosphere'] if st['atmosphere'] in ATMOSPHERES else DEFAULT_ATMOSPHERE
+        self.atmosphere_override = None      # the map editor uses its own bright look
         self.sensitivity = st['sensitivity']
         self.fov = st['fov']
         self.auto_update = st['auto_update']
@@ -77,8 +84,10 @@ class Game(Entity):
         self.intermission = 0
         self.events = Events()
         self._pressed = set()        # keys pressed since the last frame (for PlayerInput)
-        self.sky = list(hex_rgb(NORMAL_SKY['sky']) + hex_rgb(NORMAL_SKY['fog']) + (NORMAL_SKY['fog_near'], NORMAL_SKY['fog_far']))
+        self.sky = [0.0] * 11                 # sky rgb, fog rgb, fog near, fog far, ambient rgb
         self.sky_target = list(self.sky)
+        self.lighting = Lighting(self)
+        self.sky_dome = Sky()
 
         self.world = World()
         self.world_root = node()
@@ -95,7 +104,7 @@ class Game(Entity):
         self.mining = Mining(self)
         self.craft_open = False
         self.weapons.set_visible(False)
-        self.apply_sky(NORMAL_SKY, instant=True)
+        self.apply_sky(instant=True)
         self.show_cursor(True)
         self.updater = Updater()
         if check_updates and self.auto_update:
@@ -119,7 +128,7 @@ class Game(Entity):
     def save_settings(self):
         write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id,
                                        fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted,
-                                       map=self.map_stem))
+                                       map=self.map_stem, atmosphere=self.atmosphere_id))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
@@ -166,6 +175,7 @@ class Game(Entity):
             except Exception as e:
                 print('could not load map', self.map_stem, e)
         self.from_editor = map_data if from_editor else None
+        self.atmosphere_override = None
         for screen in (self.ui.menu, self.ui.dead, self.ui.pause, self.ui.shop):
             screen.enabled = False
         self.ui.hud.enabled = True
@@ -178,6 +188,8 @@ class Game(Entity):
         self.mining.clear()
         self.world.destroy()
         self.world = World(map_data=map_data)
+        self.sky_dome.set_arena(self.world.half)
+        self.lighting.clear()
         self.start_quest()
         self.player.reset()
         self.player.position = Vec3(self.world.player_spawn)
@@ -217,7 +229,7 @@ class Game(Entity):
         self.weapons.set_visible(False)
         self.ui.refresh_menu()
         self.ui.menu.enabled = True
-        self.apply_sky(NORMAL_SKY)
+        self.apply_sky()
         self.show_cursor(True)
 
     # ── map editor ───────────────────────────────────────────────────────────
@@ -227,6 +239,8 @@ class Game(Entity):
         self.weapons.set_visible(False)
         self.state = 'editor'
         self.world.destroy()
+        self.atmosphere_override = 'editor'
+        self.apply_sky(instant=True)
         self.editor = Editor(self, map_data, stem)
         self.show_cursor(True)
 
@@ -234,6 +248,8 @@ class Game(Entity):
         if self.editor:
             self.editor.close()
             self.editor = None
+        self.atmosphere_override = None
+        self.apply_sky(instant=True)
         self.world = World()
         self.to_menu()
 
@@ -260,7 +276,7 @@ class Game(Entity):
     def begin_intermission(self, seconds=INTERMISSION):
         self.phase = 'intermission'
         self.intermission = seconds
-        self.apply_sky(NORMAL_SKY)
+        self.apply_sky()
 
     def start_wave(self):
         if self.phase != 'intermission':
@@ -272,7 +288,7 @@ class Game(Entity):
         self.spawn_t = 1
         self.phase = 'wave'
         mod = self.wave['modifier']
-        self.apply_sky({**NORMAL_SKY, **mod} if mod else NORMAL_SKY)
+        self.apply_sky(mod)
         self.sounds.play('wave_start')
         self.events.emit('wave_started', wave=self.wave_number)
         n = self.wave_number
@@ -606,9 +622,27 @@ class Game(Entity):
         self.shake_amt = min(0.6, self.shake_amt + n)
 
     # ── sky & fog per wave modifier ──────────────────────────────────────────
-    def apply_sky(self, cfg, instant=False):
-        c = {**NORMAL_SKY, **cfg}
-        self.sky_target = list(hex_rgb(c['sky']) + hex_rgb(c['fog']) + (c['fog_near'], c['fog_far']))
+    def atmosphere(self):
+        return ATMOSPHERES[self.atmosphere_override or self.atmosphere_id]
+
+    def set_atmosphere(self, aid):
+        self.atmosphere_id = aid
+        self.save_settings()
+        in_wave = self.state in ('playing', 'paused') and self.phase == 'wave' and getattr(self, 'wave', None)
+        self.apply_sky(self.wave.get('modifier') if in_wave else None, instant=True)
+
+    def apply_sky(self, mod=None, instant=False):
+        """Sky, fog and light level: the chosen atmosphere, tinted by a wave modifier (Blood Moon...)."""
+        a = self.atmosphere()
+        sky, fog, near, far = hex_rgb(a['sky']), hex_rgb(a['fog']), a['fog_near'], a['fog_far']
+        if mod and 'sky' in mod:
+            k = a['mod_dim']
+            sky = tuple(c * k for c in hex_rgb(mod['sky']))
+            fog = tuple(c * k for c in hex_rgb(mod.get('fog', mod['sky'])))
+            near, far = min(near, mod.get('fog_near', near)), min(far, mod.get('fog_far', far))
+        self.sky_target = list(sky + fog + (near, far) + tuple(a['ambient']))
+        self.lighting.set_atmosphere(a)
+        self.sky_dome.set_style(a)
         if instant:
             self.sky = list(self.sky_target)
             self.blend_sky(0)
@@ -616,8 +650,16 @@ class Game(Entity):
     def blend_sky(self, k):
         self.sky = [a + (b - a) * k for a, b in zip(self.sky, self.sky_target)]
         s = self.sky
-        window.color = ucolor.Color(s[0], s[1], s[2], 1)
+        window.color = ucolor.Color(s[3], s[4], s[5], 1)
         set_fog(scene, s[3:6], s[6], s[7])
+        self.sky_dome.set_colours(s[0:3], s[3:6], s[7], 0.85 if s[8] > 0.9 else 0.55)
+        amb = s[8:11]
+        self.lighting.set_ambient(amb)
+        # the gun in your hands is lit by your torch
+        t = self.lighting.torch * 0.45
+        vm = tuple(min(1.0, amb[i] + t * TORCH_COLOUR[i]) for i in range(3))
+        from panda3d.core import LVecBase3f
+        self.weapons.vm_root.setShaderInput('ambient', LVecBase3f(*vm))
 
     # ── input ────────────────────────────────────────────────────────────────
     def input(self, key):
@@ -722,6 +764,8 @@ class Game(Entity):
 
     def step(self, dt):
         self.blend_sky(min(1, dt * 1.5))
+        self.sky_dome.update(dt)
+        self.lighting.update(dt)
         if self.state in ('playing', 'dead'):
             self.simulate(dt)
         elif self.state == 'editor':

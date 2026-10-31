@@ -46,6 +46,9 @@ class LowPoly:
         self.sun = _norm(sun) if sun else SUN
         self.half = _norm(tuple(a + b for a, b in zip(self.sun, VIEWER)))
         self.spec = 0.0          # shininess of the next shapes (0 = matte, 1 = polished metal)
+        self.emissive = False    # True = the next shapes glow (lamps, flames): they go in glow_mesh()
+        self.glow_verts = []
+        self.glow_cols = []
 
     # ── triangles ────────────────────────────────────────────────────────────
     def tri(self, a, b, c, colour, outward=None):
@@ -67,6 +70,10 @@ class LowPoly:
         v = 1 + (self.rnd.random() - 0.5) * 2 * self.variation
         hi = self.spec * max(0.0, _dot(face_out, self.half)) ** 10 * 0.6 if self.spec else 0
         cl = ucolor.Color(min(1, r * light * v + hi), min(1, g * light * v + hi), min(1, bl * light * v + hi), 1)
+        if self.emissive:
+            self.glow_verts += [a, b, c]
+            self.glow_cols += [cl, cl, cl]
+            return
         self.verts += [a, b, c]
         self.cols += [cl, cl, cl]
 
@@ -209,6 +216,13 @@ class LowPoly:
     def mesh(self):
         verts = [Vec3(*v) for v in self.verts]
         return Mesh(vertices=verts, triangles=list(range(len(verts))), colors=self.cols, static=True)
+
+    def glow_mesh(self):
+        """The glowing parts, or None."""
+        if not self.glow_verts:
+            return None
+        verts = [Vec3(*v) for v in self.glow_verts]
+        return Mesh(vertices=verts, triangles=list(range(len(verts))), colors=self.glow_cols, static=True)
 
     def triangle_count(self):
         return len(self.verts) // 3

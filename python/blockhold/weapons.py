@@ -10,13 +10,34 @@ from .data.attachments import ATTACHMENTS
 from .data.gun_models import MODELS
 from .data.weapons import PRICE_GROWTH, WEAPON_UPGRADES, WEAPONS, weapon_upgrade_price
 from .gunsmith import Smith
-from .render import block, col, node, set_fog
+from .render import block, col, node, set_fog, init_light_inputs, set_glow
 from .textures import weapon_atlas
 
 UPGRADES_BY_ID = {u['id']: u for u in WEAPON_UPGRADES}
 MOUNT_FOR_SLOT = {'optic': 'optic', 'muzzle': 'muzzle', 'under': 'under'}
 _slot_cache = {}
 
+
+_flash = None
+
+
+def _flash_mesh():
+    """Eight spikes around a hot centre, seen face-on down the barrel."""
+    global _flash
+    if _flash is None:
+        from .lowpoly import LowPoly
+        lp = LowPoly(seed=3, variation=0.0, sun=(0, 0, -1))
+        for i in range(8):
+            a = i / 8 * math.tau
+            length = 0.06 if i % 2 == 0 else 0.035
+            tip = (math.cos(a) * length, math.sin(a) * length, 0)
+            for side in (1, -1):
+                b = a + side * math.tau / 18
+                base = (math.cos(b) * 0.014, math.sin(b) * 0.014, 0)
+                for facing in ((0, 0, 1), (0, 0, -1)):
+                    lp.tri((0, 0, 0), base, tip, '#ffd27a' if i % 2 else '#fff1c4', facing)
+        _flash = lp.mesh()
+    return _flash
 
 class Weapons:
     def __init__(self, game, owner=None):
@@ -26,6 +47,7 @@ class Weapons:
         base = application.base
         self.vm_root = NodePath('viewmodel')
         set_fog(self.vm_root, (0, 0, 0), 1000, 1001)      # no fog on the gun
+        init_light_inputs(self.vm_root)                   # the gun has its own light level (see Game.blend_sky)
         self.lens = PerspectiveLens()
         self.lens.setFov(70)
         self.lens.setNearFar(0.01, 10)
@@ -45,7 +67,9 @@ class Weapons:
         self.holder.scale = 0.6
         self.model = None
         self.spinner = None
-        self.flash = block(self.holder, size=(0.12, 0.12, 0.02), color='#ffe08a', enabled=False)
+        self.flash = node(self.holder, enabled=False)            # a star-shaped muzzle flash
+        _flash_mesh().copyTo(self.flash)
+        set_glow(self.flash, 1.0)
         self.reset()
 
     def set_visible(self, on):
@@ -359,6 +383,10 @@ class Weapons:
             st['ammo'] -= 1
         self.kick = 0.4 if d.get('cone') else 1
         self.flash_t = 0.05
+        self.flash.rotation_z = random.random() * 360
+        self.flash.scale = 0.75 + random.random() * 0.6
+        if not d.get('cone'):
+            g.lighting.flash(eye + fwd * 1.2, (1.0, 0.82, 0.55), 9, 1.6, life=0.06)
         p.recoil += (2.3 if d.get('projectile') else min(3, d['damage'] * d.get('pellets', 1) / 70 + 0.3)) \
             * self.mod(d, 'recoil') * (0.7 if g.aiming else 1)
         if not d.get('cone') or random.random() < 0.3:

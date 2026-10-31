@@ -50,6 +50,13 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 Your best wave, best score and total kills are saved in a `.blockhold` folder in your
 home folder.
 
+### Atmosphere
+
+By default the game plays at **dusk**, like the original: dark and foggy, with a torch
+lighting up the ground around you. Muzzle flashes, explosions, campfires, lamp posts and
+glowing crystals light up the world too. Pick **Night** (darker still) or **Day** (bright and
+clear) under Settings or in the pause menu. The presets are in `blockhold/data/atmosphere.py`.
+
 ## Maps and the map editor
 
 Pick a map on the main menu's **MAPS** tab: the random arena, the example maps **Village**

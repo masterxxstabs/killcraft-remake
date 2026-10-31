@@ -15,6 +15,7 @@ from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
 from .data.weapons import CATEGORIES, WEAPONS
 from .data.resources import RESOURCES
+from .data.atmosphere import ATMOSPHERES
 from .render import col
 from .textures import icon, scope_texture, vignette_texture
 
@@ -683,6 +684,20 @@ class UI:
         FlatSlider(parent, x, y - 0.085, 0.38, 'Volume', 0, 100, round(g.sounds.volume * 100), lambda v: f'{v}%',
                    lambda v: g.set_volume(v / 100))
         FlatSlider(parent, x, y - 0.17, 0.38, 'Field of view', 70, 110, round(g.fov), lambda v: f'{v}°', g.set_fov)
+        y -= 0.265
+        text(parent, 'Atmosphere', x, y, 0.95, INK)
+        choices = [(k, a) for k, a in ATMOSPHERES.items() if not a.get('hidden')]
+        for i, (aid, a) in enumerate(choices):
+            on = g.atmosphere_id == aid
+            FlatButton(parent, a['name'].upper(), x + i * 0.13, y - 0.03, 0.122, 0.045,
+                       lambda k=aid: (g.set_atmosphere(k), self.refresh_settings_screen()),
+                       fill=TEAL if on else NAVY, edge=INK, size=0.85)
+
+    def refresh_settings_screen(self):
+        if self.game.state == 'paused':
+            self.show_pause()
+        else:
+            self.refresh_menu()
 
     def menu_about(self, win, g):
         b, u = win.body, g.updater

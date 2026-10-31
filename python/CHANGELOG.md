@@ -3,6 +3,14 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.7.0
+- New look inspired by the original game: a dark, foggy dusk with a torch lighting up the ground around you
+- Real lights: muzzle flashes, explosions, rockets, campfires, lamp posts, workbench lanterns, crystals and power-ups light up their surroundings
+- A cloudy sky with stars and dark mountains on the horizon
+- Detailed grass, soft-edged reddish dirt tracks, and mossy cobblestone walls
+- Random arenas get winding dirt tracks, campfires and lamp posts
+- Settings: choose the atmosphere (Dusk, Night or the old bright Day look)
+
 ## 1.6.0
 - Mining! Ore nodes (stone, iron, copper, crystal) spawn around the map. Hit them with a melee weapon
 - New Pickaxe: mines 2.5x faster

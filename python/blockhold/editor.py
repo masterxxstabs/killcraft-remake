@@ -53,8 +53,6 @@ class Editor:
         self.yaw, self.pitch, self.dist = 35.0, 52.0, 30.0
         camera.fov = 60
         camera.clip_plane_far = 1000
-        window.color = col('#8ec9f0')
-        set_fog(scene, (0.66, 0.84, 0.95), 150, 320)
         self.build_grid()
         self.build_cursor()
         self.build_ui()

@@ -4,7 +4,7 @@ import math
 import random
 from panda3d.core import Point2, Point3
 from ursina import Entity, Mesh, Text, Vec3, application, camera, color as ucolor, window
-from .render import WORLD_SHADER, block, col, node
+from .render import WORLD_SHADER, block, col, node, set_glow
 
 
 def _ring_mesh(segments=40, inner=0.85):
@@ -22,6 +22,7 @@ class Effects:
     def __init__(self, game):
         self.game = game
         self.root = node()
+        set_glow(self.root, 1.0)          # sparks, blood and tracers aren't darkened at night
         self.particles = []
         for _ in range(220):
             e = block(self.root, color=ucolor.white, enabled=False)

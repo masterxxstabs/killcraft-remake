@@ -23,6 +23,7 @@
 #    spawn      'player' or 'zombie' = this asset is a spawn point
 #    ore        an ore node grows here in game ('random' or a node type from resources.py)
 #    station    'workbench' = players craft here (press E)
+#    light      a light it gives off: dict(colour=(r, g, b), radius, strength, at=(x, y, z), flicker)
 # ─────────────────────────────────────────────────────────────────────────────
 
 BROWN = '#6b4528'
@@ -274,7 +275,9 @@ def log_pile(lp):
 def lamp_post(lp):
     lp.beam((0, 0, 0), (0, 3.0, 0), 0.07, '#2a2a30', sides=5)
     lp.beam((0, 2.9, 0), (0.45, 2.95, 0), 0.04, '#2a2a30', sides=4)
-    lp.box((0.45, 2.75, 0), (0.3, 0.35, 0.3), '#fff0b0')
+    lp.emissive = True
+    lp.box((0.45, 2.75, 0), (0.3, 0.35, 0.3), '#ffe9a8')
+    lp.emissive = False
     lp.box((0.45, 2.96, 0), (0.36, 0.08, 0.36), '#2a2a30')
 
 
@@ -292,8 +295,10 @@ def campfire(lp):
         lp.blob((math.cos(a) * 0.45, 0.08, math.sin(a) * 0.45), 0.12, STONE[0], detail=0, colours=STONE)
     lp.beam((-0.35, 0.08, -0.2), (0.35, 0.2, 0.2), 0.07, BROWN)
     lp.beam((0.35, 0.08, -0.2), (-0.35, 0.2, 0.2), 0.07, BROWN)
+    lp.emissive = True
     lp.cylinder((0, 0.1, 0), 0.25, 0.65, '#ff8c2a', sides=5, top_radius=0)
     lp.cylinder((0.05, 0.1, 0.03), 0.13, 0.45, '#ffd84a', sides=5, top_radius=0)
+    lp.emissive = False
 
 
 def car_wreck(lp):
@@ -362,6 +367,10 @@ def workbench(lp):
     lp.box((-0.2, 0.95, 0.19), (0.26, 0.07, 0.09), '#7a4a26', yaw=12)
     lp.box((0.08, 0.92, 0.12), (0.05, 0.1, 0.05), '#26282d', yaw=12)
     lp.box((0.42, 0.4, 0.05), (0.42, 0.24, 0.42), '#a87848')             # crate of ore under the table
+    lp.box((-0.88, 1.84, -0.42), (0.12, 0.06, 0.12), '#2a2a30')          # a lantern on the back board
+    lp.emissive = True
+    lp.box((-0.88, 1.68, -0.42), (0.1, 0.16, 0.1), '#ffc46b')
+    lp.emissive = False
     for i, c in enumerate(('#c3cfdb', '#e0813a', '#a3a39f', '#c07bff')):
         lp.blob((0.3 + (i % 2) * 0.22, 0.56, -0.05 + (i // 2) * 0.2), 0.08, c, jitter=0.3, detail=0)
 
@@ -430,9 +439,11 @@ ASSETS = {
     'barrel': A('Barrel', 'props', barrel, [(0, 0, 1)]),
     'hay_bale': A('Hay bale', 'props', hay_bale, [(0, 0, 1)]),
     'log_pile': A('Log pile', 'props', log_pile, [(0, 0, 1)]),
-    'lamp_post': A('Lamp post', 'props', lamp_post, [(0, 0, 3)]),
+    'lamp_post': A('Lamp post', 'props', lamp_post, [(0, 0, 3)],
+                   light=dict(colour=(1.0, 0.85, 0.55), radius=11, strength=1.1, at=(0.45, 2.6, 0), flicker=0.03)),
     'bench': A('Bench', 'props', bench),
-    'campfire': A('Campfire', 'props', campfire),
+    'campfire': A('Campfire', 'props', campfire,
+                  light=dict(colour=(1.0, 0.55, 0.22), radius=10, strength=1.5, at=(0, 0.7, 0), flicker=0.22)),
     'car_wreck': A('Car wreck', 'props', car_wreck, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
     'signpost': A('Signpost', 'props', signpost, [(0, 0, 2)]),
     'rubble': A('Rubble', 'props', rubble, nature=True, variants=2),
@@ -440,7 +451,8 @@ ASSETS = {
     'zombie_grave': A('Zombie grave (spawn)', 'special', zombie_grave, spawn='zombie'),
     'player_spawn': A('Player start', 'special', player_spawn, editor_only=True, spawn='player'),
     # mining and crafting (ore spawns only show in the editor; the real nodes grow there in game)
-    'workbench': A('Workbench (crafting)', 'mining', workbench, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)], station='workbench'),
+    'workbench': A('Workbench (crafting)', 'mining', workbench, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)], station='workbench',
+                   light=dict(colour=(1.0, 0.75, 0.42), radius=6, strength=1.0, at=(-0.88, 1.6, -0.2), flicker=0.08)),
     'ore_random': A('Ore spawn (random)', 'mining', ore_random, editor_only=True, ore='random'),
     'ore_stone': A('Stone node spawn', 'mining', _ore_marker('stone'), editor_only=True, ore='stone'),
     'ore_iron': A('Iron node spawn', 'mining', _ore_marker('iron'), editor_only=True, ore='iron'),
@@ -456,5 +468,5 @@ PATHS = {'dirt': 'Dirt path', 'gravel': 'Gravel', 'cobble': 'Cobblestone', 'road
          'floor': 'Wood floor'}
 
 # Block columns you can paint (the blocky style from the random arena)
-BLOCKS = {'stone': 'Stone', 'brick': 'Brick', 'planks': 'Planks', 'crate': 'Crate block', 'log': 'Log',
+BLOCKS = {'stone': 'Stone', 'mossy': 'Mossy stone', 'brick': 'Brick', 'planks': 'Planks', 'crate': 'Crate block', 'log': 'Log',
           'obsidian': 'Obsidian', 'leaves': 'Leaves'}

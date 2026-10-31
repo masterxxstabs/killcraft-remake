@@ -2,10 +2,13 @@
 cube meshes with Minecraft-style baked face shading."""
 from ursina import Entity, Mesh, Shader, Vec2, Vec3, color as ucolor
 
+MAX_LIGHTS = 8
+
 WORLD_SHADER = Shader(name='blockhold_world', language=Shader.GLSL, vertex='''
 #version 130
 uniform mat4 p3d_ModelViewProjectionMatrix;
 uniform mat4 p3d_ModelViewMatrix;
+uniform mat4 p3d_ModelMatrix;
 in vec4 p3d_Vertex;
 in vec2 p3d_MultiTexCoord0;
 in vec4 p3d_Color;
@@ -14,29 +17,72 @@ uniform vec2 texture_offset;
 out vec2 uvs;
 out vec4 vcol;
 out vec3 vpos;
+out vec3 wpos;
 void main() {
     gl_Position = p3d_ModelViewProjectionMatrix * p3d_Vertex;
     uvs = p3d_MultiTexCoord0 * texture_scale + texture_offset;
     vcol = p3d_Color;
     vpos = (p3d_ModelViewMatrix * p3d_Vertex).xyz;
+    wpos = (p3d_ModelMatrix * p3d_Vertex).xyz;
 }
 ''', fragment='''
 #version 130
+#define MAX_LIGHTS 8
 uniform sampler2D p3d_Texture0;
 uniform vec4 p3d_ColorScale;
 uniform vec4 fog_color;
 uniform vec2 fog_range;
+uniform vec3 ambient;               // light level everywhere (1 = full daylight)
+uniform vec3 cam_pos;
+uniform float glow;                 // 1 = ignores lighting (fire, sparks, tracers)
+uniform vec4 light_pos[MAX_LIGHTS]; // xyz = position, w = radius (0 = off)
+uniform vec4 light_col[MAX_LIGHTS]; // rgb = colour * strength
 in vec2 uvs;
 in vec4 vcol;
 in vec3 vpos;
+in vec3 wpos;
 out vec4 color;
 void main() {
-    float dist = length(vpos);
-    color = texture(p3d_Texture0, uvs) * p3d_ColorScale * vcol;
-    float t = clamp((dist - fog_range.x) / max(0.001, fog_range.y - fog_range.x), 0.0, 1.0);
+    vec4 base = texture(p3d_Texture0, uvs) * p3d_ColorScale * vcol;
+    // flat face normal from screen-space derivatives, turned towards the camera
+    vec3 c = cross(dFdx(wpos), dFdy(wpos));
+    float cl = length(c);
+    vec3 n = cl > 1e-10 ? c / cl : vec3(0.0, 1.0, 0.0);
+    if (dot(n, cam_pos - wpos) < 0.0) n = -n;
+    vec3 light = ambient;
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        float r = light_pos[i].w;
+        if (r <= 0.0) continue;
+        vec3 L = light_pos[i].xyz - wpos;
+        float d = length(L);
+        float att = clamp(1.0 - d / r, 0.0, 1.0);
+        att *= att;
+        float lambert = max(dot(n, L / max(d, 0.001)), 0.0) * 0.7 + 0.3;
+        light += light_col[i].rgb * (att * lambert);
+    }
+    color = vec4(mix(base.rgb * light, base.rgb, glow), base.a);
+    float t = clamp((length(vpos) - fog_range.x) / max(0.001, fog_range.y - fog_range.x), 0.0, 1.0);
     color.rgb = mix(color.rgb, fog_color.rgb, t);
 }
 ''', default_input={'texture_scale': Vec2(1, 1), 'texture_offset': Vec2(0, 0)})
+
+
+def init_light_inputs(np, ambient=(1.0, 1.0, 1.0)):
+    """Give a scene root every lighting input the world shader needs. Returns the light arrays
+    (edit them in place to move lights; no need to set the inputs again)."""
+    from panda3d.core import PTA_LVecBase4f, LVecBase3f
+    pos, colour = PTA_LVecBase4f.emptyArray(MAX_LIGHTS), PTA_LVecBase4f.emptyArray(MAX_LIGHTS)
+    np.setShaderInput('light_pos', pos)
+    np.setShaderInput('light_col', colour)
+    np.setShaderInput('ambient', LVecBase3f(*ambient))
+    np.setShaderInput('cam_pos', LVecBase3f(0, 0, 0))
+    np.setShaderInput('glow', 0.0)
+    return pos, colour
+
+
+def set_glow(np, amount=1.0):
+    """Make a node (and everything under it) ignore the lighting: fire, sparks, glowing crystals."""
+    np.setShaderInput('glow', float(amount))
 
 
 def set_fog(node, rgb, near, far):

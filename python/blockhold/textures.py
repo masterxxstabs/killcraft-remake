@@ -92,12 +92,18 @@ def _leaves(px, rnd, s, sh):
         px[int(rnd() * s), int(rnd() * s)] = sh('#2a5a1c')
 
 
+def _world_tile(name):
+    from .world_textures import image
+    return image(name).convert('RGBA')
+
+
 # Atlas tiles, in order. Add new block looks here.
 TILES = {
     'grass_top': lambda: pixel_image('#5d9b3a', 0.18, 3),
     'grass_side': lambda: pixel_image('#7a5534', 0.2, 7, draw=_grass_side),
     'dirt': lambda: pixel_image('#7a5534', 0.2, 5),
-    'stone': lambda: pixel_image('#7d7d80', 0.12, 11, draw=_stone),
+    'stone': lambda: _world_tile('block_stone'),
+    'mossy': lambda: _world_tile('block_mossy'),
     'brick': lambda: pixel_image('#8d4a3a', 0.1, 13, draw=_brick),
     'planks': lambda: pixel_image('#a8804a', 0.1, 17, draw=_planks),
     'crate': lambda: pixel_image('#b08850', 0.1, 19, draw=_crate),

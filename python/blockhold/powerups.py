@@ -86,6 +86,7 @@ class PowerUps:
         e = node(self.root, position=(x, 1.0, z))
         spin = node(e, scale=1.5)
         token_mesh(kind).copyTo(spin)          # copy: two tokens of one kind can't share the mesh itself
+        spin.setShaderInput('glow', 0.5)
         tag = Entity(parent=e, y=0.62, billboard=True)
         Text(d['name'], parent=tag, scale=6, origin=(0, 0), color=col(d['color']))
         self.drops.append(dict(id=new_id(), kind=kind, pos=Vec3(x, 0, z), e=e, spin=spin, life=LIFETIME))
@@ -122,6 +123,7 @@ class PowerUps:
             q.coins += 150
         g.sounds.play('boom', volume=1.0)
         g.shake(0.6)
+        g.lighting.flash(player.position + Vec3(0, 2, 0), (1.0, 0.95, 0.8), 40, 2.5, life=0.5)
 
     # ── per frame ────────────────────────────────────────────────────────────
     def update(self, dt):
@@ -151,6 +153,11 @@ class PowerUps:
                 if not p.dead and (Vec3(p.position.x, 0, p.position.z) - drop['pos']).length() < 1.4:
                     self.take(drop, p)
                     break
+
+    def lights(self):
+        from .render import hex_rgb
+        return [(Vec3(d['e'].x, d['e'].y, d['e'].z), hex_rgb(POWERUPS[d['kind']]['color']), 5, 1.0)
+                for d in self.drops if d['e'].enabled]
 
     def hud_rows(self):
         """[(name, colour, seconds left)] for the HUD, longest first."""

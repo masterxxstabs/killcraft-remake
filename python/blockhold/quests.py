@@ -104,12 +104,22 @@ class HollowLanceQuest:
             self.lanterns.append(dict(id=new_id(), pos=p, lit=False, entity=e))
 
     # ── progress ─────────────────────────────────────────────────────────────
+    def lights(self):
+        """Lit lanterns and the altar's soul orb give off a purple glow."""
+        out = [(l['pos'] + Vec3(0, 1.45, 0), (0.8, 0.5, 1.0), 6, 1.0) for l in self.lanterns if l['lit']]
+        if getattr(self, 'orb', None) is not None and self.stage in ('altar', 'herald'):
+            out.append((Vec3(self.orb.world_position), (0.75, 0.45, 1.0), 9, 1.2))
+        if self.reward is not None:
+            out.append((Vec3(self.reward.world_position), (0.85, 0.6, 1.0), 7, 1.3))
+        return out
+
     def light(self, lantern, player=None):
         g = self.game
         if lantern['lit']:
             return
         lantern['lit'] = True
         lantern['entity'].model = _lantern_mesh(True)
+        lantern['entity'].setShaderInput('glow', 0.7)
         g.effects.burst(lantern['pos'] + Vec3(0, 1.45, 0), '#ffd27a', 14, speed=3, size=0.1, gravity=-3)
         g.sounds.play('powerup', pitch=0.7)
         lit = sum(1 for l in self.lanterns if l['lit'])

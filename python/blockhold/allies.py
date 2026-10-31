@@ -284,4 +284,5 @@ class Ally:
             wave_bonus = 1 + 0.08 * max(0, g.wave_number - 1)
             enemy.hurt(d['damage'] * wave_bonus * (2 if head else 1), head, Vec3(aim.x, 0, aim.z) * 1.2, attacker=self)
         g.effects.tracer(self.muzzle_world(), end, '#fff2a8', 0.02, 0.06)
+        g.lighting.flash(self.muzzle_world(), (1.0, 0.82, 0.55), 6, 1.2, life=0.05)
         g.sounds.play('shoot_' + d['sound'], volume=0.45, pitch=0.95 + random.random() * 0.1)

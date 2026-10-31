@@ -65,7 +65,7 @@ class Mining:
         for _ in range(80):
             gx, gz = 3 + random.randrange(w.n - 6), 3 + random.randrange(w.n - 6)
             pos = Vec3(gx - w.half + 0.5, 0, gz - w.half + 0.5)
-            if not w.free(gx, gz, 1):
+            if not w.free(gx, gz, 1, paths_ok=False):
                 continue
             if any((n['pos'] - pos).length() < 4 for n in self.nodes):
                 continue
@@ -151,6 +151,11 @@ class Mining:
         g.sounds.play('mine_break')
         g.events.emit('node_broken', id=n['id'], player=player)
         self.pending.append([random.uniform(*RESPAWN_TIME), n['spot']])
+
+    def lights(self):
+        """Crystal nodes glow a little."""
+        return [(n['pos'] + Vec3(0, 0.8, 0), (0.72, 0.45, 1.0), 4.5, 0.8 * n['grow'])
+                for n in self.nodes if n['kind'] == 'crystal']
 
     # ── per frame ────────────────────────────────────────────────────────────
     def update(self, dt):

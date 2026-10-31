@@ -23,9 +23,14 @@ class Projectiles:
         destroy(p['e'])
         self.list.remove(p)
 
+    def lights(self):
+        """Rockets light up their surroundings as they fly."""
+        return [(p['e'].position, (1.0, 0.6, 0.3), 5, 1.2) for p in self.list if p['owner'] == 'player']
+
     def explode(self, pos, p):
         g = self.game
         g.effects.explosion(pos, p['radius'])
+        g.lighting.flash(pos + Vec3(0, 0.5, 0), (1.0, 0.62, 0.3), p['radius'] * 3.5, 3.0, life=0.4)
         g.sounds.play('boom')
         g.shake(0.35)
         for e in list(g.enemies.alive()):
