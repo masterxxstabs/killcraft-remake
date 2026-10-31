@@ -54,6 +54,7 @@ class PlayerInput:
     sprint: bool = False
     crouch: bool = False         # held
     crouch_pressed: bool = False
+    use: bool = False            # held: revive team-mates / allies, interact
 
     def to_dict(self):
         return asdict(self)

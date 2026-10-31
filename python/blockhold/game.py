@@ -168,6 +168,7 @@ class Game(Entity):
         self.projectiles.clear()
         self.pickups.clear()
         self.effects.clear()
+        self.clear_allies()
         self.world.destroy()
         self.world = World(map_data=map_data)
         self.player.reset()
@@ -184,6 +185,7 @@ class Game(Entity):
         self.show_cursor(False)
 
     def to_menu(self):
+        self.clear_allies()
         if self.from_editor is not None:            # play test: go back to the editor
             data, self.from_editor = self.from_editor, None
             for screen in (self.ui.hud, self.ui.pause, self.ui.dead, self.ui.shop):
@@ -273,6 +275,9 @@ class Game(Entity):
         for p in self.players:
             p.coins += bonus
             p.score += self.wave_number * 50
+        for a in self.allies:                    # everyone gets patched up between waves
+            a.revive(1.0)
+            a.hp = a.max_hp
         self.events.emit('wave_cleared', wave=self.wave_number)
         self.sounds.play('wave_clear')
         self.ui.banner('WAVE CLEARED', '#7dff8a', 3, f'+{bonus} coins  ·  press B to open the shop')
@@ -366,6 +371,55 @@ class Game(Entity):
             self.sounds.play('buy')
         w.set_camo(w.get_def(wid), camo)
         self.ui.refresh_shop()
+
+    # ── allies ───────────────────────────────────────────────────────────────
+    def hire_ally(self, kind):
+        from .allies import Ally
+        from .data.allies import ALLY_TYPES, MAX_ALLIES
+        mine = [a for a in self.allies if a.owner is self.player]
+        price = ALLY_TYPES[kind]['price']
+        if len(mine) >= MAX_ALLIES or self.coins < price:
+            self.sounds.play('deny')
+            return
+        self.coins -= price
+        slot = next(i for i in range(MAX_ALLIES) if i not in [a.slot for a in mine])
+        p = self.player
+        back = Vec3(-math.sin(math.radians(p.yaw)), 0, -math.cos(math.radians(p.yaw)))
+        ally = Ally(self, kind, p, p.position + back * 2 + Vec3((slot - 1) * 1.5, 0, 0), slot)
+        self.allies.append(ally)
+        self.events.emit('ally_hired', ally=ally, player=p)
+        self.sounds.play('buy')
+        self.ui.refresh_shop()
+
+    def clear_allies(self):
+        for a in self.allies:
+            a.destroy()
+        self.allies = []
+
+    def update_revives(self, dt, inp):
+        """Hold E next to a downed ally to get them back up."""
+        p = self.player
+        near = None
+        for a in self.allies:
+            if a.downed and (a.position - p.position).length() < 2.6:
+                near = a
+                break
+        for a in self.allies:
+            if a is not near:
+                a.revive_progress = 0
+        if near is None:
+            self.ui.set_prompt('')
+            return
+        if inp.use:
+            near.revive_progress += dt
+            if near.revive_progress >= 2.0:
+                near.revive(0.5)
+                self.sounds.play('heal')
+                self.ui.set_prompt('')
+                return
+            self.ui.set_prompt(f'Reviving {near.name}...', near.revive_progress / 2.0)
+        else:
+            self.ui.set_prompt(f'Hold E to revive {near.name}')
 
     def buy_upgrade(self, uid):
         u = next(x for x in UPGRADES if x['id'] == uid)
@@ -526,6 +580,7 @@ class Game(Entity):
             jump=bool(k['space']), jump_pressed='space' in self._pressed,
             sprint=bool(k['left shift'] or k['right shift'] or k['shift']),
             crouch=crouch, crouch_pressed=bool({'c', 'left control', 'control'} & self._pressed),
+            use=bool(k['e']),
         )
         self._pressed.clear()
         return inp
@@ -586,6 +641,7 @@ class Game(Entity):
                 sens = self.sensitivity * camera.fov / self.fov     # slower aiming when zoomed in
                 p.look(v[0] * sens, v[1] * sens)
             inp = PlayerInput() if self.shop_open else self.local_input()
+            self.update_revives(dt, inp)
             p.update(dt, inp)
             p.apply_camera(dt)
             self.weapons.update(dt)
@@ -607,6 +663,8 @@ class Game(Entity):
                 if not self.spawn_queue and self.remaining <= 0:
                     self.end_wave()
         self.enemies.update(dt)
+        for a in self.allies:
+            a.update(dt)
         self.projectiles.update(dt)
         self.pickups.update(dt)
         self.ui.update(dt)

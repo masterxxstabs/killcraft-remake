@@ -308,6 +308,12 @@ class UI:
         box(self.boss, -0.345, T - 0.178, 0.69, 0.024, NAVY, z=0.001)
         self.boss_fill = box(self.boss, -0.345, T - 0.178, 0.69, 0.024, RED)
 
+        # interaction prompt (revive etc.)
+        self.prompt = Entity(parent=h, enabled=False)
+        box(self.prompt, -0.2, -0.13, 0.4, 0.06, INK, z=0.003)
+        self.prompt_text = text(self.prompt, '', 0, -0.152, 1.0, PAPER, origin=(0, 0))
+        self.prompt_bar = box(self.prompt, -0.19, -0.176, 0.38, 0.008, TEAL)
+
         # between-wave hint
         self.hint = Entity(parent=h)
         box(self.hint, -0.25, B + 0.205, 0.5, 0.045, INK, z=0.003)
@@ -366,6 +372,15 @@ class UI:
 
     def hurt(self, frac):
         self.hurt_t = min(1, self.hurt_t + 0.35 + frac * 2)
+
+    def set_prompt(self, msg, progress=None):
+        """A centred hint like 'Hold E to revive' (with an optional progress bar)."""
+        self.prompt.enabled = bool(msg)
+        if msg:
+            self.set_text(self.prompt_text, msg)
+            self.prompt_bar.enabled = progress is not None
+            if progress is not None:
+                self.prompt_bar.scale_x = max(0.001, 0.38 * clamp01(progress))
 
     def kill_feed(self, line):
         self.feed.insert(0, (line, pytime.time()))
@@ -664,11 +679,13 @@ class UI:
 
     def refresh_shop(self):
         g, win = self.game, self.shop_win
-        win.set_tabs([('weapons', 'WEAPONS'), ('player', 'PLAYER')], self.shop_tab, self.set_tab)
+        win.set_tabs([('weapons', 'WEAPONS'), ('player', 'PLAYER'), ('allies', 'ALLIES')], self.shop_tab, self.set_tab)
         win.clear()
         win.right.text = f'{g.coins} coins'
         if self.shop_tab == 'player':
             self.shop_player(win, g)
+        elif self.shop_tab == 'allies':
+            self.shop_allies(win, g)
         else:
             self.shop_weapons(win, g)
         win.bottom_left('CLOSE', g.close_shop, 'cross', g.close_shop)
@@ -845,6 +862,41 @@ class UI:
                     text(b, str(c['price']), xr + 0.15 + i * 0.044, y - 0.036, 0.5, MUTED, origin=(0, 0.5))
             c = CAMOS[current]
             text(b, f"{c['name']} camo", xr, y - 0.03, 0.7, INK)
+
+    def shop_allies(self, win, g):
+        from .data.allies import ALLY_TYPES, MAX_ALLIES
+        b, x, y = win.body, win.left, win.top + 0.01
+        mine = [a for a in g.allies if a.owner is g.player]
+        text(b, 'HIRE SURVIVORS', x, y, 0.85, MUTED)
+        y -= 0.035
+        for kind, d in ALLY_TYPES.items():
+            frame(b, x, y, 0.56, 0.1, PAPER, LINE, t=0.004, z=0.01)
+            text(b, d['name'].upper(), x + 0.015, y - 0.012, 1.15, INK)
+            text(b, d['desc'], x + 0.015, y - 0.047, 0.72, MUTED)
+            bar(b, x + 0.015, y - 0.075, 0.16, 0.012, d['hp'] / 300, GREEN)
+            text(b, f"{d['hp']} hp", x + 0.18, y - 0.081, 0.68, INK, origin=(-0.5, 0))
+            dps = d['damage'] * d['rate']
+            bar(b, x + 0.25, y - 0.075, 0.12, 0.012, dps / 220, TEAL)
+            text(b, f'{dps:.0f} dps', x + 0.375, y - 0.081, 0.68, INK, origin=(-0.5, 0))
+            full = len(mine) >= MAX_ALLIES
+            ok = g.coins >= d['price'] and not full
+            FlatButton(b, 'TEAM FULL' if full else f"HIRE  {d['price']}", x + 0.42, y - 0.012, 0.13, 0.045,
+                       lambda k=kind: g.hire_ally(k), fill=GREEN if ok else NAVY, edge=INK, size=0.8)
+            y -= 0.112
+        xr, y = win.right_col + 0.03, win.top + 0.01
+        text(b, f'YOUR TEAM  {len(mine)}/{MAX_ALLIES}', xr, y, 0.85, MUTED)
+        y -= 0.045
+        if not mine:
+            text(b, 'No survivors yet.\nAllies follow you, shoot zombies and earn you coins.\n'
+                    'If one goes down, hold E next to them to revive them.\nEveryone gets back up when a wave ends.',
+                 xr, y, 0.85, INK)
+        for a in mine:
+            text(b, a.name, xr, y, 1.1, INK)
+            bar(b, xr + 0.2, y - 0.012, 0.25, 0.016, a.hp / a.max_hp, RED if a.downed else GREEN)
+            text(b, 'DOWN' if a.downed else f'{math.ceil(a.hp)} hp', xr + 0.47, y - 0.02, 0.8,
+                 RED if a.downed else INK, origin=(-0.5, 0))
+            y -= 0.06
+        win.bottom_right('START WAVE', g.shop_start_wave, fill=TEAL, w=0.3)
 
     def dmg_stat(self, d, w):
         dm = 1 + 0.15 * w.level(d, 'damage')

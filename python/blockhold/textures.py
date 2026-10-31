@@ -372,6 +372,9 @@ def skin_tiles(colors, look):
     bloody = look.get('blood', True)
     mouth = look.get('mouth', 'teeth')
     seed = sum(map(ord, skin + shirt))
+    human = look.get('human', False)          # survivors: no rot, no tears, normal faces
+    rotter = (lambda *a, **k: None) if human else _rot
+    tearer = (lambda *a, **k: None) if human else _tears
     tiles = {}
 
     def tile(name, draw):
@@ -384,12 +387,29 @@ def skin_tiles(colors, look):
 
     def head_front(px, rnd):
         _noise_fill(px, rnd, 0, 0, 16, 16, skin, 0.08)
-        _rot(px, rnd, skin, 5)
+        rotter(px, rnd, skin, 5)
         if hair:
             _noise_fill(px, rnd, 0, 0, 16, 3, hair, 0.12)
             for x in range(16):
                 if rnd() < 0.5:
                     px[x, 3] = _rgba(hair, 0.9)
+        if human:
+            _fill(px, 2, 5, 7, 6, _rgba(hair or '#3a2a1a', 0.9))     # brows
+            _fill(px, 9, 5, 14, 6, _rgba(hair or '#3a2a1a', 0.9))
+            _fill(px, 3, 6, 6, 8, _rgba('#f4f4f0'))                    # eye whites
+            _fill(px, 10, 6, 13, 8, _rgba('#f4f4f0'))
+            _fill(px, 4, 6, 6, 8, _rgba(eyes))                         # pupils
+            _fill(px, 10, 6, 12, 8, _rgba(eyes))
+            _fill(px, 7, 8, 9, 10, _rgba(skin, 0.8))                   # nose
+            _fill(px, 5, 11, 11, 12, _rgba(skin, 0.55))                # mouth
+            if look.get('beard'):
+                _noise_fill(px, rnd, 2, 10, 14, 16, hair or '#3a2a1a', 0.12)
+                _fill(px, 5, 11, 11, 12, _rgba(skin, 0.45))
+            if look.get('goggles'):
+                _fill(px, 2, 5, 14, 9, _rgba('#1d1e22'))
+                _fill(px, 3, 6, 6, 8, _rgba('#5fc0e0'))
+                _fill(px, 10, 6, 13, 8, _rgba('#5fc0e0'))
+            return
         _fill(px, 2, 5, 7, 6, _rgba(skin, 0.45))           # brows
         _fill(px, 9, 5, 14, 6, _rgba(skin, 0.45))
         _fill(px, 3, 6, 6, 8, _rgba('#120c0c'))             # eye sockets
@@ -423,7 +443,7 @@ def skin_tiles(colors, look):
 
     def head_side(px, rnd):
         _noise_fill(px, rnd, 0, 0, 16, 16, skin, 0.08)
-        _rot(px, rnd, skin, 4)
+        rotter(px, rnd, skin, 4)
         if hair:
             _noise_fill(px, rnd, 0, 0, 16, 5, hair, 0.12)
             _noise_fill(px, rnd, 0, 5, 5, 11, hair, 0.12)
@@ -432,24 +452,24 @@ def skin_tiles(colors, look):
     def head_back(px, rnd):
         _noise_fill(px, rnd, 0, 0, 16, 16, hair or skin, 0.1)
         if not hair:
-            _rot(px, rnd, skin, 6)
+            rotter(px, rnd, skin, 6)
 
     def head_top(px, rnd):
         _noise_fill(px, rnd, 0, 0, 16, 16, hair or skin, 0.1)
         if not hair:
-            _rot(px, rnd, skin, 5)
+            rotter(px, rnd, skin, 5)
 
     def plain(h, var=0.08, rot=False):
         def d(px, rnd):
             _noise_fill(px, rnd, 0, 0, 16, 16, h, var)
             if rot:
-                _rot(px, rnd, h, 4)
+                rotter(px, rnd, h, 4)
         return d
 
     def torso_front(px, rnd):
         if top == 'vest':
             _noise_fill(px, rnd, 0, 0, 16, 16, skin, 0.08)
-            _rot(px, rnd, skin, 5)
+            rotter(px, rnd, skin, 5)
             _noise_fill(px, rnd, 0, 0, 5, 16, shirt, 0.1)
             _noise_fill(px, rnd, 11, 0, 16, 16, shirt, 0.1)
             for i in range(16):                               # diagonal strap
@@ -471,7 +491,7 @@ def skin_tiles(colors, look):
                     _fill(px, 6 + y // 2, y, 10 - y // 2, y + 1, _rgba(skin))
                 for y in (6, 9, 12):
                     px[8, y] = _rgba(shirt, 0.6)
-            _tears(px, rnd, skin, 3)
+            tearer(px, rnd, skin, 3)
         if bloody:
             _blood(px, rnd, 4)
         if look.get('belt'):
@@ -481,14 +501,14 @@ def skin_tiles(colors, look):
     def torso_back(px, rnd):
         _noise_fill(px, rnd, 0, 0, 16, 16, shirt, 0.1)
         if top in ('shirt', 'tank'):
-            _tears(px, rnd, skin, 2)
+            tearer(px, rnd, skin, 2)
         if bloody:
             _blood(px, rnd, 2)
 
     def arm_side(px, rnd):
         sleeve = shirt if top in ('shirt', 'robe') else None
         _noise_fill(px, rnd, 0, 0, 16, 16, skin, 0.08)
-        _rot(px, rnd, skin, 4)
+        rotter(px, rnd, skin, 4)
         if sleeve:
             _noise_fill(px, rnd, 0, 0, 16, 16 if top == 'robe' else 6, sleeve, 0.1)
             for x in range(16):
@@ -526,7 +546,7 @@ def skin_tiles(colors, look):
     tile('pad', lambda px, rnd: (_noise_fill(px, rnd, 0, 0, 16, 16, '#6d737c', 0.08),
                                  _scratches('#9aa0a8', 5)(px, rnd, 16, lambda h, f=1: _rgba(h, f)),
                                  [px.__setitem__(p, _rgba('#c9c9c9')) for p in ((2, 2), (13, 2), (2, 13), (13, 13))]))
-    tile('belly', lambda px, rnd: (_noise_fill(px, rnd, 0, 0, 16, 16, skin, 0.1), _rot(px, rnd, skin, 8),
+    tile('belly', lambda px, rnd: (_noise_fill(px, rnd, 0, 0, 16, 16, skin, 0.1), rotter(px, rnd, skin, 8),
                                    [px.__setitem__((int(rnd() * 16), int(rnd() * 16)), _rgba('#9cff3a', 0.8)) for _ in range(10)]))
     tile('crown', lambda px, rnd: (_noise_fill(px, rnd, 0, 0, 16, 16, '#e0b030', 0.1),
                                    _fill(px, 3, 6, 6, 9, _rgba('#c0192c')), _fill(px, 10, 6, 13, 9, _rgba('#2a6cc0'))))
