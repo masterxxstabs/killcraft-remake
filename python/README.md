@@ -57,6 +57,8 @@ lighting up the ground around you. Muzzle flashes, explosions, campfires, lamp p
 glowing crystals light up the world too. Pick **Night** (darker still) or **Day** (bright and
 clear) under Settings or in the pause menu. The presets are in `blockhold/data/atmosphere.py`.
 
+![Dusk (top) and night (bottom)](docs/atmosphere.jpg)
+
 ## Maps and the map editor
 
 Pick a map on the main menu's **MAPS** tab: the random arena, the example maps **Village**
