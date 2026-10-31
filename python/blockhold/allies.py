@@ -35,6 +35,7 @@ class Ally:
         self.retarget = 0.0
         self.walk = random.random() * 6
         self.flash = 0.0
+        self.kills = 0
         self.build()
 
     @property

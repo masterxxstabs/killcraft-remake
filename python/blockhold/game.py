@@ -467,6 +467,8 @@ class Game(Entity):
         owner = getattr(attacker, 'owner', attacker)       # allies earn for the player who hired them
         self.remaining -= 1
         d = e.d
+        if attacker is not owner and hasattr(attacker, 'kills'):
+            attacker.kills += 1                             # for the ally's line on the scoreboard
         if hasattr(owner, 'kills'):
             owner.kills += 1
             owner.score += round(d['score'] * (1.5 if headshot else 1) * (1 + self.wave_number * 0.1))

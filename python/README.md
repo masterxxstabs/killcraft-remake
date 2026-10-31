@@ -40,6 +40,7 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | R | reload |
 | Q | use your ability |
 | B | shop (between waves) |
+| Tab (hold) | scoreboard: kills, score and coins for you and your allies |
 | N | start the next wave early |
 | M | mute |
 | F11 | fullscreen on/off |

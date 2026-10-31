@@ -72,4 +72,5 @@ chat. A direct-IP join screen comes first, then maybe a lobby.
 - [ ] One `Weapons` loadout per player (today `game.weapons` is the local player's)
 - [ ] Downed state for players (allies already have it) instead of instant game over
 - [ ] Shared shop between waves (each player buys with their own coins)
-- [ ] Scoreboard (Tab) and text chat
+- [x] Scoreboard (hold Tab): already lists every player in `game.players` and every ally
+- [ ] Text chat

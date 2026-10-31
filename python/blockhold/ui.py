@@ -331,6 +331,10 @@ class UI:
         glyph(h, 'heart', L + 0.065, B + 0.065, 0.032, RED)
         box(h, L + 0.1, B + 0.088, 0.375, 0.046, NAVY, z=0.001)
         self.hp_fill = box(h, L + 0.1, B + 0.088, 0.375, 0.046, RED)
+        # scoreboard (hold Tab): every player, then every ally
+        self.scoreboard = Entity(parent=h, enabled=False, z=-0.05)
+        self.board_rows = Entity(parent=self.scoreboard)
+        self.board_t = 0.0
         self.power_rows = []                    # active power-ups, stacked above the health bar
         for i in range(4):
             row = Entity(parent=h, enabled=False)
@@ -372,6 +376,34 @@ class UI:
             self.set_text(self.ammo, f"{st['ammo']}/{mag}")
             self.ammo.color = C(RED) if st['ammo'] <= math.ceil(mag * 0.25) else C(INK)
         self.set_text(self.slots, '  '.join(f'[{i + 1}]' if o is w.held else f'{i + 1}' for i, o in enumerate(w.owned[:9])))
+
+    def build_scoreboard(self):
+        g = self.game
+        destroy(self.board_rows)
+        b = self.board_rows = Entity(parent=self.scoreboard)
+        rows = [(p.name + ('  (you)' if p.is_local else ''), p.kills, p.score, p.coins, 'DEAD' if p.dead else '', p.is_local)
+                for p in g.players]
+        rows += [(f'{a.name}  ({a.owner.name})', a.kills, '-', '-', 'DOWN' if a.downed else '', False) for a in g.allies]
+        w, rh = 0.82, 0.052
+        h = 0.16 + rh * len(rows)
+        x0, y0 = -w / 2, 0.06 + h / 2
+        frame(b, x0, y0, w, h, PAPER, INK)
+        box(b, x0, y0, w, 0.07, INK, z=-0.001)
+        mins, secs = divmod(int(g.time), 60)
+        text(b, f'WAVE {g.wave_number}', x0 + 0.03, y0 - 0.035, 1.3, PAPER, origin=(-0.5, 0), z=-0.02)
+        text(b, f'{mins:02d}:{secs:02d} survived', x0 + w - 0.03, y0 - 0.035, 1.0, MUTED, origin=(0.5, 0), z=-0.02)
+        cols = [(x0 + 0.03, -0.5), (x0 + 0.5, 0.5), (x0 + 0.63, 0.5), (x0 + 0.76, 0.5)]
+        y = y0 - 0.1
+        for (cx, ox), label in zip(cols, ('NAME', 'KILLS', 'SCORE', 'COINS')):
+            text(b, label, cx, y, 0.8, MUTED, origin=(ox, 0), z=-0.02)
+        y -= 0.045
+        for name, kills, score, coins, status, me in rows:
+            if me:
+                box(b, x0 + 0.012, y + rh / 2, w - 0.024, rh, '#e6ecf2', z=-0.001)
+            colour = RED if status else INK
+            for (cx, ox), v in zip(cols, (name + (f'   {status}' if status else ''), kills, score, coins)):
+                text(b, str(v), cx, y, 1.0, colour, origin=(ox, 0), z=-0.02)
+            y -= rh
 
     def banner(self, title, color=TEAL, duration=2.5, sub=''):
         self.banner_text.text = title
@@ -419,6 +451,15 @@ class UI:
         if tracker:
             self.set_text(self.quest_text, tracker)
 
+        show_board = bool(held_keys['tab']) and g.state == 'playing' and not g.shop_open
+        if show_board != self.scoreboard.enabled:
+            self.scoreboard.enabled = show_board
+            self.board_t = 0
+        if show_board:
+            self.board_t -= dt
+            if self.board_t <= 0:
+                self.board_t = 0.25
+                self.build_scoreboard()
         powers = g.powerups.hud_rows()
         for i, (row, chip, name, secs) in enumerate(self.power_rows):
             row.enabled = i < len(powers)
@@ -438,7 +479,7 @@ class UI:
         self.feed_box.enabled = bool(self.feed)
         self.feed_box.scale_y = 0.02 + 0.0245 * len(self.feed)
         if self.feed:                       # widen the box for long messages
-            w = max(0.3, 0.0088 * max(len(f[0]) for f in self.feed) + 0.03)
+            w = max(0.3, 0.0108 * max(len(f[0]) for f in self.feed) + 0.03)
             self.feed_box.scale_x = w
             self.feed_box.x = self.feed_right - w
 
@@ -577,6 +618,7 @@ class UI:
          ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
          ('Reload', 'R')],
         [('Ability', 'Q'), ('Switch weapon', '1-9 / wheel'), ('Use / revive', 'Hold E'), ('Shop', 'B'),
+         ('Scoreboard', 'Hold Tab'),
          ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute', 'M'), ('Fullscreen', 'F11'), ('Turn 3D model', 'F8 / F9')],
     ]
 
