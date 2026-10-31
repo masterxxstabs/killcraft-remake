@@ -14,8 +14,9 @@ UPGRADES_BY_ID = {u['id']: u for u in WEAPON_UPGRADES}
 
 
 class Weapons:
-    def __init__(self, game):
+    def __init__(self, game, owner=None):
         self.game = game
+        self.owner = owner or game.player       # whose weapons these are
         self.defs = WEAPONS
         base = application.base
         self.vm_root = NodePath('viewmodel')
@@ -127,7 +128,7 @@ class Weapons:
 
     def dmg_mult(self, d):
         """Damage multiplier from this weapon's upgrades and the player's Power upgrade."""
-        return (1 + UPGRADES_BY_ID['damage']['bonus'] * self.level(d, 'damage')) * self.game.player.damage_mult
+        return (1 + UPGRADES_BY_ID['damage']['bonus'] * self.level(d, 'damage')) * self.owner.damage_mult
 
     # ── holding ──────────────────────────────────────────────────────────────
     @property
@@ -200,11 +201,11 @@ class Weapons:
         d, st = self.held, self.state[self.held['id']]
         if d.get('melee') or self.reloading > 0 or st['ammo'] >= self.stat(d, 'mag'):
             return
-        self.reloading = self.reload_total = self.stat(d, 'reload') * self.game.player.reload_mult
+        self.reloading = self.reload_total = self.stat(d, 'reload') * self.owner.reload_mult
         self.game.sounds.play('reload')
 
     def rate_mult(self):
-        p = self.game.player
+        p = self.owner
         return p.fire_rate_mult * (2 if p.buffs.get('adrenaline', 0) > 0 else 1)
 
     def update(self, dt):
@@ -237,7 +238,7 @@ class Weapons:
         if self.spinner:
             self.spin_angle += dt * 1500 * self.spin
             self.spinner.rotation_z = self.spin_angle
-        p = g.player
+        p = self.owner
         bob_x = math.sin(p.bob) * 0.015 if p.moving else 0
         bob_y = abs(math.cos(p.bob)) * 0.012 if p.moving else 0
         rl = math.sin((1 - self.reloading / self.reload_total) * math.pi) if self.reloading > 0 else 0
@@ -256,7 +257,7 @@ class Weapons:
         return camera.world_position + camera.forward * 1.0 + camera.right * 0.2 - camera.up * 0.16
 
     def fire(self):
-        g, d, p = self.game, self.held, self.game.player
+        g, d, p = self.game, self.held, self.owner
         st = self.state[d['id']]
         eye = Vec3(camera.world_position)
         fwd = Vec3(camera.forward)

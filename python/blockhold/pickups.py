@@ -3,6 +3,7 @@ import math
 import random
 from ursina import Vec3
 from .render import block, col
+from .net import new_id
 
 
 class Pickups:
@@ -23,7 +24,7 @@ class Pickups:
         e.scale = 0.22 + min(0.2, value / 100) if kind == 'coin' else 0.35
         e.position = Vec3(pos.x, pos.y + 0.8, pos.z)
         vel = Vec3((random.random() - 0.5) * 4, 4 + random.random() * 2, (random.random() - 0.5) * 4)
-        self.list.append(dict(e=e, kind=kind, value=value, vel=vel, life=30, t=random.random() * 6))
+        self.list.append(dict(id=new_id(), e=e, kind=kind, value=value, vel=vel, life=30, t=random.random() * 6))
 
     def drop_coins(self, pos, total):
         pieces = min(6, max(1, round(total / 6)))
@@ -34,14 +35,16 @@ class Pickups:
             if v > 0:
                 self.drop(pos, 'coin', v)
 
-    def _collect(self, p):
+    def _collect(self, p, player=None):
         g = self.game
+        player = player or g.player
         if p['kind'] == 'coin':
-            g.coins += p['value']
-            g.sounds.play('coin', volume=0.6)
+            player.coins += p['value']
         else:
-            g.player.heal(p['value'])
-            g.sounds.play('heal')
+            player.heal(p['value'])
+        g.events.emit('pickup', player=player, kind=p['kind'], value=p['value'])
+        if player.is_local:
+            g.sounds.play('coin' if p['kind'] == 'coin' else 'heal', volume=0.6 if p['kind'] == 'coin' else 1)
         self._release(p)
 
     def _release(self, p):
@@ -50,10 +53,11 @@ class Pickups:
         self.list.remove(p)
 
     def update(self, dt):
-        g, pl = self.game, self.game.player
-        target = Vec3(pl.position.x, pl.position.y + 0.9, pl.position.z)
+        g = self.game
         for p in list(self.list):
             e = p['e']
+            pl = g.nearest_player(e.position) or g.player      # whoever is closest gets it
+            target = Vec3(pl.position.x, pl.position.y + 0.9, pl.position.z)
             p['life'] -= dt
             p['t'] += dt
             d = (e.position - target).length()
@@ -74,7 +78,7 @@ class Pickups:
             e.rotation_y += dt * 170
             e.rotation_x = math.sin(p['t'] * 2) * 17
             if d < 0.9:
-                self._collect(p)
+                self._collect(p, pl)
             elif p['life'] <= 0:
                 self._release(p)
             else:

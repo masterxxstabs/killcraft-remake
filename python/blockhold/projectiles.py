@@ -2,6 +2,7 @@
 import random
 from ursina import Vec3, destroy
 from .render import block
+from .net import new_id
 
 
 class Projectiles:
@@ -9,14 +10,14 @@ class Projectiles:
         self.game = game
         self.list = []
 
-    def spawn_rocket(self, pos, vel, radius, damage, knockback):
+    def spawn_rocket(self, pos, vel, radius, damage, knockback, owner=None):
         e = block(self.game.world_root, size=(0.15, 0.15, 0.45), color='#ff3b3b', position=pos)
-        self.list.append(dict(e=e, vel=vel, owner='player', radius=radius, damage=damage,
-                              knockback=knockback, life=4, gravity=3, trail='#ffc04a'))
+        self.list.append(dict(id=new_id(), e=e, vel=vel, owner='player', shooter=owner or self.game.player, radius=radius,
+                              damage=damage, knockback=knockback, life=4, gravity=3, trail='#ffc04a'))
 
     def spawn_enemy(self, pos, vel, damage, color):
         e = block(self.game.world_root, size=(0.3, 0.3, 0.3), color=color, position=pos)
-        self.list.append(dict(e=e, vel=vel, owner='enemy', damage=damage, life=4, gravity=2, trail=color))
+        self.list.append(dict(id=new_id(), e=e, vel=vel, owner='enemy', damage=damage, life=4, gravity=2, trail=color))
 
     def _remove(self, p):
         destroy(p['e'])
@@ -33,7 +34,8 @@ class Projectiles:
                 k = 1 - max(0, d - e.radius) / p['radius']
                 away = Vec3(e.position.x - pos.x, 0, e.position.z - pos.z)
                 away = away.normalized() if away.length() > 0.01 else Vec3(0, 0, 1)
-                e.hurt(p['damage'] * (0.35 + 0.65 * k) * g.player.damage_mult, False, away * p['knockback'] * k)
+                e.hurt(p['damage'] * (0.35 + 0.65 * k) * p['shooter'].damage_mult, False, away * p['knockback'] * k,
+                       attacker=p['shooter'])
 
     def update(self, dt):
         g = self.game
@@ -53,14 +55,19 @@ class Projectiles:
                     self._remove(p)
                     continue
             else:
-                eye = g.player.eye()
-                body = Vec3(eye.x, eye.y - 0.6, eye.z)
-                # closest point on this frame's path to the player's body
-                t = max(0, min(length, (body - start).dot(d)))
-                cp = start + d * t
-                if (cp.x - body.x) ** 2 + (cp.z - body.z) ** 2 < 0.25 and abs(cp.y - body.y) < 1:
-                    g.player.hurt(p['damage'], start)
-                    g.effects.burst(cp, p['trail'], 8, speed=3)
+                hit = None
+                for target in g.targets():
+                    eye = target.eye()
+                    body = Vec3(eye.x, eye.y - 0.6, eye.z)
+                    # closest point on this frame's path to the target's body
+                    t = max(0, min(length, (body - start).dot(d)))
+                    cp = start + d * t
+                    if (cp.x - body.x) ** 2 + (cp.z - body.z) ** 2 < 0.25 and abs(cp.y - body.y) < 1:
+                        hit = (target, cp)
+                        break
+                if hit:
+                    hit[0].hurt(p['damage'], start)
+                    g.effects.burst(hit[1], p['trail'], 8, speed=3)
                     self._remove(p)
                     continue
 

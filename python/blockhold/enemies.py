@@ -6,6 +6,7 @@ from ursina import Vec3, application, destroy
 from .data.enemies import ENEMIES
 from .render import block, col, node
 from .textures import zombie_skin
+from .net import new_id
 
 # Hitboxes in the enemy's own (unscaled) space: (min, max)
 HEAD_BOX = ((-0.27, 1.45, -0.27), (0.27, 1.99, 0.27))
@@ -35,6 +36,10 @@ class Enemy:
     def __init__(self, game, kind, wave, pos):
         d = ENEMIES[kind]
         self.game, self.kind, self.d = game, kind, d
+        self.id = new_id()
+        self.target = None          # the player (or ally) this enemy is chasing
+        self.last_attacker = None   # who gets the kill
+        self.retarget_t = 0
         self.max_hp = round(d['hp'] * wave['hp_mult'])
         self.hp = self.max_hp
         self.speed = d['speed'] * wave['speed_mult'] * (0.9 + random.random() * 0.2)
@@ -139,17 +144,19 @@ class Enemy:
         return tb, False
 
     # ── combat ───────────────────────────────────────────────────────────────
-    def hurt(self, amount, headshot=False, knock=None):
+    def hurt(self, amount, headshot=False, knock=None, attacker=None):
         if self.dead:
             return
         g = self.game
+        if attacker is not None or self.last_attacker is None:
+            self.last_attacker = attacker or g.player
         self.hp -= amount
         if amount < 0.01:          # finishing blow from burning: no number, no flash
             if self.hp <= 0:
                 self.dead = True
                 self.hp = 0
                 g.sounds.play('death', pitch=0.8 + random.random() * 0.4)
-                g.on_enemy_killed(self, False)
+                g.on_enemy_killed(self, False, self.last_attacker)
             return
         self.flash = 0.1
         if knock is not None:
@@ -162,7 +169,7 @@ class Enemy:
             self.dead = True
             self.hp = 0
             g.sounds.play('death', pitch=0.8 + random.random() * 0.4)
-            g.on_enemy_killed(self, headshot)
+            g.on_enemy_killed(self, headshot, self.last_attacker)
 
     def ignite(self, dps, seconds):
         self.burn_dps = max(self.burn_dps, dps)
@@ -196,7 +203,7 @@ class Enemy:
     def shoot(self, r):
         g = self.game
         start = self.head_pos()
-        target = g.player.eye() - Vec3(0, 0.5, 0)
+        target = self.target.eye() - Vec3(0, 0.5, 0)
         base_dir = (target - start).normalized()
         g.sounds.play('spit')
         for i in range(r['count']):
@@ -234,7 +241,14 @@ class Enemy:
             self.root.position = self.position
             return self.death_t < 2.4
 
-        p = g.player.position
+        self.retarget_t -= dt
+        if self.target is None or self.retarget_t <= 0 or getattr(self.target, 'dead', False):
+            self.target = g.nearest_target(self.position)
+            self.retarget_t = 0.5 + random.random() * 0.5
+        if self.target is None:
+            self.root.position = self.position
+            return True
+        p = self.target.position
         if self.rise > 0:
             self.rise -= dt
             self.position.y = -self.height * max(0, self.rise / 0.9)
@@ -256,7 +270,7 @@ class Enemy:
         r = self.d.get('ranged')
         if r:
             self.ranged_cd -= dt
-            can_see = dist < r['range'] and g.world.line_of_sight(self.head_pos(), g.player.eye())
+            can_see = dist < r['range'] and g.world.line_of_sight(self.head_pos(), self.target.eye())
             if can_see and dist > 6 and not self.d.get('boss'):
                 side = 0.6 if math.sin(self.walk * 0.3) > 0 else -0.6
                 mx, mz = -tz * side, tx * side
@@ -281,7 +295,7 @@ class Enemy:
                 mx += dx / d * (mn - d) * 3
                 mz += dz / d * (mn - d) * 3
 
-        reach = self.d['reach'] + g.player.radius
+        reach = self.d['reach'] + self.target.radius
         if dist < reach * 0.8:
             speed = 0
         ml = math.hypot(mx, mz)
@@ -307,7 +321,7 @@ class Enemy:
         if dist < reach and abs(p.y - self.position.y) < self.height * 0.8 + 0.6 and self.attack_cd <= 0:
             self.attack_cd = 1 / self.d['attack_rate']
             self.attack_anim = 0.3
-            g.player.hurt(self.damage, self.position)
+            self.target.hurt(self.damage, self.position)
 
         self.groan_t -= dt
         if self.groan_t <= 0:

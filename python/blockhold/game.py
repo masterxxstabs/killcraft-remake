@@ -11,6 +11,7 @@ from .data.upgrades import UPGRADES
 from .data.waves import BOSS, INTERMISSION, NORMAL_SKY, build_wave
 from .data.weapons import WEAPONS
 from .effects import Effects
+from .net import Events, PlayerInput
 from .enemies import EnemyManager
 from .pickups import Pickups
 from .player import Player
@@ -69,16 +70,19 @@ class Game(Entity):
         self.god_mode = False
         self.aiming = False
         self.shake_amt = 0
-        self.coins = self.score = self.kills = self.wave_number = self.remaining = 0
+        self.wave_number = self.remaining = 0
         self.time = 0
         self.intermission = 0
-        self.upgrade_levels = {}
+        self.events = Events()
+        self._pressed = set()        # keys pressed since the last frame (for PlayerInput)
         self.sky = list(hex_rgb(NORMAL_SKY['sky']) + hex_rgb(NORMAL_SKY['fog']) + (NORMAL_SKY['fog_near'], NORMAL_SKY['fog_far']))
         self.sky_target = list(self.sky)
 
         self.world = World()
         self.world_root = node()
-        self.player = Player(self)
+        self.player = Player(self)           # the local player
+        self.players = [self.player]         # everyone in the game (more once multiplayer exists)
+        self.allies = []                     # friendly NPCs
         self.ui = UI(self)
         self.effects = Effects(self)
         self.weapons = Weapons(self)
@@ -170,9 +174,8 @@ class Game(Entity):
         self.player.position = Vec3(self.world.player_spawn)
         self.weapons.reset()
         self.weapons.set_visible(True)
-        self.coins = self.score = self.kills = self.wave_number = self.remaining = 0
+        self.wave_number = self.remaining = 0
         self.time = 0
-        self.upgrade_levels = {}
         self.shop_open = False
         self.god_mode = False
         self.state = 'playing'
@@ -256,6 +259,7 @@ class Game(Entity):
         mod = self.wave['modifier']
         self.apply_sky({**NORMAL_SKY, **mod} if mod else NORMAL_SKY)
         self.sounds.play('wave_start')
+        self.events.emit('wave_started', wave=self.wave_number)
         n = self.wave_number
         if mod:
             self.ui.banner(f"WAVE {n}: {mod['name']}", '#ff8c5a', 3.5, mod['desc'])
@@ -266,8 +270,10 @@ class Game(Entity):
 
     def end_wave(self):
         bonus = self.wave['clear_bonus']
-        self.coins += bonus
-        self.score += self.wave_number * 50
+        for p in self.players:
+            p.coins += bonus
+            p.score += self.wave_number * 50
+        self.events.emit('wave_cleared', wave=self.wave_number)
         self.sounds.play('wave_clear')
         self.ui.banner('WAVE CLEARED', '#7dff8a', 3, f'+{bonus} coins  ·  press B to open the shop')
         self.begin_intermission()
@@ -348,11 +354,15 @@ class Game(Entity):
         self.ability['use'](self)
         self.player.ability_cd = self.ability['cooldown']
 
-    def on_enemy_killed(self, e, headshot):
-        self.kills += 1
+    def on_enemy_killed(self, e, headshot, attacker=None):
+        attacker = attacker or self.player
+        owner = getattr(attacker, 'owner', attacker)       # allies earn for the player who hired them
         self.remaining -= 1
         d = e.d
-        self.score += round(d['score'] * (1.5 if headshot else 1) * (1 + self.wave_number * 0.1))
+        if hasattr(owner, 'kills'):
+            owner.kills += 1
+            owner.score += round(d['score'] * (1.5 if headshot else 1) * (1 + self.wave_number * 0.1))
+        self.events.emit('enemy_killed', enemy=e, attacker=attacker, headshot=headshot)
         lo, hi = d['coins']
         coins = round((lo + random.random() * (hi - lo)) * e.coin_mult * (1 + self.wave_number * 0.04))
         self.pickups.drop_coins(e.position, coins)
@@ -364,7 +374,9 @@ class Game(Entity):
             self.shake(0.5)
         self.ui.kill_feed(f"{'HEADSHOT ' if headshot else ''}{d['name']} +{coins}")
 
-    def on_player_death(self):
+    def on_player_death(self, player=None):
+        if player is not None and not player.is_local:
+            return                       # (multiplayer: a team-mate went down)
         self.weapons.trigger(False)
         self.aiming = False
         camera.fov = self.fov
@@ -419,6 +431,7 @@ class Game(Entity):
 
     # ── input ────────────────────────────────────────────────────────────────
     def input(self, key):
+        self._pressed.add(key)
         if key == 'f11':
             window.fullscreen = not window.fullscreen
         if key == 'm':
@@ -467,13 +480,43 @@ class Game(Entity):
         elif key in ('n', 'enter') and self.phase == 'intermission':
             self.start_wave()
 
-    def keys(self):
+    def local_input(self):
+        """This frame's PlayerInput from the keyboard (a remote player's comes from the network)."""
         k = held_keys
-        return {
-            'w': max(k['w'], k['up arrow']), 's': max(k['s'], k['down arrow']),
-            'a': max(k['a'], k['left arrow']), 'd': max(k['d'], k['right arrow']),
-            'space': k['space'], 'shift': max(k['left shift'], k['right shift'], k['shift']),
-        }
+        crouch = bool(k['c'] or k['left control'] or k['control'])
+        inp = PlayerInput(
+            move_x=max(k['d'], k['right arrow']) - max(k['a'], k['left arrow']),
+            move_z=max(k['w'], k['up arrow']) - max(k['s'], k['down arrow']),
+            jump=bool(k['space']), jump_pressed='space' in self._pressed,
+            sprint=bool(k['left shift'] or k['right shift'] or k['shift']),
+            crouch=crouch, crouch_pressed=bool({'c', 'left control', 'control'} & self._pressed),
+        )
+        self._pressed.clear()
+        return inp
+
+    # ── who is where (players and friendly NPCs) ─────────────────────────────
+    def targets(self):
+        """Everything zombies can attack: living players and allies."""
+        return [p for p in self.players if not p.dead] + [a for a in self.allies if not a.dead]
+
+    def nearest_target(self, pos):
+        best, best_d = None, math.inf
+        for t in self.targets():
+            d = (t.position.x - pos.x) ** 2 + (t.position.z - pos.z) ** 2
+            if d < best_d:
+                best, best_d = t, d
+        return best
+
+    def nearest_player(self, pos):
+        alive = [p for p in self.players if not p.dead] or self.players
+        return min(alive, key=lambda p: (p.position.x - pos.x) ** 2 + (p.position.z - pos.z) ** 2)
+
+    # ── each player's economy; these read / write the local player's ──────────
+    coins = property(lambda self: self.player.coins, lambda self, v: setattr(self.player, 'coins', v))
+    score = property(lambda self: self.player.score, lambda self, v: setattr(self.player, 'score', v))
+    kills = property(lambda self: self.player.kills, lambda self, v: setattr(self.player, 'kills', v))
+    upgrade_levels = property(lambda self: self.player.upgrade_levels,
+                              lambda self, v: setattr(self.player, 'upgrade_levels', v))
 
     # ── main loop ────────────────────────────────────────────────────────────
     def update(self):
@@ -506,7 +549,9 @@ class Game(Entity):
                 v = mouse.velocity
                 sens = self.sensitivity * camera.fov / self.fov     # slower aiming when zoomed in
                 p.look(v[0] * sens, v[1] * sens)
-            p.update(dt, {} if self.shop_open else self.keys())
+            inp = PlayerInput() if self.shop_open else self.local_input()
+            p.update(dt, inp)
+            p.apply_camera(dt)
             self.weapons.update(dt)
 
             if self.phase == 'intermission' and not self.shop_open:
@@ -518,7 +563,8 @@ class Game(Entity):
                 if self.spawn_queue and self.spawn_t <= 0 and self.enemies.alive_count() < self.wave['max_alive']:
                     self.spawn_t = self.wave['spawn_interval'] * (0.6 + random.random() * 0.8)
                     kind = self.spawn_queue.pop(0)
-                    self.enemies.spawn(kind, self.wave, self.world.random_spawn(p.position))
+                    near = random.choice([q for q in self.players if not q.dead] or self.players)
+                    self.enemies.spawn(kind, self.wave, self.world.random_spawn(near.position))
                     if kind == BOSS:
                         self.sounds.play('boss_roar')
                         self.shake(0.4)
