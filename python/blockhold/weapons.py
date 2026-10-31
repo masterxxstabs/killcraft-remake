@@ -382,7 +382,7 @@ class Weapons:
 
     def on_hit(self, d, e, dm):
         """Status effects after a hit."""
-        if d.get('lifesteal'):
+        if d.get('lifesteal') and not self.owner.downed:
             o = self.owner
             o.health = min(o.max_health, o.health + d['lifesteal'])
         if e.dead:

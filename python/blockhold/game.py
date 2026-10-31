@@ -15,7 +15,7 @@ from .net import Events, PlayerInput
 from .enemies import EnemyManager
 from .pickups import Pickups
 from .powerups import PowerUps
-from .player import Player
+from .player import Player, REVIVE_TIME
 from .projectiles import Projectiles
 from .render import col, hex_rgb, node, set_fog
 from .sounds import Sounds
@@ -281,6 +281,8 @@ class Game(Entity):
         for p in self.players:
             p.coins += bonus
             p.score += self.wave_number * 50
+        for p in self.players:
+            p.revive(0.5)
         for a in self.allies:                    # everyone gets patched up between waves
             a.revive(1.0)
             a.hp = a.max_hp
@@ -291,6 +293,8 @@ class Game(Entity):
 
     # ── shop ─────────────────────────────────────────────────────────────────
     def open_shop(self):
+        if self.player.downed:
+            return
         if self.phase != 'intermission':
             self.ui.banner('SHOP CLOSED', '#ff7070', 1.2, 'The shop opens between waves')
             return
@@ -418,6 +422,11 @@ class Game(Entity):
     def update_revives(self, dt, inp):
         """Hold E next to a downed ally to get them back up."""
         p = self.player
+        if p.downed:
+            helper = next((a for a in self.allies if a.reviving), None)
+            msg = f'{helper.name} is coming for you' if helper else 'Waiting for an ally'
+            self.ui.set_prompt(f'{msg}   {math.ceil(p.bleed)}s', p.revive_progress / REVIVE_TIME if helper else None)
+            return
         near = None
         for a in self.allies:
             if a.downed and (a.position - p.position).length() < 2.6:
@@ -457,7 +466,7 @@ class Game(Entity):
 
     # ── events ───────────────────────────────────────────────────────────────
     def use_ability(self):
-        if not self.can_act() or self.player.ability_cd > 0:
+        if not self.can_act() or self.player.ability_cd > 0 or self.player.downed:
             return
         self.ability['use'](self)
         self.player.ability_cd = self.ability['cooldown']
@@ -611,7 +620,11 @@ class Game(Entity):
     # ── who is where (players and friendly NPCs) ─────────────────────────────
     def targets(self):
         """Everything zombies can attack: living players and allies."""
-        return [p for p in self.players if not p.dead] + [a for a in self.allies if not a.dead]
+        return [p for p in self.players if not p.dead and not p.downed] + [a for a in self.allies if not a.dead]
+
+    def can_go_down(self, player):
+        """A player only goes down (instead of dying) while one of their allies is still standing."""
+        return any(a.owner is player and not a.downed for a in self.allies)
 
     def nearest_target(self, pos):
         best, best_d = None, math.inf

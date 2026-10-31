@@ -8,7 +8,9 @@ import random
 from ursina import Vec3, camera
 from .net import PlayerInput, new_id
 
-STAND_EYE, CROUCH_EYE, SLIDE_EYE = 1.62, 1.08, 0.92
+STAND_EYE, CROUCH_EYE, SLIDE_EYE, DOWNED_EYE = 1.62, 1.08, 0.92, 0.55
+BLEED_OUT = 25          # seconds a downed player has before they die
+REVIVE_TIME = 3.0       # seconds an ally needs to get a downed player up
 GRAVITY = 22
 JUMP_SPEED = 7.2
 
@@ -50,6 +52,9 @@ class Player:
         self.magnet = 3.0
         self.buffs = {}
         self.dead = False
+        self.downed = False      # on the ground, waiting for an ally to revive them
+        self.bleed = 0.0
+        self.revive_progress = 0.0
         self.ability_cd = 0.0
         # each player's own economy (shared screens show the local player's)
         self.coins = 0
@@ -70,7 +75,7 @@ class Player:
 
     def hurt(self, amount, source=None):
         g = self.game
-        if self.dead or g.god_mode:
+        if self.dead or self.downed or g.god_mode:
             return
         amount *= 1 - self.armor
         self.health -= amount
@@ -81,11 +86,44 @@ class Player:
             g.shake(min(0.25, amount / 60))
         if self.health <= 0:
             self.health = 0
-            self.dead = True
-            g.events.emit('player_died', player=self)
-            g.on_player_death(self)
+            if g.can_go_down(self):
+                self.go_down()
+            else:
+                self.die()
+
+    def go_down(self):
+        """Out of health, but an ally can still get this player back up."""
+        g = self.game
+        self.downed = True
+        self.bleed = BLEED_OUT
+        self.revive_progress = 0.0
+        self.slide_t = 0
+        self.mantle = None
+        g.events.emit('player_downed', player=self)
+        if self.is_local:
+            g.ui.banner('YOU ARE DOWN', '#d64541', 3, 'Hold on, an ally is coming to get you up')
+            g.sounds.play('hurt', pitch=0.6)
+
+    def revive(self, frac=0.4):
+        if not self.downed:
+            return
+        self.downed = False
+        self.health = self.max_health * frac
+        self.revive_progress = 0.0
+        self.game.events.emit('player_revived', player=self)
+        if self.is_local:
+            self.game.sounds.play('heal')
+
+    def die(self):
+        g = self.game
+        self.downed = False
+        self.dead = True
+        g.events.emit('player_died', player=self)
+        g.on_player_death(self)
 
     def heal(self, n):
+        if self.downed or self.dead:
+            return
         self.health = min(self.max_health, self.health + n)
         if self.is_local:
             self.game.effects.damage_number(self.eye() + self.forward() * 1.5, n, color='#5dff7a')
@@ -108,13 +146,16 @@ class Player:
             self.buffs[k] = max(0, self.buffs[k] - dt)
         if self.ability_cd > 0:
             self.ability_cd -= dt
-        if self.regen > 0 and self.health < self.max_health:
+        if self.regen > 0 and self.health < self.max_health and not self.downed:
             self.health = min(self.max_health, self.health + self.regen * dt)
         self.slide_cd = max(0, self.slide_cd - dt)
         self.land_dip = max(0, self.land_dip - dt * 3)
 
         if self.mantle:
             self.update_mantle(dt)
+            return
+        if self.downed:
+            self.crawl(dt, inp)
             return
 
         fx, fz = inp.move_x, inp.move_z
@@ -265,6 +306,27 @@ class Player:
             self.mantle = (start, end, t, dur, vel)
 
     # ── camera (local player only) ───────────────────────────────────────────
+    def crawl(self, dt, inp):
+        """Downed: drag yourself along the ground while the bleed-out timer runs."""
+        g = self.game
+        self.bleed -= dt
+        if self.bleed <= 0 or not g.can_go_down(self):      # time's up, or nobody left to help
+            self.die()
+            return
+        yr = math.radians(self.yaw)
+        fx, fz = inp.move_x, inp.move_z
+        length = math.hypot(fx, fz)
+        if length > 1:
+            fx, fz = fx / length, fz / length
+        wx = fz * math.sin(yr) + fx * math.cos(yr)
+        wz = fz * math.cos(yr) - fx * math.sin(yr)
+        self.vel = Vec3(wx * 1.3, 0, wz * 1.3)
+        self.position += self.vel * dt
+        self.position.x, self.position.z = g.world.collide(self.position, self.radius)
+        self.position.y = g.world.ground_at(self.position.x, self.position.z, self.radius, self.position.y)
+        self.moving = False
+        self.eye_height += (DOWNED_EYE - self.eye_height) * min(1, dt * 6)
+
     def apply_camera(self, dt):
         bob_y = abs(math.sin(self.bob)) * 0.06 if self.moving else 0
         self.recoil = max(0, self.recoil - dt * 6 * max(1.0, self.recoil))
@@ -274,6 +336,6 @@ class Player:
             self.position.y + self.eye_height + bob_y - self.land_dip + (random.random() - 0.5) * s,
             self.position.z + (random.random() - 0.5) * s,
         )
-        roll = 6 if self.sliding else (-3 if self.mantle else 0)
+        roll = 14 if self.downed else 6 if self.sliding else (-3 if self.mantle else 0)
         dip = 8 if self.mantle else 0
         camera.rotation = (-(self.pitch + self.recoil) + dip, self.yaw, roll)

@@ -36,6 +36,7 @@ class Ally:
         self.walk = random.random() * 6
         self.flash = 0.0
         self.kills = 0
+        self.reviving = False
         self.build()
 
     @property
@@ -144,10 +145,14 @@ class Ally:
             self.root.setColorScale(1, 1, 1, 1)
         self.hp_bar.scale_x = max(0.001, 0.68 * self.hp / self.max_hp)
         self.hp_bar.color = col('#2e9e6a' if self.hp > self.max_hp * 0.35 else '#d64541')
+        self.reviving = False
         if self.downed:
             return
 
         o = self.owner
+        if o.downed and self.is_reviver():
+            self.go_revive(dt)
+            return
         oy = math.radians(o.yaw)
         back = Vec3(-math.sin(oy), 0, -math.cos(oy))
         right = Vec3(math.cos(oy), 0, -math.sin(oy))
@@ -190,7 +195,7 @@ class Ally:
         self.position.y = 0
         self.position.x, self.position.z = g.world.collide(self.position, self.radius)
 
-        if self.d.get('heal') and (o.position - self.position).length() < 6 and not o.dead:
+        if self.d.get('heal') and (o.position - self.position).length() < 6 and not o.dead and not o.downed:
             o.health = min(o.max_health, o.health + self.d['heal'] * dt)
 
         self.retarget -= dt
@@ -208,6 +213,33 @@ class Ally:
         self.walk += dt * move.length() * speed * 2.2
         swing = math.sin(self.walk) * 35 if move.length() > 0.1 else 0
         self.legs[0].rotation_x, self.legs[1].rotation_x = swing, -swing
+        self.root.position = self.position
+
+    def is_reviver(self):
+        """The closest standing ally is the one who runs over to help their downed owner."""
+        standing = [a for a in self.game.allies if a.owner is self.owner and not a.downed]
+        return bool(standing) and min(standing, key=lambda a: (a.position - self.owner.position).length()) is self
+
+    def go_revive(self, dt):
+        from .player import REVIVE_TIME
+        o = self.owner
+        self.reviving = True
+        to = Vec3(o.position.x - self.position.x, 0, o.position.z - self.position.z)
+        d = to.length()
+        if d > 1.2:
+            speed = self.d['speed'] * 1.6
+            self.position += to.normalized() * min(d - 1.0, speed * dt)
+            self.position.x, self.position.z = self.game.world.collide(self.position, self.radius)
+            self.walk += dt * speed * 2.2
+            swing = math.sin(self.walk) * 35
+            self.legs[0].rotation_x, self.legs[1].rotation_x = swing, -swing
+        else:
+            self.legs[0].rotation_x = self.legs[1].rotation_x = 0
+            o.revive_progress += dt
+            if o.revive_progress >= REVIVE_TIME:
+                o.revive(0.4)
+                self.game.ui.kill_feed(f'{self.name} got {o.name} back up')
+        self.face(o.position.x, o.position.z, dt)
         self.root.position = self.position
 
     def face(self, x, z, dt):

@@ -70,7 +70,8 @@ chat. A direct-IP join screen comes first, then maybe a lobby.
 - [ ] Snapshot encode / decode and interpolation of remote entities
 - [ ] Remote player models (the blocky character with the held gun)
 - [ ] One `Weapons` loadout per player (today `game.weapons` is the local player's)
-- [ ] Downed state for players (allies already have it) instead of instant game over
+- [x] Downed state for players (`player.downed`, bleed-out timer; allies revive their owner)
+- [ ] Let players revive each other too (reuse `update_revives`)
 - [ ] Shared shop between waves (each player buys with their own coins)
 - [x] Scoreboard (hold Tab): already lists every player in `game.players` and every ally
 - [ ] Text chat

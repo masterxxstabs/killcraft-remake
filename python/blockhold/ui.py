@@ -437,7 +437,7 @@ class UI:
     def update(self, dt):
         g, p = self.game, self.game.player
         self.hp_fill.scale_x = max(0.0001, 0.375 * clamp01(p.health / p.max_health))
-        self.set_text(self.hp_text, f'{math.ceil(p.health)} / {p.max_health}')
+        self.set_text(self.hp_text, 'DOWN' if p.downed else f'{math.ceil(p.health)} / {p.max_health}')
         self.set_text(self.coins, str(g.coins))
         self.set_text(self.score, f'SCORE {g.score}')
         self.set_text(self.wave, str(g.wave_number))
@@ -512,6 +512,8 @@ class UI:
                 self.hit.enabled = False
         self.hurt_t = max(0, self.hurt_t - dt * 1.5)
         low = 0.35 + math.sin(now * 5) * 0.1 if p.health / p.max_health < 0.3 else 0
+        if p.downed:
+            low = 0.8 + math.sin(now * 3) * 0.12
         self.vignette.alpha = max(self.hurt_t, low)
         self.adrenaline.alpha = 0.8 if p.buffs.get('adrenaline', 0) > 0 else 0
 

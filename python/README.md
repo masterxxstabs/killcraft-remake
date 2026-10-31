@@ -141,6 +141,10 @@ the Rookie (pistol), Gunner (AR-15), Medic (MP5, heals you when you're close) an
 (M249). You can have 3 at a time. When one goes down, stand next to them and hold **E**
 to get them back up. Everyone gets back up at the end of a wave. Their kills earn you coins.
 
+Allies also have your back: if your health runs out while one of them is still standing, you
+go **down** instead of dying. You can crawl and keep shooting while the closest ally runs over
+to revive you. If nobody gets to you within 25 seconds, or every ally is down too, it's game over.
+
 ### Power-ups
 
 Now and then a zombie drops a floating power-up. Walk into it and it works for the whole team:
