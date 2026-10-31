@@ -1,5 +1,6 @@
 """Enemy models (blocky humanoids) and their AI."""
 import math
+from collections import deque
 import random
 from panda3d.core import Point3, Vec3 as PVec3
 from ursina import Vec3, application
@@ -61,6 +62,8 @@ class Enemy:
         self.death_t = 0
         self.stuck_t = 0
         self.detour = 0
+        self.nav_t = 0.0
+        self.blocked = False      # True = a wall is in the way: follow the flow field
         self.detour_side = 1
         self.last_pos = Vec3(pos)
         self.groan_t = 3 + random.random() * 8
@@ -281,6 +284,16 @@ class Enemy:
                 self.ranged_cd = 1 / r['rate'] * (0.8 + random.random() * 0.4)
                 self.shoot(r)
 
+        self.nav_t -= dt
+        if self.nav_t <= 0:                     # is the straight line to the target walkable?
+            self.nav_t = 0.25 + random.random() * 0.2
+            self.blocked = not g.world.walkable_line(self.position, p)
+        if self.blocked and dist > 1.2:         # no: walk around walls and through doors instead
+            way = g.enemies.flow.direction(self.position.x, self.position.z)
+            if way is not None:
+                mx, mz = way
+                self.detour = 0
+
         if self.detour > 0:     # stuck: walk sideways for a moment
             self.detour -= dt
             s = self.detour_side
@@ -358,10 +371,69 @@ class Enemy:
         self.arm_r.rotation_x = arm - arm_swing
 
 
+class FlowField:
+    """How many steps every walkable cell is from the nearest target (player or ally),
+    found with a breadth-first search. Zombies that can't walk straight to their target
+    follow it downhill, which takes them around walls and through doorways."""
+    INF = 1 << 30
+
+    def __init__(self, world):
+        self.world = world
+        self.dist = None
+
+    def rebuild(self, targets):
+        w, n, INF = self.world, self.world.n, self.INF
+        heights = w.heights
+        dist = [INF] * (n * n)
+        queue = deque()
+        for t in targets:
+            gx, gz = w.to_grid(t.position.x, t.position.z)
+            if w.inside(gx, gz) and dist[w.gidx(gx, gz)]:
+                dist[w.gidx(gx, gz)] = 0
+                queue.append((gx, gz))
+        while queue:
+            gx, gz = queue.popleft()
+            d = dist[gz * n + gx] + 1
+            for nx, nz in ((gx + 1, gz), (gx - 1, gz), (gx, gz + 1), (gx, gz - 1)):
+                if 0 <= nx < n and 0 <= nz < n:
+                    j = nz * n + nx
+                    if dist[j] > d and heights[j] <= 0.05:
+                        dist[j] = d
+                        queue.append((nx, nz))
+        self.dist = dist
+
+    def direction(self, x, z):
+        """Unit (dx, dz) towards the next cell on the way, or None."""
+        if self.dist is None:
+            return None
+        w, n = self.world, self.world.n
+        gx, gz = w.to_grid(x, z)
+        if not w.inside(gx, gz):
+            return None
+        heights, dist = w.heights, self.dist
+        best, bx, bz = dist[gz * n + gx], None, None
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            nx, nz = gx + dx, gz + dz
+            if not (0 <= nx < n and 0 <= nz < n):
+                continue
+            if dx and dz and (heights[gz * n + nx] > 0.05 or heights[nz * n + gx] > 0.05):
+                continue                        # don't cut corners
+            dj = dist[nz * n + nx]
+            if dj < best:
+                best, bx, bz = dj, nx, nz
+        if bx is None:
+            return None
+        cx, cz = bx - w.half + 0.5 - x, bz - w.half + 0.5 - z
+        length = math.hypot(cx, cz) or 1
+        return cx / length, cz / length
+
+
 class EnemyManager:
     def __init__(self, game):
         self.game = game
         self.list = []
+        self.flow = FlowField(game.world)
+        self.flow_t = 0.0
 
     def spawn(self, kind, wave, pos):
         e = Enemy(self.game, kind, wave, pos)
@@ -375,6 +447,14 @@ class EnemyManager:
         return sum(1 for e in self.list if not e.dead)
 
     def update(self, dt):
+        g = self.game
+        if self.flow.world is not g.world:
+            self.flow = FlowField(g.world)
+            self.flow_t = 0
+        self.flow_t -= dt
+        if self.flow_t <= 0 and self.list:
+            self.flow_t = 0.4
+            self.flow.rebuild(g.targets())
         for e in list(self.list):
             if not e.update(dt):
                 e.destroy()

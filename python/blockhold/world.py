@@ -558,6 +558,16 @@ class World:
     def blocked(self, x, z, radius, feet_y):
         return any(h > feet_y + 0.05 for h, _, _ in self._cells(x, z, radius))
 
+    def walkable_line(self, a, b, step=0.5):
+        """True if nothing solid stands on the ground between a and b (x/z only)."""
+        dx, dz = b[0] - a[0], b[2] - a[2]
+        n = int(math.hypot(dx, dz) / step)
+        for k in range(1, n):
+            gx, gz = self.to_grid(a[0] + dx * k / n, a[2] + dz * k / n)
+            if self.inside(gx, gz) and self.heights[self.gidx(gx, gz)] > 0.05:
+                return False
+        return True
+
     def collide(self, pos, radius):
         """Push a circle (pos.x, pos.z) out of columns taller than pos.y. Returns new (x, z)."""
         x, z, y = pos[0], pos[2], pos[1]
