@@ -1,9 +1,14 @@
 # BLOCKHOLD
 
-A blocky first-person wave survival game that runs in your browser. Hold the arena, survive
-the waves, spend your coins.
+A blocky first-person wave survival game. Hold the arena, survive the waves, spend your coins.
 
-## Play
+It comes in two versions with the same gameplay:
+
+- **Python version** in the [`python/`](python/) folder, built with the Ursina engine.
+  See [`python/README.md`](python/README.md) to install and run it.
+- **Browser version** (this folder): no install, just open `index.html`. Details below.
+
+## Play (browser version)
 
 **Easiest:** download this repo (green **Code** button → **Download ZIP**), unzip it, and
 double-click `index.html`. That's it. It needs no install and no internet.
