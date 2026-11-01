@@ -28,6 +28,8 @@ jobs:
           gh release download --repo pal1000/mesa-dist-win --pattern '*release-msvc.7z' --dir mesa
           7z x (Get-ChildItem mesa\*.7z).FullName -omesa\x -y | Out-Null
           Copy-Item mesa\x\x64\*.dll dist\BLOCKHOLD\
+          # Panda3D's graphics plugin looks for opengl32.dll next to itself first
+          Copy-Item mesa\x\x64\*.dll dist\BLOCKHOLD\_internal\panda3d\
           (Get-ChildItem mesa\x\x64\*.dll).Name -join ', '
       - name: Play
         run: |

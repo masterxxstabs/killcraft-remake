@@ -95,6 +95,18 @@ def selftest():
     print('SELFTEST OK')
 
 
+def check_graphics(app):
+    """The game draws everything with shaders: stop with a clear message if the driver can't."""
+    gsg = app.win.gsg
+    if gsg.supports_glsl and gsg.driver_shader_version_major >= 1:
+        return
+    show_error('BLOCKHOLD needs a graphics driver with OpenGL 3 / GLSL shaders, but this computer is using:\n\n'
+               f'    {gsg.driver_vendor} {gsg.driver_renderer} (OpenGL {gsg.driver_version})\n\n'
+               'Install or update the driver for your graphics card (NVIDIA, AMD or Intel) and try again. '
+               'In a virtual machine or over Remote Desktop, turn on 3D acceleration or play on the computer itself.')
+    sys.exit(2)
+
+
 def main():
     if FROZEN:
         setup_frozen()
@@ -125,6 +137,7 @@ def main():
     app = Ursina(title='BLOCKHOLD', development_mode=False, editor_ui_enabled=False, borderless=False, **extra)
     window.fps_counter.enabled = False
     window.exit_button.visible = False
+    check_graphics(app)
 
     from blockhold.game import Game  # (needs the window to exist first)
 

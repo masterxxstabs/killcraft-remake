@@ -71,6 +71,8 @@ jobs:
           7z x (Get-ChildItem mesa\*.7z).FullName -omesa\x -y | Out-Null
           Copy-Item -Recurse dist\BLOCKHOLD rendertest
           Copy-Item mesa\x\x64\*.dll rendertest\
+          # Panda3D's graphics plugin looks for opengl32.dll next to itself first
+          Copy-Item mesa\x\x64\*.dll rendertest\_internal\panda3d\
           Remove-Item "$env:USERPROFILE\.blockhold\autotest.png" -ErrorAction SilentlyContinue
           $p = Start-Process -FilePath rendertest\BLOCKHOLD.exe -ArgumentList '--autotest', '--software-gl' -PassThru
           if (-not $p.WaitForExit(240000)) { $p.Kill(); Write-Host 'timed out' }
