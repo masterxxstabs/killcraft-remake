@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw
 from ursina import Texture
 
 VERSION = 1
-CACHE_DIR = Path(__file__).parent / '_generated_textures'
+from .paths import TEXTURE_CACHE as CACHE_DIR
 
 
 # ── noise helpers ────────────────────────────────────────────────────────────
@@ -251,7 +251,7 @@ def image(name):
         pass
     img = GENERATORS[name]()
     try:
-        CACHE_DIR.mkdir(exist_ok=True)
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
         img.save(path)
     except Exception as e:
         print('could not cache texture', name, e)

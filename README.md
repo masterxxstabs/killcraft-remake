@@ -2,6 +2,16 @@
 
 A blocky first-person wave survival game. Hold the arena, survive the waves, spend your coins.
 
+## Download and play (Windows)
+
+**[Get the latest release](https://github.com/masterxxstabs/killcraft-remake/releases/latest)**, run
+`BLOCKHOLD-Setup-<version>.exe` and start BLOCKHOLD from the Start menu. No Python, no admin
+rights needed, and it updates itself. (There's also a portable zip and a Linux build on the
+same page.)
+
+Windows may say it "protected your PC" because the installer isn't code-signed: click
+**More info** then **Run anyway**.
+
 It comes in two versions with the same gameplay:
 
 - **Python version** in the [`python/`](python/) folder, built with the Ursina engine. This

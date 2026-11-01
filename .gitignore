@@ -4,3 +4,6 @@ __pycache__/
 python/blockhold/_generated_sounds/
 python/_backup/
 python/blockhold/_generated_textures/
+python/dist/
+python/build/
+release/

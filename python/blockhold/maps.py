@@ -5,7 +5,9 @@ from pathlib import Path
 from PIL import Image
 from .data.assets import ASSETS
 
-MAPS_DIR = Path(__file__).resolve().parent.parent / 'maps'
+from .paths import BUNDLED_MAPS, USER_MAPS
+
+MAPS_DIR = USER_MAPS        # where maps you save go (the same folder as the bundled maps when running from source)
 
 
 def slug(name):
@@ -15,22 +17,33 @@ def slug(name):
 
 def list_maps():
     """[(file stem, map name)] for every map in maps/."""
+    files = {}
+    for folder in (BUNDLED_MAPS, USER_MAPS):          # your own maps replace bundled ones with the same name
+        if folder.is_dir():
+            for f in folder.glob('*.json'):
+                files[f.stem] = f
     out = []
-    if MAPS_DIR.is_dir():
-        for f in sorted(MAPS_DIR.glob('*.json')):
-            try:
-                out.append((f.stem, json.loads(f.read_text()).get('name', f.stem)))
-            except Exception as e:
-                print('skipping broken map', f.name, e)
+    for stem in sorted(files):
+        try:
+            out.append((stem, json.loads(files[stem].read_text()).get('name', stem)))
+        except Exception as e:
+            print('skipping broken map', files[stem].name, e)
     return out
 
 
+def map_file(stem):
+    for folder in (USER_MAPS, BUNDLED_MAPS):
+        if (folder / f'{stem}.json').exists():
+            return folder / f'{stem}.json'
+    return USER_MAPS / f'{stem}.json'
+
+
 def load_map(stem):
-    return json.loads((MAPS_DIR / f'{stem}.json').read_text())
+    return json.loads(map_file(stem).read_text())
 
 
 def save_map(data, stem=None):
-    MAPS_DIR.mkdir(exist_ok=True)
+    MAPS_DIR.mkdir(parents=True, exist_ok=True)
     stem = stem or slug(data.get('name'))
     text = json.dumps(data, separators=(',', ':'))
     # one prop / block / path per line keeps the files readable and easy to diff

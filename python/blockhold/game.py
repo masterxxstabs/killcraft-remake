@@ -29,7 +29,7 @@ from .weapons import Weapons
 from .world import World
 from . import maps
 
-SAVE_DIR = Path.home() / '.blockhold'
+from .paths import USER_DIR as SAVE_DIR
 SAVE_FILE = SAVE_DIR / 'save.json'
 SETTINGS_FILE = SAVE_DIR / 'settings.json'
 
@@ -43,7 +43,7 @@ def load_json(path, default):
 
 def write_json(path, data):
     try:
-        SAVE_DIR.mkdir(exist_ok=True)
+        SAVE_DIR.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2))
     except Exception as e:
         print('could not save', e)
@@ -117,7 +117,7 @@ class Game(Entity):
 
     def finish_update(self):
         """Called once the update is installed: start the new version."""
-        restart()
+        restart(self.updater)
         application.quit()
 
     # ── settings / saving ────────────────────────────────────────────────────

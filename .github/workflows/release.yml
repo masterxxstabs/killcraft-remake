@@ -1,0 +1,186 @@
+# Builds BLOCKHOLD for Windows (installer + portable zip) and Linux, checks the builds,
+# and publishes them as a GitHub Release.
+#
+# Runs when python/VERSION changes on the default branch, so publishing an update is:
+#   1. bump python/VERSION   2. add a section to python/CHANGELOG.md   3. push
+# It can also be started by hand from the Actions tab ("Run workflow").
+# A version that already has a release is skipped.
+name: Build and release
+
+on:
+  push:
+    paths:
+      - python/VERSION
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      exists: ${{ steps.v.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(tr -d '[:space:]' < python/VERSION)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release v$v already exists: nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    needs: version
+    if: needs.version.outputs.exists == 'false'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: python
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build tools
+        run: python -m pip install -r requirements-build.txt
+      - name: Build BLOCKHOLD.exe
+        run: pyinstaller blockhold.spec --noconfirm
+      - name: Self-test the build
+        run: |
+          $p = Start-Process -FilePath dist\BLOCKHOLD\BLOCKHOLD.exe -ArgumentList '--selftest' -Wait -PassThru
+          Get-Content "$env:USERPROFILE\.blockhold\selftest.log"
+          if ($p.ExitCode -ne 0) { throw "self-test failed ($($p.ExitCode))" }
+      - name: Play test with software OpenGL (Mesa)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo pal1000/mesa-dist-win --pattern '*release-msvc.7z' --dir mesa
+          7z x (Get-ChildItem mesa\*.7z).FullName -omesa\x -y | Out-Null
+          Copy-Item -Recurse dist\BLOCKHOLD rendertest
+          Copy-Item mesa\x\x64\*.dll rendertest\
+          Remove-Item "$env:USERPROFILE\.blockhold\autotest.png" -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath rendertest\BLOCKHOLD.exe -ArgumentList '--autotest' -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); Write-Host 'timed out' }
+          Get-Content "$env:USERPROFILE\.blockhold\log.txt" -Tail 40
+          if (-not (Test-Path "$env:USERPROFILE\.blockhold\autotest.png")) { throw 'the game did not get to the screenshot' }
+          Copy-Item "$env:USERPROFILE\.blockhold\autotest.png" ..\autotest-windows.png
+      - name: Build the installer
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $out = Join-Path (Resolve-Path ..).Path 'release'
+          & $iscc "/DMyAppVersion=$env:VERSION" "/O$out" installer\blockhold.iss
+          if ($LASTEXITCODE -ne 0) { throw 'ISCC failed' }
+      - name: Test the installer (install, self-test, uninstall)
+        run: |
+          $setup = (Get-ChildItem ..\release\BLOCKHOLD-Setup-*.exe).FullName
+          $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOLAUNCH', '/CURRENTUSER', '/DIR=C:\bh_install_test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer failed ($($p.ExitCode))" }
+          $p = Start-Process -FilePath C:\bh_install_test\BLOCKHOLD.exe -ArgumentList '--selftest' -Wait -PassThru
+          Get-Content "$env:USERPROFILE\.blockhold\selftest.log" -Tail 3
+          if ($p.ExitCode -ne 0) { throw 'installed game failed its self-test' }
+          $p = Start-Process -FilePath C:\bh_install_test\unins000.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'uninstall failed' }
+      - name: Portable zip
+        run: Compress-Archive -Path dist\BLOCKHOLD -DestinationPath "..\release\BLOCKHOLD-$env:VERSION-windows-portable.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: release/*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screenshot
+          path: autotest-windows.png
+          if-no-files-found: ignore
+
+  linux:
+    needs: version
+    if: needs.version.outputs.exists == 'false'
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: python
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri libglu1-mesa libegl1
+          python -m pip install -r requirements-build.txt
+      - name: Build
+        run: pyinstaller blockhold.spec --noconfirm
+      - name: Self-test and play test
+        run: |
+          xvfb-run -a dist/BLOCKHOLD/BLOCKHOLD --selftest
+          xvfb-run -a -s "-screen 0 1280x720x24" dist/BLOCKHOLD/BLOCKHOLD --autotest
+          test -f ~/.blockhold/autotest.png
+          cp ~/.blockhold/autotest.png ../autotest-linux.png
+      - name: Package
+        run: |
+          mkdir -p ../release
+          tar -czf "../release/BLOCKHOLD-$VERSION-linux.tar.gz" -C dist BLOCKHOLD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: release/*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-screenshot
+          path: autotest-linux.png
+          if-no-files-found: ignore
+
+  release:
+    needs: [version, windows, linux]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Write the release notes
+        run: |
+          awk -v v="## $VERSION" '$0 == v {on=1; next} /^## / {if (on) exit} on' python/CHANGELOG.md > changes.md
+          {
+            echo "## What's new"
+            cat changes.md
+            echo
+            echo "## Download"
+            echo "- **Windows:** download \`BLOCKHOLD-Setup-$VERSION.exe\`, run it, then start BLOCKHOLD from the Start menu or your desktop."
+            echo "  No admin rights needed. Windows may say it \"protected your PC\" because the installer isn't code-signed: click **More info** then **Run anyway**."
+            echo "- **Windows (no install):** \`BLOCKHOLD-$VERSION-windows-portable.zip\`: unzip it anywhere and run \`BLOCKHOLD.exe\`."
+            echo "- **Linux:** \`BLOCKHOLD-$VERSION-linux.tar.gz\`: extract it and run \`BLOCKHOLD/BLOCKHOLD\`."
+            echo
+            echo "The installed game updates itself: when a new version comes out, the main menu shows **UPDATE NOW**."
+            echo "Your saves and settings are kept in \`%USERPROFILE%\\.blockhold\` (Windows) or \`~/.blockhold\` (Linux)."
+          } > notes.md
+          cat notes.md
+      - name: Publish
+        run: |
+          gh release create "v$VERSION" dl/windows/* dl/linux/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "BLOCKHOLD $VERSION" \
+            --notes-file notes.md

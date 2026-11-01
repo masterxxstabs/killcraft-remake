@@ -13,8 +13,7 @@ from pathlib import Path
 from panda3d.core import Filename, GeomVertexReader, LPoint3f
 from ursina import application
 
-HERE = Path(__file__).resolve().parent
-MODELS_DIR = HERE.parent / 'models'
+from .paths import MODELS_DIR
 EXTENSIONS = ('.glb', '.gltf', '.bam', '.egg', '.obj')
 
 _cache = {}         # path -> loaded NodePath (we copy it for each use)

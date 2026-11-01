@@ -5,6 +5,14 @@ The same blocky first-person wave survival game, written in Python with the
 
 ## Play
 
+**The easy way (Windows):** download `BLOCKHOLD-Setup-<version>.exe` from the
+[Releases page](https://github.com/masterxxstabs/killcraft-remake/releases/latest), run it, and
+start BLOCKHOLD from the Start menu. It installs just for you (no admin rights), keeps itself
+up to date, and keeps your saves in `%USERPROFILE%\.blockhold`. Prefer no install? Take the
+portable zip from the same page. Linux players can grab the `linux.tar.gz`.
+
+**From source** (to change the game or on any other system):
+
 You need [Python 3.10 or newer](https://www.python.org/downloads/). On Windows, tick
 **"Add Python to PATH"** when installing.
 
@@ -280,6 +288,10 @@ belong to each player, and zombies chase whoever is closest. See
 On launch, the game checks GitHub for a newer version. If one exists, the main menu shows
 **UPDATE NOW** and what's new. Click it and the game updates itself and restarts.
 
+- If you installed it with `BLOCKHOLD-Setup.exe`, it downloads the new installer from the
+  Releases page and runs it; the game starts again by itself when it's done.
+- If you use the portable zip or the Linux build, it opens the Releases page so you can
+  download the new version.
 - If you got the game with `git clone`, it runs `git pull`.
 - If you downloaded a ZIP, it downloads the new files and copies them over. Any file it
   replaces that you had changed is backed up first in `_backup/<old version>/`.
@@ -293,6 +305,23 @@ checking using `python main.py --offline`.
 2. Add a `## 1.2.0` section with bullet points at the top of `python/CHANGELOG.md`.
    Players see these bullet points.
 3. Push to the repository's default branch on GitHub.
+
+GitHub Actions then builds the Windows installer, a portable zip and a Linux build, tests
+them (it installs the game, runs a self-test and a short play test) and publishes them as a
+new release with your changelog as the notes. See `.github/workflows/release.yml`. Installed
+copies of the game see the new release and update themselves.
+
+**Building the .exe yourself** (on Windows):
+
+```bash
+cd python
+pip install -r requirements-build.txt
+pyinstaller blockhold.spec --noconfirm
+```
+
+The game is then in `dist/BLOCKHOLD/`. To make the installer, install
+[Inno Setup](https://jrsoftware.org/isinfo.php) and run `ISCC.exe installer\blockhold.iss`.
+`BLOCKHOLD.exe --selftest` checks that a build has everything it needs.
 
 The repository and branch it checks are set at the top of `blockhold/updater.py`.
 

@@ -7,31 +7,38 @@ python/VERSION on GitHub. So to publish an update for everyone:
     3. push to GitHub
 
 How it installs:
+  * The installed game (BLOCKHOLD.exe) downloads the newest installer from the
+    GitHub Releases page and runs it; the installer starts the game again.
+    (The portable zip just opens the Releases page for you.)
   * If the game folder is a git clone, it runs `git pull`.
   * Otherwise (downloaded as a ZIP) it downloads the newest ZIP from GitHub and
     copies the files over. Any file it replaces that you had changed is backed
     up first in python/_backup/<old version>/, so your own edits are never lost.
 """
 import io
+import json
 import re
 import shutil
 import subprocess
 import sys
 import threading
+import tempfile
 import urllib.request
+import webbrowser
 import zipfile
 from pathlib import Path
+from .paths import APP_DIR, FROZEN, VERSION_FILE
 
 REPO = 'masterxxstabs/killcraft-remake'   # GitHub owner/name
 BRANCH = 'HEAD'                           # HEAD = the repository's default branch
 SUBDIR = 'python'                         # the game lives in this folder of the repo
 
-GAME_DIR = Path(__file__).resolve().parent.parent
+GAME_DIR = APP_DIR
 REPO_DIR = GAME_DIR.parent
-VERSION_FILE = GAME_DIR / 'VERSION'
-CHANGELOG_FILE = GAME_DIR / 'CHANGELOG.md'
 BACKUP_DIR = GAME_DIR / '_backup'
-SKIP_PARTS = {'__pycache__', '_generated_sounds', '_backup', '.git'}
+SKIP_PARTS = {'__pycache__', '_generated_sounds', '_generated_textures', '_backup', '.git'}
+RELEASES_API = f'https://api.github.com/repos/{REPO}/releases/latest'
+RELEASES_PAGE = f'https://github.com/{REPO}/releases/latest'
 
 
 def parse_version(text):
@@ -47,7 +54,8 @@ def local_version():
 
 
 def _fetch(url, timeout=8):
-    req = urllib.request.Request(url, headers={'User-Agent': 'blockhold-updater', 'Cache-Control': 'no-cache'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'blockhold-updater', 'Cache-Control': 'no-cache',
+                                               'Accept': 'application/vnd.github+json'})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
 
@@ -73,6 +81,18 @@ def is_git_checkout():
     return (REPO_DIR / '.git').exists() and shutil.which('git') is not None
 
 
+def installed_with_setup():
+    """True for the Windows installer version (Inno Setup puts an uninstaller next to the exe)."""
+    exe_dir = Path(sys.executable).resolve().parent
+    return FROZEN and sys.platform == 'win32' and any(exe_dir.glob('unins*.exe'))
+
+
+def release_notes(body):
+    """Bullet points from a GitHub release description."""
+    return [line.strip().lstrip('-* ').strip() for line in (body or '').splitlines()
+            if line.strip().startswith(('-', '*'))]
+
+
 def _git(*args, timeout=60):
     return subprocess.run(['git', '-C', str(REPO_DIR), *args], capture_output=True, text=True, timeout=timeout)
 
@@ -86,7 +106,9 @@ class Updater:
         self.remote = None
         self.notes = []
         self.message = ''
-        self.mode = 'git' if is_git_checkout() else 'zip'
+        self.mode = 'release' if FROZEN else ('git' if is_git_checkout() else 'zip')
+        self.release = None          # the GitHub release (release mode)
+        self.relaunch_by_installer = False
 
     # ── checking ─────────────────────────────────────────────────────────────
     def check_async(self):
@@ -95,7 +117,11 @@ class Updater:
     def check(self):
         self.status = 'checking'
         try:
-            if self.mode == 'git':
+            if self.mode == 'release':
+                self.release = json.loads(_fetch(RELEASES_API).decode('utf-8', 'replace'))
+                remote = self.release.get('tag_name', '0.0.0').lstrip('vV')
+                changelog = ''
+            elif self.mode == 'git':
                 fetched = _git('fetch', '--quiet')
                 if fetched.returncode != 0:
                     raise OSError(fetched.stderr.strip())
@@ -112,7 +138,8 @@ class Updater:
                     changelog = ''
             self.remote = remote
             if parse_version(remote) > parse_version(self.local):
-                self.notes = latest_notes(changelog, remote)
+                self.notes = (release_notes(self.release.get('body')) if self.mode == 'release'
+                              else latest_notes(changelog, remote))
                 self.status = 'available'
             else:
                 self.status = 'up_to_date'
@@ -132,6 +159,8 @@ class Updater:
     def install(self):
         self.status = 'installing'
         try:
+            if self.mode == 'release':
+                return self._install_release()
             if self.mode == 'git':
                 result = _git('pull', '--ff-only', timeout=180)
                 if result.returncode != 0:
@@ -146,6 +175,28 @@ class Updater:
         except Exception as e:
             self.status = 'failed'
             self.message = f'Update failed: {e}'[:300]
+        return self.status
+
+    def _install_release(self):
+        """Installed version: download the new installer and run it (it restarts the game).
+        Portable / Linux builds: open the Releases page to download the new version."""
+        asset = next((a for a in (self.release or {}).get('assets', [])
+                      if a.get('name', '').lower().endswith('.exe') and 'setup' in a.get('name', '').lower()), None)
+        if not installed_with_setup() or asset is None:
+            webbrowser.open((self.release or {}).get('html_url') or RELEASES_PAGE)
+            self.status = 'failed'
+            self.message = 'Opened the download page in your browser: get the new version there.'
+            return self.status
+        folder = Path(tempfile.gettempdir()) / 'blockhold_update'
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / asset['name']
+        target.write_bytes(_fetch(asset['browser_download_url'], timeout=600))
+        # /SILENT shows only a progress bar; the installer starts BLOCKHOLD again when it's done
+        subprocess.Popen([str(target), '/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS'],
+                         close_fds=True)
+        self.relaunch_by_installer = True
+        self.local = self.remote
+        self.status = 'installed'
         return self.status
 
     def _install_zip(self):
@@ -179,9 +230,14 @@ class Updater:
                 target.write_bytes(new)
 
 
-def restart():
+def restart(updater=None):
     """Start a fresh copy of the game and let the caller quit this one."""
-    subprocess.Popen([sys.executable] + sys.argv, cwd=str(GAME_DIR))
+    if updater is not None and updater.relaunch_by_installer:
+        return                          # the installer starts the new version itself
+    if FROZEN:
+        subprocess.Popen([sys.executable] + sys.argv[1:], cwd=str(Path(sys.executable).parent))
+    else:
+        subprocess.Popen([sys.executable] + sys.argv, cwd=str(GAME_DIR))
 
 
 def run_cli():

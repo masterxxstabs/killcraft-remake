@@ -3,6 +3,14 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.9.0
+- BLOCKHOLD is now a real Windows game: download the installer from the GitHub Releases page, no Python needed
+- Installs without admin rights, adds Start menu and desktop shortcuts, and has an uninstaller
+- The installed game updates itself from GitHub Releases
+- Portable Windows zip and a Linux build too
+- Your maps, sounds and caches go in your .blockhold folder when the game is installed
+- New game icon
+
 ## 1.8.0
 - First-person arms like the original: blocky hands on the grip (and under the barrel for two-handed guns) with dark sleeves
 - Guns resized and moved up so you can see the whole weapon

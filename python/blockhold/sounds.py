@@ -12,9 +12,7 @@ from pathlib import Path
 
 RATE = 22050
 VERSION = 6
-HERE = Path(__file__).resolve().parent
-CUSTOM_DIR = HERE.parent / 'sounds'
-CACHE_DIR = HERE / '_generated_sounds'
+from .paths import CUSTOM_SOUND_DIRS, SOUND_CACHE as CACHE_DIR
 
 
 # ── tiny synth ───────────────────────────────────────────────────────────────
@@ -260,7 +258,7 @@ def _write(path, samples):
 
 
 def ensure_generated():
-    CACHE_DIR.mkdir(exist_ok=True)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     marker = CACHE_DIR / f'v{VERSION}'
     if marker.exists():
         return
@@ -283,9 +281,10 @@ class Sounds:
         loader = application.base.loader
         for name in RECIPES:
             path = None
-            for ext in ('.wav', '.ogg'):
-                if (CUSTOM_DIR / f'{name}{ext}').exists():
-                    path = CUSTOM_DIR / f'{name}{ext}'
+            for folder in reversed(CUSTOM_SOUND_DIRS):        # the first folder in the list wins
+                for ext in ('.wav', '.ogg'):
+                    if (folder / f'{name}{ext}').exists():
+                        path = folder / f'{name}{ext}'
             path = path or CACHE_DIR / f'{name}.wav'
             try:
                 self.pool[name] = [loader.loadSfx(Filename.fromOsSpecific(str(path))) for _ in range(self.VOICES)]
