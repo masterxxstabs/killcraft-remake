@@ -54,7 +54,7 @@ def setup_frozen():
 def show_error(message):
     """Tell the player something went wrong (a message box on Windows, the log everywhere)."""
     print(message, flush=True)
-    if FROZEN and sys.platform == 'win32':
+    if FROZEN and sys.platform == 'win32' and not ({'--selftest', '--autotest'} & set(sys.argv)):
         try:
             import ctypes
             ctypes.windll.user32.MessageBoxW(None, message[-1500:], 'BLOCKHOLD crashed', 0x10)
@@ -124,13 +124,27 @@ def main():
 
 def autotest(game):
     """Build check: start a game, save a screenshot to ~/.blockhold/autotest.png and quit."""
-    from ursina import application, invoke
+    import faulthandler
+    import time
+    from ursina import Entity, application, invoke
     from panda3d.core import Filename
+    log = getattr(sys.stdout, 'file', None) or sys.__stderr__
+    if log is not None:
+        faulthandler.dump_traceback_later(150, exit=True, file=log)   # stuck? say where, then quit
+    start = time.time()
+    frames = [0]
+
+    def count():
+        frames[0] += 1
+        if frames[0] in (1, 10) or frames[0] % 60 == 0:
+            print(f'AUTOTEST frame {frames[0]} at {time.time() - start:.1f}s', flush=True)
+    Entity(update=count)
 
     def shot():
         path = USER_DIR / 'autotest.png'
         application.base.win.saveScreenshot(Filename.from_os_specific(str(path)))
-        print('AUTOTEST screenshot', path, flush=True)
+        took = time.time() - start
+        print(f'AUTOTEST screenshot {path} after {frames[0]} frames ({frames[0] / max(took, 0.01):.1f} fps)', flush=True)
         application.quit()
     invoke(game.start_game, delay=1)
     invoke(shot, delay=6)

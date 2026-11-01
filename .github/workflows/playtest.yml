@@ -1,0 +1,49 @@
+# Plays BLOCKHOLD for a few seconds on Windows with software OpenGL (Mesa) and checks that
+# it renders. Start it from the Actions tab ("Run workflow").
+name: Windows play test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  playtest:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build
+        run: |
+          python -m pip install -r requirements-build.txt
+          pyinstaller blockhold.spec --noconfirm
+      - name: Add software OpenGL (Mesa) next to the exe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo pal1000/mesa-dist-win --pattern '*release-msvc.7z' --dir mesa
+          7z x (Get-ChildItem mesa\*.7z).FullName -omesa\x -y | Out-Null
+          Copy-Item mesa\x\x64\*.dll dist\BLOCKHOLD\
+          (Get-ChildItem mesa\x\x64\*.dll).Name -join ', '
+      - name: Play
+        run: |
+          $p = Start-Process -FilePath dist\BLOCKHOLD\BLOCKHOLD.exe -ArgumentList '--autotest' -PassThru
+          $done = $p.WaitForExit(240000)
+          if (-not $done) { $p.Kill() }
+          Write-Host "finished: $done  exit code: $($p.ExitCode)"
+          Write-Host '----- game log -----'
+          Get-Content "$env:USERPROFILE\.blockhold\log.txt" -Tail 80
+          $shot = "$env:USERPROFILE\.blockhold\autotest.png"
+          if (-not (Test-Path $shot)) { throw 'no screenshot: the game did not render' }
+          Copy-Item $shot ..\autotest-windows.png
+          python -c "from PIL import Image, ImageStat; im = Image.open(r'$shot').convert('RGB'); st = ImageStat.Stat(im); print('screenshot', im.size, 'mean colour', [round(v) for v in st.mean], 'spread', [round(v) for v in st.stddev])"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-playtest
+          path: autotest-windows.png
+          if-no-files-found: ignore
