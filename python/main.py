@@ -5,6 +5,7 @@ Update it with:         python main.py --update
 Skip the update check:  python main.py --offline
 Check an install:       BLOCKHOLD.exe --selftest   (exit code 0 = everything is there)
 Render check:           BLOCKHOLD.exe --autotest   (plays a few seconds, saves ~/.blockhold/autotest.png)
+No graphics card:       BLOCKHOLD.exe --software-gl (allows a software OpenGL renderer)
 """
 import sys
 import traceback
@@ -103,6 +104,11 @@ def main():
         from blockhold.updater import run_cli
         run_cli()
         sys.exit()
+
+    if '--software-gl' in sys.argv:
+        # allow a software OpenGL renderer (no graphics card / broken drivers, build checks)
+        from panda3d.core import load_prc_file_data
+        load_prc_file_data('software-gl', 'framebuffer-hardware #f\n')
 
     from ursina import Ursina, window
 

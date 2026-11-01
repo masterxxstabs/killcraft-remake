@@ -31,7 +31,7 @@ jobs:
           (Get-ChildItem mesa\x\x64\*.dll).Name -join ', '
       - name: Play
         run: |
-          $p = Start-Process -FilePath dist\BLOCKHOLD\BLOCKHOLD.exe -ArgumentList '--autotest' -PassThru
+          $p = Start-Process -FilePath dist\BLOCKHOLD\BLOCKHOLD.exe -ArgumentList '--autotest', '--software-gl' -PassThru
           $done = $p.WaitForExit(240000)
           if (-not $done) { $p.Kill() }
           Write-Host "finished: $done  exit code: $($p.ExitCode)"
