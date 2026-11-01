@@ -283,6 +283,19 @@ zombie and pickup has a network id, players are driven by input commands, coins 
 belong to each player, and zombies chase whoever is closest. See
 [MULTIPLAYER.md](MULTIPLAYER.md) for the plan and the rules new features follow.
 
+## Troubleshooting
+
+- **"Windows protected your PC"** when running the installer: it isn't code-signed. Click
+  **More info**, then **Run anyway**.
+- **The game says it needs a graphics driver with OpenGL 3**: install the latest driver for
+  your graphics card (NVIDIA, AMD or Intel). In a virtual machine or over Remote Desktop,
+  turn on 3D acceleration or play on the computer itself.
+- **No graphics card at all**: you can start it with `BLOCKHOLD.exe --software-gl` after
+  putting a software OpenGL (such as Mesa's `opengl32.dll`) in the game's `_internal\panda3d`
+  folder. It will be slow.
+- **Something else went wrong**: the game writes `log.txt` and `panda.log` in your
+  `.blockhold` folder (`%USERPROFILE%\.blockhold` on Windows). Attach them when you report a bug.
+
 ## Updates
 
 On launch, the game checks GitHub for a newer version. If one exists, the main menu shows

@@ -3,6 +3,12 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.9.1
+- If your graphics driver can't run the game, it now tells you what to do instead of showing a black screen
+- New --software-gl option for computers without a working graphics driver
+- Logs for troubleshooting in your .blockhold folder (log.txt and panda.log)
+- The Windows build is now play-tested automatically before every release
+
 ## 1.9.0
 - BLOCKHOLD is now a real Windows game: download the installer from the GitHub Releases page, no Python needed
 - Installs without admin rights, adds Start menu and desktop shortcuts, and has an uninstaller

@@ -171,7 +171,9 @@ def autotest(game):
               '| GLSL', f'{gsg.driver_shader_version_major}.{gsg.driver_shader_version_minor}',
               '| shaders supported:', gsg.supports_basic_shaders, flush=True)
         path = USER_DIR / 'autotest.png'
-        application.base.win.saveScreenshot(Filename.from_os_specific(str(path)))
+        USER_DIR.mkdir(parents=True, exist_ok=True)
+        if not application.base.win.saveScreenshot(Filename.from_os_specific(str(path))):
+            print('AUTOTEST could not save the screenshot', flush=True)
         took = time.time() - start
         print(f'AUTOTEST screenshot {path} after {frames[0]} frames ({frames[0] / max(took, 0.01):.1f} fps)', flush=True)
         application.quit()
