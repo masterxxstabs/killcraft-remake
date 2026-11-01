@@ -12,6 +12,7 @@ import traceback
 from pathlib import Path
 
 FROZEN = bool(getattr(sys, 'frozen', False))       # True inside the BLOCKHOLD.exe build
+_panda_log = None
 USER_DIR = Path.home() / '.blockhold'
 
 
@@ -46,7 +47,12 @@ def setup_frozen():
     name = 'selftest.log' if '--selftest' in sys.argv else 'log.txt'
     sys.stdout = Tee(USER_DIR / name, sys.__stdout__)
     sys.stderr = sys.stdout
-    from panda3d.core import Filename, load_prc_file_data
+    from panda3d.core import Filename, MultiplexStream, Notify, load_prc_file_data
+    # Panda3D's own messages (graphics driver, shader errors) go to panda.log
+    global _panda_log
+    _panda_log = MultiplexStream()
+    _panda_log.add_file(Filename.from_os_specific(str(USER_DIR / 'panda.log')))
+    Notify.ptr().set_ostream_ptr(_panda_log, False)
     bundle = Path(sys._MEIPASS)
     plugins = Filename.from_os_specific(str(bundle / 'panda3d')).get_fullpath()
     load_prc_file_data('blockhold', f'plugin-path {plugins}\n')
@@ -147,6 +153,10 @@ def autotest(game):
     Entity(update=count)
 
     def shot():
+        gsg = application.base.win.gsg
+        print('AUTOTEST graphics:', gsg.driver_vendor, '|', gsg.driver_renderer, '| GL', gsg.driver_version,
+              '| GLSL', f'{gsg.driver_shader_version_major}.{gsg.driver_shader_version_minor}',
+              '| shaders supported:', gsg.supports_basic_shaders, flush=True)
         path = USER_DIR / 'autotest.png'
         application.base.win.saveScreenshot(Filename.from_os_specific(str(path)))
         took = time.time() - start

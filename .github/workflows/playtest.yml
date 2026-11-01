@@ -37,12 +37,14 @@ jobs:
           Write-Host "finished: $done  exit code: $($p.ExitCode)"
           Write-Host '----- game log -----'
           Get-Content "$env:USERPROFILE\.blockhold\log.txt" -Tail 80
+          Write-Host '----- panda3d log -----'
+          Get-Content "$env:USERPROFILE\.blockhold\panda.log" -Tail 40 -ErrorAction SilentlyContinue
           $shot = "$env:USERPROFILE\.blockhold\autotest.png"
           if (-not (Test-Path $shot)) { throw 'no screenshot: the game did not render' }
           Copy-Item $shot ..\autotest-windows.png
           python -c "from PIL import Image, ImageStat; im = Image.open(r'$shot').convert('RGB'); st = ImageStat.Stat(im); print('screenshot', im.size, 'mean colour', [round(v) for v in st.mean], 'spread', [round(v) for v in st.stddev])"
           # a tiny copy of the screenshot as a grid of colours, so it can be checked from the log
-          python -c "from PIL import Image; im = Image.open(r'$shot').convert('RGB').resize((24, 18), Image.BOX); [print('GRID', ' '.join('%02x%02x%02x' % im.getpixel((x, y)) for x in range(24))) for y in range(18)]"
+          python -c "from PIL import Image; im = Image.open(r'$shot').convert('RGB').resize((16, 12), Image.BOX); [print('GRID', ' '.join('%02x%02x%02x' % im.getpixel((x, y)) for x in range(16))) for y in range(12)]"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
