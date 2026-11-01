@@ -88,9 +88,15 @@ def installed_with_setup():
 
 
 def release_notes(body):
-    """Bullet points from a GitHub release description."""
-    return [line.strip().lstrip('-* ').strip() for line in (body or '').splitlines()
-            if line.strip().startswith(('-', '*'))]
+    """The bullet points of the first section ("What's new") of a GitHub release description."""
+    notes = []
+    for line in (body or '').splitlines():
+        text = line.strip()
+        if text.startswith('#') and notes:
+            break                                   # the next section (Download...) starts
+        if text.startswith(('- ', '* ')):
+            notes.append(text[2:].strip())
+    return notes
 
 
 def _git(*args, timeout=60):
