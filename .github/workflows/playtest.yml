@@ -41,6 +41,8 @@ jobs:
           if (-not (Test-Path $shot)) { throw 'no screenshot: the game did not render' }
           Copy-Item $shot ..\autotest-windows.png
           python -c "from PIL import Image, ImageStat; im = Image.open(r'$shot').convert('RGB'); st = ImageStat.Stat(im); print('screenshot', im.size, 'mean colour', [round(v) for v in st.mean], 'spread', [round(v) for v in st.stddev])"
+          # a small copy of the screenshot as text, so it can be looked at from the log
+          python -c "import base64, io; from PIL import Image; im = Image.open(r'$shot').convert('RGB'); im.thumbnail((400, 300)); b = io.BytesIO(); im.save(b, 'JPEG', quality=70); s = base64.b64encode(b.getvalue()).decode(); [print('THUMB', s[i:i + 4000]) for i in range(0, len(s), 4000)]"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
