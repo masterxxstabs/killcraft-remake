@@ -49,6 +49,7 @@ chat. A direct-IP join screen comes first, then maybe a lobby.
 | Quests listen to events | `quests.py` reacts to `enemy_killed` and shots | the host runs the quest; clients only see the effects |
 | Team power-ups | `game.powerups` (timers are team-wide, any player can pick one up) | the host runs them and sends `powerup_*` events |
 | Mining and crafting | `player.resources`; nodes have ids; `game.craft(recipe, player)` | each friend mines and crafts for themselves; the host runs the nodes |
+| Barricades belong to a player | `barricade['owner']`, ids, `player.placeables`; `barricades.place(player, ...)`; events `barricade_placed`, `barricade_hit`, `barricade_destroyed`, `mine_exploded` | the host runs turrets, mines and zombie smashing; turret, spike and mine kills earn the owner coins |
 | Lighting is presentation only | `lighting.py` picks lights from what each client can see | nothing to send over the network |
 | Attachments and camos per weapon | `weapons.attach`, `weapons.camo` | a remote player's gun can be rebuilt from a small dict |
 

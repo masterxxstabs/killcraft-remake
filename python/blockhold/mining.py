@@ -132,7 +132,7 @@ class Mining:
             g.effects.burst(at, n['d']['ore'][0], 4, speed=4, size=0.08)
         g.events.emit('node_mined', id=n['id'], player=player, gained=gained)
         if player.is_local:
-            g.sounds.play('mine_hit', pitch=0.9 + random.random() * 0.2)
+            g.sounds.play('chop' if n['d'].get('wood') else 'mine_hit', pitch=0.9 + random.random() * 0.2)
             for i, (res, amt) in enumerate(gained.items()):
                 g.effects.damage_number(n['pos'] + Vec3(0, 1.3 + i * 0.3, 0), amt, color=RESOURCES[res]['color'],
                                         label=f"+{amt} {RESOURCES[res]['name']}")
@@ -148,7 +148,7 @@ class Mining:
         g.effects.burst(n['pos'] + Vec3(0, 0.5, 0), n['d']['rock'][0], 18, speed=6, size=0.16)
         if n['d']['ore']:
             g.effects.burst(n['pos'] + Vec3(0, 0.5, 0), n['d']['ore'][0], 10, speed=6, size=0.12)
-        g.sounds.play('mine_break')
+        g.sounds.play('barricade_break' if n['d'].get('wood') else 'mine_break')
         g.events.emit('node_broken', id=n['id'], player=player)
         self.pending.append([random.uniform(*RESPAWN_TIME), n['spot']])
 

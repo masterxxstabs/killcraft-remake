@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 RATE = 22050
-VERSION = 6
+VERSION = 7
 from .paths import CUSTOM_SOUND_DIRS, SOUND_CACHE as CACHE_DIR
 
 
@@ -236,6 +236,15 @@ RECIPES = {
                               (0.07, lowpass(env_noise(0.35, 0.08, 124, 0.5), 2200))),
     'craft': lambda: mix(mech([(0, 2400, 0.6)], seed=125), (0.15, mech([(0, 2200, 0.6)], seed=126)),
                          (0.3, mech([(0, 2700, 0.6)], seed=127)), (0.45, seq([660, 990], 0.12, 'triangle', 0.12))),
+    'chop': lambda: mix(lowpass(env_noise(0.16, 0.03, 131, 0.9), 1300), thump(150, 90, 0.12, 0.55),
+                        (0.01, highpass(env_noise(0.05, 0.01, 132, 0.35), 2500))),
+    'build_place': lambda: mix(lowpass(env_noise(0.3, 0.06, 133, 0.8), 700), thump(95, 55, 0.22, 0.7),
+                               (0.16, mech([(0, 1900, 0.55)], seed=134)), (0.3, mech([(0, 2100, 0.5)], seed=135))),
+    'barricade_hit': lambda: mix(lowpass(env_noise(0.2, 0.04, 136, 0.9), 900), thump(120, 70, 0.14, 0.6),
+                                 (0.02, highpass(env_noise(0.08, 0.015, 137, 0.3), 1800))),
+    'barricade_break': lambda: mix(lowpass(env_noise(0.7, 0.2, 138, 0.9), 1100), thump(80, 40, 0.3, 0.6),
+                                   (0.05, highpass(env_noise(0.25, 0.05, 139, 0.5), 1500)),
+                                   (0.18, lowpass(env_noise(0.3, 0.06, 140, 0.6), 2000))),
     'powerup_drop': lambda: seq([1046, 1318, 1568, 2093], 0.08, 'sine', 0.12, gap=0.045),
     'powerup': lambda: seq([440, 554, 659, 880], 0.12, 'square', 0.1, gap=0.06),
     'blink': lambda: tone(300, 0.2, 'sine', vol=0.2, to=1500),

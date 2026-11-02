@@ -3,6 +3,16 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.10.0
+- Barricades, like the original game: craft them at a workbench (they can't be bought) and press G to build
+- Spike barricades hurt zombies, plank barricades you can vault over, and tall palisade walls
+- Sentry turret: a minigun on a tripod that shoots zombies by itself (hold E to refill its ammo)
+- Landmines that blow up under zombies
+- Zombies walk around your barricades, or smash through them if you've walled yourself in
+- Hold E to repair a damaged barricade with wood
+- New resource: wood, from log piles (the Axe chops fastest)
+- The Village and Forest Camp maps now have log piles
+
 ## 1.9.1
 - If your graphics driver can't run the game, it now tells you what to do instead of showing a black screen
 - New --software-gl option for computers without a working graphics driver

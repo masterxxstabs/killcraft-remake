@@ -19,6 +19,8 @@ from .enemies import EnemyManager
 from .pickups import Pickups
 from .powerups import PowerUps
 from .mining import Mining
+from .barricades import Barricades
+from .data.barricades import BARRICADES, MAX_CARRIED, PLACE_RANGE
 from .player import Player, REVIVE_TIME
 from .projectiles import Projectiles
 from .render import col, hex_rgb, node, set_fog
@@ -102,6 +104,10 @@ class Game(Entity):
         self.pickups = Pickups(self)
         self.powerups = PowerUps(self)
         self.mining = Mining(self)
+        self.barricades = Barricades(self)
+        self.build_kind = None       # build mode: which barricade is being placed (None = not building)
+        self.build_rot = 0
+        self.build_spot = None
         self.craft_open = False
         self.weapons.set_visible(False)
         self.apply_sky(instant=True)
@@ -185,6 +191,8 @@ class Game(Entity):
         self.powerups.clear()
         self.effects.clear()
         self.clear_allies()
+        self.exit_build()
+        self.barricades.clear()
         self.mining.clear()
         self.world.destroy()
         self.world = World(map_data=map_data)
@@ -209,6 +217,8 @@ class Game(Entity):
         self.close_shop()
         self.clear_allies()
         self.powerups.clear()
+        self.exit_build()
+        self.barricades.clear()
         self.mining.clear()
         self.end_quest()
         if self.from_editor is not None:            # play test: go back to the editor
@@ -321,6 +331,7 @@ class Game(Entity):
         if self.phase != 'intermission':
             self.ui.banner('SHOP CLOSED', '#ff7070', 1.2, 'The shop opens between waves')
             return
+        self.exit_build()
         self.shop_open = True
         self.aiming = False
         camera.fov = self.fov
@@ -350,6 +361,7 @@ class Game(Entity):
         """The workbench menu. Unlike the shop it works during waves too, so watch your back."""
         if self.player.downed or self.shop_open or not self.near_bench():
             return
+        self.exit_build()
         self.shop_open = self.craft_open = True
         self.aiming = False
         camera.fov = self.fov
@@ -373,6 +385,8 @@ class Game(Entity):
             return 'FULL HEALTH'
         if r['kind'] == 'armor' and p.armor >= r['max'] - 1e-6:
             return 'MAXED'
+        if r['kind'] == 'placeable' and p.placeables.get(r['placeable'], 0) >= MAX_CARRIED:
+            return 'CARRYING MAX'
         if not self.can_craft(r, p):
             return 'NEED MORE'
         return ''
@@ -392,6 +406,8 @@ class Game(Entity):
             p.heal(r['amount'])
         elif r['kind'] == 'armor':
             p.armor = min(r['max'], p.armor + r['amount'])
+        elif r['kind'] == 'placeable':
+            p.placeables[r['placeable']] = p.placeables.get(r['placeable'], 0) + 1
         self.events.emit('crafted', player=p, recipe=rid)
         if p.is_local:
             self.sounds.play('craft')
@@ -519,7 +535,11 @@ class Game(Entity):
             if a is not near:
                 a.revive_progress = 0
         if near is None:
-            self.ui.set_prompt('Press E to use the workbench' if self.near_bench() else '')
+            if self.near_bench():
+                self.ui.set_prompt('Press E to use the workbench')
+                return
+            msg, progress = self.barricades.interact(p, inp.use, dt)
+            self.ui.set_prompt(msg or '', progress)
             return
         if inp.use:
             near.revive_progress += dt
@@ -616,7 +636,7 @@ class Game(Entity):
         camera.fov += (target - camera.fov) * min(1, dt * 12)
         scoped = can_aim and scope and camera.fov < 45
         self.ui.scope.enabled = bool(scoped)
-        self.weapons.set_visible(not scoped)
+        self.weapons.set_visible(not scoped and self.build_kind is None)   # building: hands are busy
 
     def shake(self, n):
         self.shake_amt = min(0.6, self.shake_amt + n)
@@ -661,6 +681,82 @@ class Game(Entity):
         from panda3d.core import LVecBase3f
         self.weapons.vm_root.setShaderInput('ambient', LVecBase3f(*vm))
 
+    # ── build mode (G): placing crafted barricades ─────────────────────────────
+    def owned_placeables(self):
+        p = self.player
+        return [k for k in BARRICADES if p.placeables.get(k, 0) > 0]
+
+    def toggle_build(self, step=1, wrap=False):
+        """G: start building, or switch to the next barricade you have (past the last one: stop)."""
+        p = self.player
+        if p.downed or p.dead or self.shop_open:
+            return
+        owned = self.owned_placeables()
+        if not owned:
+            self.exit_build()
+            self.ui.banner('NOTHING TO BUILD', '#d9912b', 1.6, 'Craft barricades at a workbench first')
+            self.sounds.play('deny')
+            return
+        if self.build_kind not in owned:
+            self.build_kind = owned[0]
+        else:
+            i = owned.index(self.build_kind) + step
+            if not wrap and i >= len(owned):
+                self.exit_build()
+                return
+            self.build_kind = owned[i % len(owned)]
+        self.weapons.trigger(False)
+        self.aiming = False
+        self.weapons.set_visible(False)
+
+    def exit_build(self):
+        if getattr(self, 'build_kind', None) is None:
+            return
+        self.build_kind = None
+        self.build_spot = None
+        self.barricades.hide_ghost()
+        self.ui.set_build_hint('')
+        if self.state == 'playing':
+            self.weapons.set_visible(True)
+
+    def update_build(self):
+        """Move the see-through preview to where you're looking."""
+        kind = self.build_kind
+        if kind is None:
+            return
+        p = self.player
+        if p.downed or p.dead or self.shop_open:
+            self.exit_build()
+            return
+        if p.placeables.get(kind, 0) <= 0:
+            owned = self.owned_placeables()
+            if not owned:
+                self.exit_build()
+                return
+            kind = self.build_kind = owned[0]
+        eye, fwd = p.eye(), p.forward()
+        flat = Vec3(fwd.x, 0, fwd.z).normalized()
+        reach = PLACE_RANGE
+        if fwd.y < -0.05:
+            reach = min(reach, eye.y / -fwd.y * Vec3(fwd.x, 0, fwd.z).length())
+        reach = max(1.8, reach)
+        spot = Vec3(p.position.x, 0, p.position.z) + flat * reach
+        rot = (round(p.yaw / 90) * 90 + self.build_rot) % 360    # long side faces you
+        why = self.barricades.can_place(kind, spot.x, spot.z, rot, p)
+        self.build_spot = (spot.x, spot.z, rot, why)
+        self.barricades.show_ghost(kind, spot.x, spot.z, rot, not why)
+        d = BARRICADES[kind]
+        self.ui.set_build_hint(f"{d['name'].upper()}   x{p.placeables.get(kind, 0)}", why)
+
+    def try_place(self):
+        if self.build_kind is None or self.build_spot is None:
+            return
+        x, z, rot, why = self.build_spot
+        if why:
+            self.sounds.play('deny')
+            return
+        self.barricades.place(self.player, self.build_kind, x, z, rot)
+
     # ── input ────────────────────────────────────────────────────────────────
     def input(self, key):
         self._pressed.add(key)
@@ -684,6 +780,28 @@ class Game(Entity):
         if key == 'e' and self.near_bench() and not self.player.downed:
             self.open_craft()
             return
+        if key == 'g':
+            self.toggle_build()
+            return
+        if self.build_kind is not None:
+            if key == 'left mouse down':
+                if not mouse.locked:
+                    self.show_cursor(False)
+                self.try_place()
+                return
+            if key in ('right mouse down', 'escape'):
+                self.exit_build()
+                return
+            if key == 'r':
+                self.build_rot = (self.build_rot + 90) % 360
+                return
+            if key in ('scroll up', 'scroll down'):
+                self.toggle_build(step=-1 if key == 'scroll up' else 1, wrap=True)
+                return
+            if key in ('left mouse up', 'right mouse up'):
+                return
+            if (key in '123456789' and len(key) == 1) or key == 'b':
+                self.exit_build()            # picking a weapon or opening the shop ends build mode
         if key == 'escape':
             self.pause()
         elif key == 'left mouse down':
@@ -798,6 +916,7 @@ class Game(Entity):
             p.update(dt, inp)
             p.apply_camera(dt)
             self.weapons.update(dt)
+            self.update_build()
 
             if self.phase == 'intermission' and not self.shop_open:
                 self.intermission -= dt
@@ -823,4 +942,5 @@ class Game(Entity):
         if self.state == 'playing':
             self.powerups.update(dt)
             self.mining.update(dt)
+            self.barricades.update(dt)
         self.ui.update(dt)

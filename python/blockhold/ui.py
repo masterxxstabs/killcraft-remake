@@ -320,7 +320,7 @@ class UI:
 
         # interaction prompt (revive etc.)
         self.prompt = Entity(parent=h, enabled=False)
-        box(self.prompt, -0.2, -0.13, 0.4, 0.06, INK, z=0.003)
+        self.prompt_box = box(self.prompt, -0.2, -0.13, 0.4, 0.06, INK, z=0.003)
         self.prompt_text = text(self.prompt, '', 0, -0.152, 1.0, PAPER, origin=(0, 0))
         self.prompt_bar = box(self.prompt, -0.19, -0.176, 0.38, 0.008, TEAL)
 
@@ -358,14 +358,22 @@ class UI:
                                    scale=(0.09 - 2 * EDGE, 0.09 - 2 * EDGE), color=C(TEAL))
         self.ability_cd = text(h, 'Q', 0, B + 0.075, 1.7, PAPER, origin=(0, 0), z=-0.02)
 
+        # bottom middle, above the ability: build mode (what you're placing, controls or why it can't go there)
+        self.build_box = Entity(parent=h, enabled=False)
+        box(self.build_box, -0.3, B + 0.3, 0.6, 0.088, INK, z=0.003)
+        self.build_accent = box(self.build_box, -0.3, B + 0.3, 0.6, 0.007, TEAL, z=0.002)
+        self.build_title = text(self.build_box, '', 0, B + 0.264, 1.0, PAPER, origin=(0, 0))
+        self.build_sub = text(self.build_box, '', 0, B + 0.23, 0.72, '#aeb3c4', origin=(0, 0))
+
         # bottom right: mined resources (shown once you have some)
         self.res_box = Entity(parent=h, enabled=False)
         box(self.res_box, R - 0.33, B + 0.142, 0.3, 0.032, INK, z=0.003)
         self.res_text = {}
+        step = 0.296 / len(RESOURCES)
         for i, (rid, r) in enumerate(RESOURCES.items()):
-            x = R - 0.322 + i * 0.074
-            box(self.res_box, x, B + 0.133, 0.014, 0.014, r['color'], z=0.001)
-            self.res_text[rid] = text(self.res_box, '0', x + 0.02, B + 0.126, 0.72, PAPER, origin=(-0.5, 0))
+            x = R - 0.324 + i * step
+            box(self.res_box, x, B + 0.133, 0.013, 0.013, r['color'], z=0.001)
+            self.res_text[rid] = text(self.res_box, '0', x + 0.018, B + 0.126, 0.66, PAPER, origin=(-0.5, 0))
 
         # bottom right: weapon
         # bottom right: a compact weapon box (name, slots, ammo) that stays clear of the gun
@@ -444,10 +452,26 @@ class UI:
         """A centred hint like 'Hold E to revive' (with an optional progress bar)."""
         self.prompt.enabled = bool(msg)
         if msg:
-            self.set_text(self.prompt_text, msg)
+            if self._cache.get(id(self.prompt_text)) != msg:
+                self.set_text(self.prompt_text, msg)
+                w = max(0.4, self.prompt_text.width + 0.05)      # long hints get a wider box
+                self.prompt_box.x, self.prompt_box.scale_x = -w / 2, w
             self.prompt_bar.enabled = progress is not None
             if progress is not None:
                 self.prompt_bar.scale_x = max(0.001, 0.38 * clamp01(progress))
+
+    def set_build_hint(self, title, why=''):
+        """Build mode: what you're placing and the controls, or (in red) why it can't go there."""
+        self.build_box.enabled = bool(title)
+        if not title:
+            return
+        self.set_text(self.build_title, title)
+        self.set_text(self.build_sub, why.upper() if why else 'LMB place     R turn     G / wheel next     RMB done')
+        colour = RED if why else TEAL
+        if self._cache.get('build_colour') != colour:
+            self._cache['build_colour'] = colour
+            self.build_accent.color = C(colour)
+            self.build_sub.color = C('#ff8a80' if why else '#aeb3c4')
 
     def kill_feed(self, line):
         self.feed.insert(0, (line, pytime.time()))
@@ -642,10 +666,10 @@ class UI:
     CONTROLS = [
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
          ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
-         ('Reload', 'R')],
-        [('Ability', 'Q'), ('Switch weapon', '1-9 / wheel'), ('Craft / revive', 'E / hold E'), ('Shop', 'B'),
-         ('Scoreboard', 'Hold Tab'),
-         ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute', 'M'), ('Fullscreen', 'F11'), ('Turn 3D model', 'F8 / F9')],
+         ('Reload', 'R'), ('Ability', 'Q')],
+        [('Switch weapon', '1-9 / wheel'), ('Craft / revive', 'E / hold E'), ('Build (R turns)', 'G'),
+         ('Repair / refill', 'Hold E'), ('Shop', 'B'), ('Scoreboard', 'Hold Tab'),
+         ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute', 'M'), ('Fullscreen', 'F11')],
     ]
 
     def menu_controls(self, win, g):
@@ -810,13 +834,13 @@ class UI:
         win.clear()
         win.right.text = ''
         # header: what you've got
-        x = win.x + win.w - 0.06 - 4 * 0.12
+        x = win.x + win.w - 0.06 - (len(RESOURCES) - 1) * 0.11 - 0.07
         for rid, r in RESOURCES.items():
             box(b, x, win.y - 0.035, 0.024, 0.024, r['color'], z=-0.01)
-            text(b, str(p.resources.get(rid, 0)), x + 0.034, win.y - 0.047, 1.3, INK, origin=(-0.5, 0))
-            x += 0.12
+            text(b, str(p.resources.get(rid, 0)), x + 0.032, win.y - 0.047, 1.2, INK, origin=(-0.5, 0))
+            x += 0.11
         recipes = all_recipes()
-        cats = [('items', 'Items')] + list(CATEGORIES)
+        cats = [('items', 'Items'), ('build', 'Barricades')] + list(CATEGORIES)
         mine = [r for r in recipes if r['category'] == self.craft_cat]
         sel = next((r for r in mine if r['id'] == self.craft_sel), None) or (mine[0] if mine else recipes[0])
         self.craft_sel = sel['id']
@@ -838,7 +862,9 @@ class UI:
                        fill=INK if is_sel else PAPER, edge=INK if is_sel else LINE, fg=fg, size=1.0, align='left',
                        right=right, hover=0.15 if is_sel else -0.06)
             y -= 0.058
-        text(b, 'Mine ore nodes with a melee weapon (the Pickaxe is fastest).', x, win.btn_y + 0.045, 0.8, MUTED)
+        tip = ('Press G to build what you carry. Chop log piles for wood (the Axe is fastest).'
+               if self.craft_cat == 'build' else 'Mine ore nodes with a melee weapon (the Pickaxe is fastest).')
+        text(b, tip, x, win.btn_y + 0.045, 0.8, MUTED)
 
         # right: the selected recipe
         xr, y = win.right_col + 0.03, win.top + 0.01
@@ -854,6 +880,13 @@ class UI:
             if d['price']:
                 text(b, f"or buy it for {d['price']} coins in the shop between waves", xr, y, 0.8, MUTED)
                 y -= 0.035
+        elif sel['kind'] == 'placeable':
+            from .data.barricades import BARRICADES, MAX_CARRIED
+            d = BARRICADES[sel['placeable']]
+            t = text(b, self.barricade_specials(d), xr, y, 0.8, TEAL, wordwrap=56)
+            y -= 0.035 * (t.text.count('\n') + 1)
+            text(b, f"Carrying {p.placeables.get(sel['placeable'], 0)} / {MAX_CARRIED}", xr, y, 0.8, INK)
+            y -= 0.035
         y -= 0.02
         text(b, 'COST', xr, y, 0.85, MUTED)
         y -= 0.04
@@ -871,6 +904,22 @@ class UI:
         win.bottom_left('CLOSE', g.close_shop, 'cross', g.close_shop)
         label = 'CRAFT' if not blocker else blocker
         win.bottom_right(label, lambda: g.craft(sel['id']), fill=GREEN if not blocker else NAVY, w=0.3)
+
+    @staticmethod
+    def barricade_specials(d):
+        parts = [f"{d['hp']} HP"]
+        if d['height'] >= 3:
+            parts.append('too tall to climb')
+        elif d['height'] >= 1 and 'turret' not in d:
+            parts.append('zombies must break it')
+        if 'thorns' in d:
+            parts.append(f"{d['thorns']['dps']} damage/s to zombies touching it")
+        if 'turret' in d:
+            t = d['turret']
+            parts.append(f"{t['damage']} damage x {t['rate']}/s  |  {t['range']} m range  |  {t['ammo']} rounds")
+        if 'mine' in d:
+            parts.append(f"{d['mine']['damage']} blast damage, {d['mine']['radius']} m radius")
+        return '  |  '.join(parts)
 
     def set_tab(self, tab):
         self.shop_tab = tab

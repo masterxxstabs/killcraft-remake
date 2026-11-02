@@ -43,7 +43,8 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | Space | jump; hold it against a ledge to climb up |
 | Shift | sprint (sprint at low cover to vault over it) |
 | C or Ctrl | crouch; press it while sprinting to slide |
-| E | use a workbench (crafting); hold it to revive a downed ally |
+| E | use a workbench (crafting); hold it to revive a downed ally, repair a barricade or refill a turret |
+| G | build mode: place the barricades you crafted (R turns them, the wheel switches, right click stops) |
 | 1–9 or mouse wheel | switch weapon |
 | R | reload |
 | Q | use your ability |
@@ -176,12 +177,14 @@ about a minute later. The **Pickaxe** mines 2.5x faster (craft it from 25 stone,
 | Iron ore | iron and some stone |
 | Copper ore | copper and some stone |
 | Crystal (rare, purple) | crystal and some stone |
+| Log pile | wood (the Axe chops 3x faster) |
 
 Your resources show above your weapon. Walk up to a **workbench** and press **E** to craft:
 
 - **Any gun in the game**, instead of buying it with coins. Better guns need more iron and
   copper, and the energy weapons and heavy guns need crystal.
 - **Bandage** (heals 40), **Medkit** (full heal) and **Armor plating** (5% less damage, stacks to 40%).
+- **Barricades** (see below). These can only be crafted, never bought.
 
 Workbenches work during waves too, but zombies don't wait while you craft. Random arenas get two
 benches (one near the start). Costs and node yields are in `blockhold/data/crafting.py` and
@@ -189,8 +192,34 @@ benches (one near the start). Costs and node yields are in `blockhold/data/craft
 a `craft=` field in `weapons.py`.
 
 **In your own maps:** the editor's **Mining** tab has the workbench and ore spawns (random,
-stone, iron, copper or crystal). If a map has ore spawns, nodes only grow there, so you can build
+stone, iron, copper, crystal or log pile). If a map has ore spawns, nodes only grow there, so you can build
 a mine or a quarry. Without any, nodes appear anywhere there's room.
+
+### Barricades
+
+Like the original game, you can fortify your spot. Barricades are crafted at a workbench
+(**Barricades** tab) and can't be bought. Press **G** to go into build mode: a see-through
+preview shows where it goes (green = fits, red = it says why not). **Left click** places it,
+**R** turns it, the **mouse wheel** or **G** switches to another barricade you carry, and
+**right click** puts your gun back.
+
+| Barricade | Cost | What it does |
+| --- | --- | --- |
+| Spike barricade | 20 wood, 5 iron | crossed sharpened stakes (450 HP); zombies that push against it or hit it get hurt |
+| Plank barricade | 25 wood, 5 iron | waist-high planks with spikes (650 HP); you can vault over it, zombies have to break it |
+| Palisade wall | 40 wood, 10 stone | tall wall of pointed logs (1400 HP); too tall to climb, and it stops spit |
+| Sentry turret | 60 iron, 40 copper, 2 crystal | minigun on a tripod that shoots zombies by itself (300 rounds) |
+| Landmine | 15 iron, 10 copper, 5 stone | blows up under the first zombie that steps on it (arms 2 seconds after you place it) |
+
+- Zombies walk around barricades when there's a way round. If you've walled yourself in, they
+  smash through the weakest way in, so keep an eye on your walls.
+- Hold **E** next to a damaged barricade to repair it (1 wood per 10 HP). Hold **E** next to a
+  turret to refill its ammo (10 iron + 10 copper).
+- Turret and spike kills count as yours. Turrets and spikes hit harder in later waves.
+- You can carry 10 of each kind and have 40 standing at once.
+- Barricades only last for the current game. Stats and costs are in `blockhold/data/barricades.py`.
+
+![Plank barricade, spikes, a palisade wall and a sentry turret holding off zombies](docs/barricades.jpg)
 
 ### Power-ups
 

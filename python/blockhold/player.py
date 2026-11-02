@@ -8,6 +8,7 @@ import random
 from ursina import Vec3, camera
 from .net import PlayerInput, new_id
 from .data.resources import RESOURCES
+from .data.barricades import BARRICADES
 
 STAND_EYE, CROUCH_EYE, SLIDE_EYE, DOWNED_EYE = 1.62, 1.08, 0.92, 0.55
 BLEED_OUT = 25          # seconds a downed player has before they die
@@ -63,6 +64,7 @@ class Player:
         self.kills = 0
         self.upgrade_levels = {}
         self.resources = {k: 0 for k in RESOURCES}     # mined ore, spent at workbenches
+        self.placeables = {k: 0 for k in BARRICADES}   # crafted barricades waiting to be placed (G)
 
     def eye(self):
         return Vec3(self.position.x, self.position.y + self.eye_height, self.position.z)

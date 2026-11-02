@@ -8,6 +8,7 @@
 #    'weapon'   gives the weapon `weapon`
 #    'heal'     heals `amount` straight away
 #    'armor'    adds `amount` armor (0.05 = 5% less damage), up to `max`
+#  Barricades (data/barricades.py) are added to the recipes automatically.
 # ─────────────────────────────────────────────────────────────────────────────
 
 ITEMS = [
@@ -44,7 +45,11 @@ def weapon_cost(d):
 def all_recipes():
     """Everything a workbench can make: [dict(id, name, kind, cost, desc, category, weapon?)]"""
     from .weapons import WEAPONS
+    from .barricades import BARRICADES
     out = [dict(r, category='items') for r in ITEMS]
+    for key, b in BARRICADES.items():               # barricades can only be crafted, never bought
+        out.append(dict(id='b_' + key, kind='placeable', placeable=key, name=b['name'], cost=b['cost'],
+                        desc=b['desc'], category='build'))
     for d in WEAPONS:
         if d.get('hidden'):
             continue

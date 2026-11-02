@@ -531,7 +531,8 @@ class Weapons:
             n = g.mining.find(eye, fwd, reach)
             if n is not None:
                 dist = (n['pos'] + Vec3(0, 0.45, 0) - eye).length()
-                g.mining.mine(n, self.owner, d.get('gather', 1), eye + fwd * max(0.3, dist - 0.4))
+                power = d.get('chop', 1) if n['d'].get('wood') else d.get('gather', 1)   # axes chop, picks mine
+                g.mining.mine(n, self.owner, power, eye + fwd * max(0.3, dist - 0.4))
 
     def spray(self, d, eye, fwd, muzzle, dm):
         """Flamethrower-style cone: hits everything in front of you."""

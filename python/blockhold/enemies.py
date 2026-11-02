@@ -1,4 +1,5 @@
 """Enemy models (blocky humanoids) and their AI."""
+import heapq
 import math
 from collections import deque
 import random
@@ -67,6 +68,7 @@ class Enemy:
         self.best_d = math.inf     # closest it has got to its target (in flow-field steps)
         self.no_progress = 0
         self.blocked = False      # True = a wall is in the way: follow the flow field
+        self.smashing = None      # (barricade, x, z) it is breaking
         self.detour_side = 1
         self.last_pos = Vec3(pos)
         self.groan_t = 3 + random.random() * 8
@@ -298,6 +300,29 @@ class Enemy:
             if way is not None:
                 mx, mz = way
                 self.detour = 0
+        self.smashing = None
+        bars = getattr(g, 'barricades', None)
+        if bars is not None and bars.list and dist > self.d['reach'] + self.target.radius:
+            if self.blocked:                    # is the next step of the way a barricade? break it
+                cell = g.enemies.flow.next_cell(self.position.x, self.position.z)
+                b = bars.at_cell(cell) if cell else None
+                if b is not None:
+                    w = g.world
+                    cx, cz = cell[0] - w.half + 0.5, cell[1] - w.half + 0.5
+                    if math.hypot(cx - self.position.x, cz - self.position.z) < self.d['reach'] + 0.75:
+                        self.smashing = (b, cx, cz)
+                    else:
+                        mx, mz = cx - self.position.x, cz - self.position.z
+            if self.smashing is None:           # a turret right next to it gets smashed too
+                b, bd = bars.nearest(self.position, self.d['reach'] + 0.4, kinds=('turret',))
+                if b is not None:
+                    self.smashing = (b, b['pos'].x, b['pos'].z)
+            if self.smashing is not None:
+                b, cx, cz = self.smashing
+                mx = mz = 0.0
+                self.detour = 0
+                self.no_progress = 0
+                self.face(Vec3(cx, 0, cz))
 
         if self.detour > 0:     # stuck: walk sideways for a moment
             self.detour -= dt
@@ -354,7 +379,11 @@ class Enemy:
             self.stuck_t = 0
 
         self.attack_cd -= dt
-        if dist < reach and abs(p.y - self.position.y) < self.height * 0.8 + 0.6 and self.attack_cd <= 0:
+        if self.smashing is not None and self.attack_cd <= 0:
+            self.attack_cd = 1 / self.d['attack_rate']
+            self.attack_anim = 0.3
+            g.barricades.hurt(self.smashing[0], self.damage, self)
+        elif dist < reach and abs(p.y - self.position.y) < self.height * 0.8 + 0.6 and self.attack_cd <= 0:
             self.attack_cd = 1 / self.d['attack_rate']
             self.attack_anim = 0.3
             self.target.hurt(self.damage, self.position)
@@ -365,7 +394,7 @@ class Enemy:
             if dist < 20:
                 g.sounds.play('groan', volume=0.6, pitch=0.7 + random.random() * 0.6)
 
-        self.face(p)
+        self.face(Vec3(self.smashing[1], 0, self.smashing[2]) if self.smashing is not None else p)
         self.animate(dt, speed)
         self.root.position = self.position
         return True
@@ -416,7 +445,10 @@ class FlowField:
         self.world = world
         self.dist = None
 
-    def rebuild(self, targets):
+    BREAK_COST = 12          # extra steps a barricade "costs": short detours win, long ones don't
+
+    def rebuild(self, targets, blockers=None):
+        """blockers: {cell: barricade}. Zombies can go through those cells, but only by breaking them."""
         w, n, INF = self.world, self.world.n, self.INF
         heights = w.heights
         dist = [INF] * (n * n)
@@ -426,6 +458,9 @@ class FlowField:
             if w.inside(gx, gz) and dist[w.gidx(gx, gz)]:
                 dist[w.gidx(gx, gz)] = 0
                 queue.append((gx, gz))
+        if blockers:
+            self.dist = self._dijkstra(dist, queue, blockers)
+            return
         while queue:
             gx, gz = queue.popleft()
             d = dist[gz * n + gx] + 1
@@ -436,6 +471,44 @@ class FlowField:
                         dist[j] = d
                         queue.append((nx, nz))
         self.dist = dist
+
+    def _dijkstra(self, dist, starts, blockers):
+        w, n = self.world, self.world.n
+        heights = w.heights
+        heap = [(0, gx, gz) for gx, gz in starts]
+        heapq.heapify(heap)
+        while heap:
+            d, gx, gz = heapq.heappop(heap)
+            if d > dist[gz * n + gx]:
+                continue
+            for nx, nz in ((gx + 1, gz), (gx - 1, gz), (gx, gz + 1), (gx, gz - 1)):
+                if 0 <= nx < n and 0 <= nz < n:
+                    j = nz * n + nx
+                    if heights[j] <= 0.05:
+                        nd = d + 1
+                    elif (nx, nz) in blockers:
+                        nd = d + 1 + self.BREAK_COST
+                    else:
+                        continue
+                    if nd < dist[j]:
+                        dist[j] = nd
+                        heapq.heappush(heap, (nd, nx, nz))
+        return dist
+
+    def next_cell(self, x, z):
+        """The neighbouring cell a zombie at (x, z) should step into next, or None."""
+        if self.dist is None:
+            return None
+        w, n = self.world, self.world.n
+        gx, gz = w.to_grid(x, z)
+        if not w.inside(gx, gz):
+            return None
+        best, cell = self.dist[gz * n + gx], None
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, nz = gx + dx, gz + dz
+            if 0 <= nx < n and 0 <= nz < n and self.dist[nz * n + nx] < best:
+                best, cell = self.dist[nz * n + nx], (nx, nz)
+        return cell
 
     def steps_at(self, x, z):
         """How many steps from (x, z) to the nearest target, or None if unknown / unreachable."""
@@ -464,7 +537,7 @@ class FlowField:
             if not (0 <= nx < n and 0 <= nz < n):
                 continue
             if dx and dz and (heights[gz * n + nx] > 0.05 or heights[nz * n + gx] > 0.05):
-                continue                        # don't cut corners
+                continue                        # don't cut corners (or walls / barricades)
             dj = dist[nz * n + nx]
             if dj < best:
                 best, bx, bz = dj, nx, nz
@@ -501,7 +574,8 @@ class EnemyManager:
         self.flow_t -= dt
         if self.flow_t <= 0 and self.list:
             self.flow_t = 0.4
-            self.flow.rebuild(g.targets())
+            bar = getattr(g, 'barricades', None)
+            self.flow.rebuild(g.targets(), bar.cells if bar is not None else None)
         for e in list(self.list):
             if not e.update(dt):
                 e.destroy()

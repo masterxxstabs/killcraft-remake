@@ -16,6 +16,7 @@ RESOURCES = {
     'iron': dict(name='Iron', color='#c3cfdb'),
     'copper': dict(name='Copper', color='#e0813a'),
     'crystal': dict(name='Crystal', color='#c07bff'),
+    'wood': dict(name='Wood', color='#b98a52'),
 }
 
 NODE_TYPES = {
@@ -27,6 +28,9 @@ NODE_TYPES = {
                    rock=['#7b7166', '#6e655b', '#877c70'], ore=['#e0813a', '#c96a2b', '#f09a55']),
     'crystal': dict(name='Crystal', hp=220, yields={'crystal': 4, 'stone': 4}, weight=0.7,
                     rock=['#4a4458', '#3d384a', '#565066'], ore=['#c07bff', '#d6a3ff', '#9b5ae0']),
+    # chopped rather than mined: the Fire Axe is fastest (its `chop` in weapons.py)
+    'logs': dict(name='Log pile', hp=140, yields={'wood': 30}, weight=4, wood=True,
+                 rock=['#6e5233', '#634a2e', '#7a5b39'], ore=['#cdb083', '#c4a574', '#d8bd92']),
 }
 
 MINE_DAMAGE = 20            # mining done by one swing of a weapon with gather=1
@@ -40,6 +44,15 @@ def draw_node(lp, kind):
     t = NODE_TYPES[kind]
     rnd = lp.rnd
     rock, ore = t['rock'], t['ore']
+    if t.get('wood'):                      # a pile of cut logs instead of a rock
+        for y, z, n in ((0.16, 0.0, 3), (0.42, 0.0, 2), (0.66, 0.0, 1)):
+            for k in range(n):
+                x0 = (k - (n - 1) / 2) * 0.34 + (rnd.random() - 0.5) * 0.05
+                a = (rnd.random() - 0.5) * 0.15
+                lp.beam((x0 + a, y, z - 0.62), (x0 - a, y, z + 0.62), 0.16, rnd.choice(rock), sides=7)
+                for end in (-0.625, 0.625):           # the pale cut ends
+                    lp.box((x0 + a * (1 if end < 0 else -1), y, z + end), (0.25, 0.25, 0.012), rnd.choice(ore))
+        return
     lp.blob((0, 0.32, 0), 0.6, rock[0], squash=(1.1, 0.72, 1.0), jitter=0.22, detail=1, colours=rock)
     lp.blob((0.45, 0.18, 0.22), 0.34, rock[1], jitter=0.25, detail=0, colours=rock)
     lp.blob((-0.4, 0.16, -0.25), 0.3, rock[2], jitter=0.25, detail=0, colours=rock)

@@ -146,7 +146,7 @@ WEAPONS = [
     ),
     dict(
         id='axe', category='melee', name='Fire Axe', desc='Heavy swing that cleaves through up to 3 enemies.',
-        price=350, melee=True, damage=120, rate=1.1, range=3.0, cleave=3, knockback=9, gather=1.5, length=0.7,
+        price=350, melee=True, damage=120, rate=1.1, range=3.0, cleave=3, knockback=9, gather=1.5, chop=3.0, length=0.7,
         model=[
             ('wood', (0.04, 0.04, 0.6), (0, 0, 0.22)),
             ('grip', (0.048, 0.048, 0.13), (0, 0, -0.03)),
