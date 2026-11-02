@@ -18,13 +18,15 @@ from ursina import Entity, InputField, Mesh, Vec3, application, camera, color as
 from . import maps
 from .data.assets import ASSETS, ASSET_CATEGORIES, BLOCKS, PATHS
 from .render import WORLD_SHADER, col, node, set_fog, destroy
-from .ui import (BTN_H, EDGE, GREEN, INK, LINE, MUTED, NAVY, PAPER, RED, SLATE, TEAL, C, FlatButton, Window, box,
+from .ui import (AMBER, BTN_H, EDGE, GREEN, INK, LINE, MUTED, NAVY, PAPER, RED, SLATE, TEAL, C, FlatButton, Window, box,
                  frame, glyph, text)
 from .world import MAX_SIZE, MIN_SIZE, World, prototype, rotate_cell
 
 SCATTER_SPACING = {'trees': 2.6, 'shrubs': 1.1, 'props': 1.2}
 UNDO_LIMIT = 40
 BRUSHES = [1, 3, 5, 9, 15]
+TOOLS = ('paths', 'blocks', 'caves')        # palette tabs that are tools rather than assets
+CAVE_LIMITS = dict(depth=(8, 120, 4), width=(2, 7, 1), height=(3, 7, 1), branches=(0, 5, 1))
 ROW = 0.044                    # palette row height
 
 
@@ -39,6 +41,7 @@ class Editor:
         self.grid = None
         self.page = 0
         self.dlg = dict(size=34, walls=True, fill='empty')
+        self.cave = dict(depth=30, width=3, height=4, branches=1, extras=True)
         self.category, self.asset = 'trees', 'pine'
         self.path_kind, self.block_kind = 'dirt', 'stone'
         self.rot = 0
@@ -194,6 +197,16 @@ class Editor:
                 self.erase(p, everything=True)
                 self.last_cell = cell
             return
+        if self.category == 'caves':
+            if first:
+                c = self.cave
+                info = self.world.make_cave(p.x, p.z, c['depth'], c['width'], c['height'], c['branches'], c['extras'])
+                if info.get('cells'):
+                    self.toast(f"Dug a cave: {info['length']} m deep, {info['tunnels']} tunnel(s). "
+                               'Ctrl+Z to try again for a different one.')
+                else:
+                    self.toast('No room for a cave there', RED)
+            return
         if self.category == 'paths':
             for gx, gz in self.brush_cells(p):
                 self.world.set_path(gx, gz, self.path_kind)
@@ -217,7 +230,7 @@ class Editor:
 
     def erase(self, p, everything=False):
         cells = self.brush_cells(p)
-        if everything or self.category not in ('paths', 'blocks'):
+        if everything or self.category not in TOOLS:
             gone = set()
             for gx, gz in cells or [self.world.to_grid(p.x, p.z)]:
                 q = self.world.prop_at(gx - self.world.half + 0.5, gz - self.world.half + 0.5,
@@ -364,7 +377,15 @@ class Editor:
             return
         gx, gz = self.world.to_grid(p.x, p.z)
         cx, cz = gx - self.world.half + 0.5, gz - self.world.half + 0.5
-        paint = self.category in ('paths', 'blocks') or self.eraser
+        if self.category == 'caves' and not self.eraser:     # where the cave entrance will be
+            self.ghost_root.hide()
+            self.block_ghost.enabled = False
+            self.marker.enabled = True
+            self.marker.position = (cx, 0.06, cz)
+            self.marker.scale = (self.cave['width'] + 1, self.cave['width'] + 1, 1)
+            self.marker.color = C(AMBER, 0.45)
+            return
+        paint = self.category in TOOLS or self.eraser
         self.marker.enabled = paint
         if not paint:
             self.block_ghost.enabled = False
@@ -479,7 +500,7 @@ class Editor:
         self.category = cat
         self.page = 0
         self.eraser = False
-        if cat not in ('paths', 'blocks'):
+        if cat not in TOOLS:
             first = next(k for k, a in ASSETS.items() if a['category'] == cat)
             self.select_asset(first)
         else:
@@ -529,6 +550,11 @@ class Editor:
         elif self.category == 'blocks':
             items = [(k, n, self.block_kind == k) for k, n in BLOCKS.items()]
             pick = self.pick_tile
+        elif self.category == 'caves':
+            self.cave_settings(p, x0, y, w)
+            self.options_y = -0.25 - 0.05
+            self.options = Entity(parent=self.palette)
+            return
         else:
             items = [(k, a['name'], self.asset == k) for k, a in ASSETS.items() if a['category'] == self.category]
             pick = self.select_asset
@@ -553,6 +579,33 @@ class Editor:
         self.options = Entity(parent=self.palette)
         self.refresh_options()
 
+    def cave_settings(self, p, x0, y, w):
+        """The Caves tab: what the next cave you click will look like."""
+        c = self.cave
+
+        def change(key, step):
+            lo, hi, _ = CAVE_LIMITS[key]
+            c[key] = max(lo, min(hi, c[key] + step))
+            self.refresh_palette()
+        rows = (('depth', 'Depth', 'm'), ('width', 'Width', 'm'), ('height', 'Rock height', 'm'),
+                ('branches', 'Side tunnels', ''))
+        for key, label, unit in rows:
+            step = CAVE_LIMITS[key][2]
+            text(p, label, x0, y - 0.012, 0.85, INK)
+            FlatButton(p, '-', x0 + w - 0.2, y, 0.045, 0.036, lambda k=key, s=step: change(k, -s), fill=SLATE, edge=INK)
+            text(p, f'{c[key]} {unit}'.strip(), x0 + w - 0.105, y - 0.018, 0.9, TEAL, origin=(0, 0))
+            FlatButton(p, '+', x0 + w - 0.045, y, 0.045, 0.036, lambda k=key, s=step: change(k, s), fill=SLATE, edge=INK)
+            y -= 0.05
+        text(p, 'Lanterns, ore, crate, grave', x0, y - 0.012, 0.75, INK)
+        on = c['extras']
+        FlatButton(p, 'ON' if on else 'OFF', x0 + w - 0.09, y, 0.09, 0.036,
+                   lambda: (c.__setitem__('extras', not c['extras']), self.refresh_palette()),
+                   fill=TEAL if on else NAVY, edge=INK, size=0.8)
+        y -= 0.065
+        text(p, 'Click on the map to dig a cave. The entrance is where you click; the tunnels wind '
+                'into a rock hill with a roof you walk under. Ctrl+Z and click again for a different one. '
+                'Erase parts of it with the ERASER.', x0, y, 0.72, MUTED, wordwrap=36)
+
     def turn_page(self, step):
         self.page += step
         self.refresh_palette()
@@ -560,11 +613,13 @@ class Editor:
     def refresh_options(self):
         for c in list(self.options.children):
             destroy(c)
+        if self.category == 'caves' and not self.eraser:
+            return
         o, x0, y = self.options, self.panel_x + 0.02, self.options_y
         w = self.panel_w - 0.04
         box(o, x0, y + 0.006, w, 0.004, LINE)
         y -= 0.02
-        if self.eraser or self.category in ('paths', 'blocks'):
+        if self.eraser or self.category in TOOLS:
             text(o, 'Brush  [ ]', x0, y, 0.85, MUTED)
             for i, s in enumerate(BRUSHES):
                 on = self.brush == s
@@ -580,7 +635,7 @@ class Editor:
                            lambda h=i + 1: (setattr(self, 'block_h', h), self.refresh_options()),
                            fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.75)
             y -= 0.05
-        if not self.eraser and self.category not in ('paths', 'blocks'):
+        if not self.eraser and self.category not in TOOLS:
             a = ASSETS[self.asset]
             if a['nature']:
                 text(o, 'Hold and drag to scatter.\nEach one gets a random turn and size.', x0, y, 0.78, MUTED)

@@ -71,7 +71,8 @@ def blank_map(name='My map', size=34):
 PATH_COLOURS = {'dirt': (122, 90, 58), 'gravel': (140, 138, 133), 'cobble': (134, 134, 138), 'road': (58, 59, 64),
                 'sand': (216, 196, 143), 'floor': (168, 128, 74)}
 BLOCK_COLOURS = {'stone': (125, 125, 128), 'brick': (141, 74, 58), 'planks': (168, 128, 74), 'crate': (176, 136, 80),
-                 'log': (107, 74, 43), 'obsidian': (40, 30, 55), 'leaves': (63, 125, 42)}
+                 'log': (107, 74, 43), 'obsidian': (40, 30, 55), 'leaves': (63, 125, 42), 'mossy': (100, 115, 90),
+                 'cave_roof': (62, 58, 52)}
 CATEGORY_COLOURS = {'trees': (47, 107, 58), 'shrubs': (95, 160, 70), 'buildings': (168, 67, 47),
                     'props': (176, 136, 80), 'special': (214, 69, 65)}
 
@@ -89,7 +90,8 @@ def preview_image(data, scale=3):
             px[gx, n - 1 - gz] = c
     for x, z, kind in data.get('paths', []):
         put(x, z, PATH_COLOURS.get(kind, (120, 100, 80)))
-    for x, z, kind, h in data.get('blocks', []):
+    for entry in data.get('blocks', []):
+        x, z, kind = entry[0], entry[1], entry[2]
         put(x, z, BLOCK_COLOURS.get(kind, (120, 120, 120)))
     from .world import rotate_cell
     for entry in data.get('props', []):

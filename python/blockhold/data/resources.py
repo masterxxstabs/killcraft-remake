@@ -9,6 +9,8 @@
 #    yields    resources you get in total, handed out a bit with every hit
 #    rock      colours of the rock, ore = colours of the ore chunks in it
 #    weight    how often it spawns compared to the others
+#    loot      breakable crates: (resource, min, max, chance) rolled when it breaks
+#              (crates can be shot as well as hit, and give nothing until they break)
 # ─────────────────────────────────────────────────────────────────────────────
 
 RESOURCES = {
@@ -31,6 +33,11 @@ NODE_TYPES = {
     # chopped rather than mined: the Fire Axe is fastest (its `chop` in weapons.py)
     'logs': dict(name='Log pile', hp=140, yields={'wood': 30}, weight=4, wood=True,
                  rock=['#6e5233', '#634a2e', '#7a5b39'], ore=['#cdb083', '#c4a574', '#d8bd92']),
+    # supply crates: smash or shoot them open for a random handful of crafting resources
+    'crate': dict(name='Supply crate', hp=60, yields={}, weight=1.5, wood=True, crate=True,
+                  loot=[('wood', 6, 14, 1.0), ('stone', 4, 10, 0.6), ('iron', 3, 9, 0.6), ('copper', 3, 8, 0.5),
+                        ('crystal', 1, 2, 0.12)],
+                  rock=['#9a7448', '#8a6a40', '#a87e50'], ore=['#4a4e55', '#3a3d42', '#5b6067']),
 }
 
 MINE_DAMAGE = 20            # mining done by one swing of a weapon with gather=1
@@ -44,6 +51,16 @@ def draw_node(lp, kind):
     t = NODE_TYPES[kind]
     rnd = lp.rnd
     rock, ore = t['rock'], t['ore']
+    if t.get('crate'):                     # a banded wooden supply crate
+        lp.box((0, 0.42, 0), (0.86, 0.84, 0.86), rock[0], top=rock[2])
+        for y in (0.08, 0.76):
+            lp.box((0, y, 0), (0.9, 0.08, 0.9), ore[0])
+        for x in (-0.4, 0.4):
+            lp.box((x, 0.42, 0), (0.08, 0.84, 0.9), rock[1])
+        lp.box((0, 0.46, 0.44), (0.4, 0.16, 0.01), '#d9c98a')            # stencil plate
+        lp.box((0, 0.46, -0.44), (0.4, 0.16, 0.01), '#d9c98a')
+        lp.box((0.2, 0.86, 0.1), (0.3, 0.06, 0.2), ore[2], yaw=20)        # a crowbar left on top
+        return
     if t.get('wood'):                      # a pile of cut logs instead of a rock
         for y, z, n in ((0.16, 0.0, 3), (0.42, 0.0, 2), (0.66, 0.0, 1)):
             for k in range(n):

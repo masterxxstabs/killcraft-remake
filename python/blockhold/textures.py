@@ -111,12 +111,14 @@ TILES = {
     'log_top': lambda: pixel_image('#b38b5a', 0.14, 29, draw=_log_top),
     'leaves': lambda: pixel_image('#3f7d2a', 0.3, 31, draw=_leaves),
     'obsidian': lambda: pixel_image('#1d1528', 0.3, 37),
+    'cave_roof': lambda: pixel_image('#33302c', 0.35, 41),        # the dark underside of a cave roof
 }
 
 # Which tile each block type uses per face (top, bottom, side)
 BLOCK_FACES = {
     'grass': ('grass_top', 'dirt', 'grass_side'),
     'log': ('log_top', 'log_top', 'log_side'),
+    'cave_roof': ('mossy', 'cave_roof', 'stone'),
 }
 
 

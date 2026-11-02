@@ -3,6 +3,15 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.12.0
+- Caves in the map editor: pick the depth, width, rock height and side tunnels, then click to dig one
+- Caves have a rock roof you walk under, chambers with ore and a loot crate, lanterns, and a zombie grave at the end
+- Loot crates: smash them or shoot them open for random crafting resources (in the editor's Mining tab, and on random arenas)
+- Drop the gun you're holding with X, and pick it up again with E (it keeps its ammo, upgrades and attachments)
+- 15 more military assets: army truck, armored jeep, tank wreck, guard tower, army tent, checkpoint, sandbag wall, hesco barrier, field gun, radar dish, helipad and more
+- 17 more town assets: abandoned cars, police car, ambulance, street and traffic lights, corner shop, apartment block, gas station, chain-link fence and more
+- Random arenas can now have a military camp or an abandoned street to find
+
 ## 1.11.0
 - Huge maps: from 24 x 24 m up to 512 x 512 m
 - Pick the random arena's size on the MAPS tab: Small, Normal, Large, Huge or Giant

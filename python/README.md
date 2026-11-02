@@ -43,7 +43,8 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | Space | jump; hold it against a ledge to climb up |
 | Shift | sprint (sprint at low cover to vault over it) |
 | C or Ctrl | crouch; press it while sprinting to slide |
-| E | use a workbench (crafting); hold it to revive a downed ally, repair a barricade or refill a turret |
+| E | use a workbench (crafting) or pick up a dropped gun; hold it to revive a downed ally, repair a barricade or refill a turret |
+| X | drop the gun you're holding (it keeps its ammo, upgrades and attachments) |
 | G | build mode: place the barricades you crafted (R turns them, the wheel switches, right click stops) |
 | 1–9 or mouse wheel | switch weapon |
 | R | reload |
@@ -100,12 +101,13 @@ big maps stay playable (expect a somewhat lower frame rate than on small maps).
 | Shrubs | bush, flower bush, tall grass, fern, flowers, mushrooms, rocks, boulder, hedge, dead bush |
 | Buildings | house, log cabin, ruined house, watchtower, market stall, well, tent, stone wall, fence, sandbags |
 | Props | crate, barrel, hay bale, log pile, lamp post, bench, campfire, car wreck, signpost, rubble |
-| Town | pickup truck, bus wreck, traffic cone, road barrier, stop sign, fire hydrant, mailbox, phone booth, dumpster, trash bags, utility pole, bus stop, gas pump, billboard, vending machine, picnic table |
-| Military | shipping container, barbed wire, tank trap, ammo crate, fuel drums, generator, radio mast, helicopter wreck, floodlight, bunker, jerry cans |
+| Town | pickup truck, bus wreck, abandoned car, police car, ambulance, traffic cone, road barrier, stop sign, road sign, traffic light, street light, fire hydrant, mailbox, phone booth, news stand, parking meter, dumpster, trash can, trash bags, utility pole, bus stop, gas pump, gas station, billboard, vending machine, picnic table, shopping cart, tire stack, pallet stack, chain-link fence, broken wall, corner shop, apartment block |
+| Military | shipping container, army truck, armored jeep, tank wreck, helicopter wreck, guard tower, bunker, army tent, checkpoint gate, sandbag wall, hesco barrier, barbed wire, tank trap, ammo crate, supply pallet, weapon rack, fuel drums, jerry cans, generator, field gun, radar dish, radio mast, floodlight, helipad, camo net, burning barrel |
 | Farm | barn, silo, windmill, water tower, scarecrow, tractor, wheelbarrow, outhouse, corn, pumpkins, picket fence |
 | Graveyard | gravestone, stone cross, iron fence, crypt, coffin, grave lantern, old church |
 | Special | **zombie grave** (zombies climb out of these) and the **player start** |
-| Mining | workbench and ore / log pile spawns |
+| Mining | workbench, ore / log pile spawns, and **loot crates** (break them for resources) |
+| Caves | dig a cave: set its depth, width, rock height and side tunnels, then click where the entrance goes |
 | Paths | dirt, gravel, cobblestone, road, sand, wood floor |
 | Blocks | stone, brick, planks, crate, log, obsidian and leaves columns, 1–4 high |
 
@@ -137,6 +139,26 @@ EDITOR** brings you back. **SAVE** writes `maps/<name>.json`. Change the name at
 save a copy instead of overwriting.
 
 If a map has no zombie graves, zombies climb over the outer wall like in the random arena.
+
+**Caves.** On the **Caves** tab, set the cave you want, then click on the map where the
+entrance should be:
+
+| Setting | What it does |
+| --- | --- |
+| Depth | how far the main tunnel winds in (8 to 120 m) |
+| Width | how wide the tunnels are (2 to 7 m) |
+| Rock height | how tall the rock hill is; the roof is 1 m lower (3 to 7 m) |
+| Side tunnels | branches off the main tunnel (0 to 5), each ending in a chamber |
+| Lanterns, ore, crate, grave | lanterns along the way, ore and a loot crate in every chamber, and a zombie grave at the far end |
+
+The map is flat ground, so a cave is a rock hill with winding tunnels and a roof you walk under
+(not a hole into the ground). Every cave is different: Ctrl+Z and click again for another one. Erase
+or reshape parts with the ERASER and the Blocks tab. If the cave adds ore spawns, ore only grows at
+spawn markers on that map, so add a few outside too.
+
+**Loot crates** (Mining tab) are supply crates you smash with a melee weapon or shoot open for a
+random handful of wood, stone, iron, copper and sometimes crystal. They come back about a minute later.
+Random arenas have some too.
 
 **Add your own assets:** everything in the palette lives in `blockhold/data/assets.py`. Each
 asset is a short function made of low-poly shapes (boxes, cylinders, cones, lumpy blobs,

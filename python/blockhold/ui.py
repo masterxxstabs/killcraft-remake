@@ -679,9 +679,9 @@ class UI:
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
          ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
          ('Reload', 'R'), ('Ability', 'Q')],
-        [('Switch weapon', '1-9 / wheel'), ('Craft / revive', 'E / hold E'), ('Build (R turns)', 'G'),
-         ('Repair / refill', 'Hold E'), ('Shop', 'B'), ('Scoreboard', 'Hold Tab'),
-         ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute', 'M'), ('Fullscreen', 'F11')],
+        [('Switch weapon', '1-9 / wheel'), ('Craft / pick up', 'E'), ('Drop gun', 'X'), ('Build (R turns)', 'G'),
+         ('Revive / repair', 'Hold E'), ('Shop', 'B'), ('Scoreboard', 'Hold Tab'),
+         ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute / fullscreen', 'M / F11')],
     ]
 
     def menu_controls(self, win, g):

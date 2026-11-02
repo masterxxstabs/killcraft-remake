@@ -46,7 +46,7 @@ class Lighting:
     def providers(self):
         g = self.game
         out = [g.world]
-        for name in ('mining', 'powerups', 'projectiles', 'quest'):
+        for name in ('mining', 'powerups', 'projectiles', 'quest', 'drops'):
             obj = getattr(g, name, None)
             if obj is not None and hasattr(obj, 'lights'):
                 out.append(obj)

@@ -138,8 +138,29 @@ class Mining:
                 g.effects.damage_number(n['pos'] + Vec3(0, 1.3 + i * 0.3, 0), amt, color=RESOURCES[res]['color'],
                                         label=f"+{amt} {RESOURCES[res]['name']}")
         if n['hp'] <= 0:
+            if n['d'].get('loot'):                 # a crate: roll what's inside
+                for res, lo, hi, chance in n['d']['loot']:
+                    if random.random() < chance:
+                        amt = random.randint(lo, hi)
+                        player.resources[res] = player.resources.get(res, 0) + amt
+                        gained[res] = gained.get(res, 0) + amt
+                if player.is_local:
+                    for i, (res, amt) in enumerate(gained.items()):
+                        g.effects.damage_number(n['pos'] + Vec3(0, 1.0 + i * 0.3, 0), amt,
+                                                color=RESOURCES[res]['color'], label=f"+{amt} {RESOURCES[res]['name']}")
+                g.events.emit('crate_opened', id=n['id'], player=player, gained=gained)
             self.break_node(n, player)
         return gained
+
+    def at_point(self, p):
+        """The breakable crate a bullet hit at point p (only crates can be shot open)."""
+        gx, gz = self.game.world.to_grid(p.x, p.z)
+        if p.y > 1.15:
+            return None
+        for n in self.nodes:
+            if n['cell'] == (gx, gz) and n['d'].get('crate'):
+                return n
+        return None
 
     def break_node(self, n, player=None):
         g = self.game

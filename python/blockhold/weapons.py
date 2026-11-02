@@ -324,6 +324,43 @@ class Weapons:
         self.muzzle = Vec3(*d.get('muzzle', (0, 0, d.get('length', 0.4))))
         return g
 
+    def ground_model(self, d, parent):
+        """The gun as an object in the world (a dropped gun): same model, real size."""
+        if d['id'] in MODELS:
+            node(parent, model=self.gun_smith(d).build())
+            return
+        atlas = weapon_atlas()
+        for part in d.get('model') or [('dark', (0.08, 0.1, d.get('length', 0.4)), (0, 0, d.get('length', 0.4) / 2))]:
+            block(parent, size=part[1], center=part[2], texture=atlas.texture, uv_rects=atlas.all_faces(part[0]))
+
+    # ── dropping and picking up ──────────────────────────────────────────────
+    def take_out(self, d):
+        """Remove weapon d and return everything about it (ammo, upgrades, attachments, camo)."""
+        wid = d['id']
+        pack = dict(wid=wid, state=dict(self.state.get(wid, {})), levels=dict(self.levels.get(wid, {})),
+                    attach=dict(self.attach.get(wid, {})), owned_att=set(self.owned_att.get(wid, set())),
+                    camo=self.camo.get(wid, 'factory'))
+        was = self.current
+        self.owned.remove(d)
+        for table in (self.state, self.levels, self.attach, self.owned_att, self.camo):
+            table.pop(wid, None)
+        if self.held is d:
+            self.held = None
+            self.equip(min(was, len(self.owned) - 1))
+        return pack
+
+    def put_back(self, pack, equip=True):
+        """Give back a weapon taken out with take_out, exactly as it was."""
+        wid = pack['wid']
+        self.give(wid, equip=False)
+        self.state[wid] = dict(pack['state']) or self.state[wid]
+        self.levels[wid] = dict(pack['levels'])
+        self.attach[wid] = dict(pack['attach'])
+        self.owned_att[wid] = set(pack['owned_att'])
+        self.camo[wid] = pack['camo']
+        if equip:
+            self.equip(self.owned.index(self.get_def(wid)), force=True)
+
     # ── the arms holding the gun ─────────────────────────────────────────────
     def hold_pos(self, d):
         return d.get('hold') or (HOLD_SHORT if d.get('length', 0.5) < 0.35 else HOLD_LONG)
@@ -593,6 +630,9 @@ class Weapons:
                     break
             if not stopped and wall < rng:
                 g.effects.burst(end, '#8a8a8a', 3, speed=2, size=0.08, life=0.4)
+                crate = g.mining.at_point(eye + direction * (wall + 0.05)) if getattr(g, 'mining', None) else None
+                if crate is not None:                       # shot a supply crate: bullets break it open too
+                    g.mining.mine(crate, self.owner, d['damage'] * dm / 40, end)
             if d.get('chain'):
                 g.effects.lightning(muzzle, end, tracer)
                 if first:

@@ -891,6 +891,396 @@ def church(lp):
     lp.box((0, 9.4, 4.0), (0.1, 0.6, 0.1), '#c9a227')
     lp.box((0, 9.5, 4.0), (0.35, 0.1, 0.1), '#c9a227')
 
+
+# ── caves ────────────────────────────────────────────────────────────────────
+def cave_lantern(lp):
+    lp.beam((0, 0, 0), (0, 1.6, 0), 0.04, '#5e3b1f', sides=4)
+    lp.beam((0, 1.6, 0), (0.25, 1.65, 0), 0.025, '#5e3b1f', sides=4)
+    lp.box((0.25, 1.42, 0), (0.16, 0.24, 0.16), '#2a2a30')
+    lp.emissive = True
+    lp.box((0.25, 1.4, 0), (0.12, 0.17, 0.12), '#ffb85a')
+    lp.emissive = False
+    for _ in range(3):                                                      # a few stones at its foot
+        lp.blob(((lp.rnd.random() - 0.5) * 0.5, 0.05, (lp.rnd.random() - 0.5) * 0.5), 0.1, STONE[1], detail=0)
+
+
+# ── more military ────────────────────────────────────────────────────────────
+CANVAS = '#6b6a48'
+
+
+def military_truck(lp):
+    lp.box((1.55, 0.95, 0), (1.1, 1.1, 1.6), OLIVE_DRAB, top='#5b6640')               # cab
+    lp.box((1.75, 1.2, 0), (0.6, 0.45, 1.5), GLASS)
+    lp.box((-0.6, 0.7, 0), (3.4, 0.25, 1.7), '#3f4829')                              # flatbed
+    lp.box((-0.6, 1.55, 0), (3.3, 1.5, 1.65), CANVAS, top='#77764f')                 # canvas cover
+    for x in (-2.0, -1.0, 0.0, 0.9):
+        lp.box((x, 1.55, 0), (0.06, 1.52, 1.67), '#5a5a3c')
+    lp.box((2.12, 0.75, 0), (0.06, 0.4, 1.4), '#2a2a30')
+    _wheels(lp, (-1.6, -0.6, 1.5), 0.85, 0.42)
+
+
+def humvee(lp):
+    tan = lp.rnd.choice(['#a89a72', OLIVE_DRAB])
+    lp.box((0, 0.8, 0), (3.2, 0.7, 1.85), tan, top='#968a66')
+    lp.box((-0.3, 1.4, 0), (1.7, 0.55, 1.7), tan)
+    lp.box((0.56, 1.4, 0), (0.02, 0.4, 1.5), GLASS)
+    lp.box((1.35, 1.17, 0), (0.6, 0.06, 1.7), '#5b5e4a')                             # sloped bonnet
+    lp.cylinder((-0.3, 1.68, 0), 0.32, 0.25, '#4a4a3c', sides=8)                     # turret ring
+    lp.beam((-0.3, 1.88, 0), (0.6, 1.92, 0), 0.04, '#26282d', sides=5)              # gun
+    lp.box((1.62, 0.8, 0), (0.06, 0.4, 1.6), '#2a2a30')
+    _wheels(lp, (-1.05, 1.05), 0.9, 0.42)
+
+
+def tank_wreck(lp):
+    hull, dark = '#5a6040', '#3f4530'
+    lp.box((0, 0.7, 0), (5.6, 0.9, 2.6), hull, top='#626a46')
+    for z in (-1.3, 1.3):                                                              # tracks
+        lp.box((0, 0.45, z), (5.8, 0.9, 0.5), '#2a2a2c')
+        for x in (-2.2, -1.1, 0.0, 1.1, 2.2):
+            lp.beam((x, 0.42, z - 0.27), (x, 0.42, z + 0.27), 0.32, '#3a3a3c', sides=8)
+    lp.box((-0.3, 1.5, 0), (2.4, 0.7, 2.0), hull, yaw=18)                           # turret, knocked askew
+    lp.beam((0.6, 1.55, 0.35), (3.6, 1.3, 1.3), 0.11, dark, sides=6)               # barrel
+    lp.blob((-2.2, 1.2, -0.5), 0.45, '#2a2622', detail=0)                           # scorch / debris
+    lp.box((2.7, 0.75, 0), (0.15, 0.6, 2.2), dark)
+
+
+def guard_tower(lp):
+    steel, wall = '#5b6067', OLIVE_DRAB
+    for x, z in ((-1.1, -1.1), (1.1, -1.1), (-1.1, 1.1), (1.1, 1.1)):
+        lp.box((x, 2.5, z), (0.18, 5.0, 0.18), steel)
+    for y in (1.6, 3.2):
+        lp.beam((-1.1, y, 1.1), (1.1, y + 0.9, 1.1), 0.05, steel, sides=4)
+        lp.beam((-1.1, y, -1.1), (1.1, y + 0.9, -1.1), 0.05, steel, sides=4)
+    lp.box((0, 5.0, 0), (2.8, 0.15, 2.8), '#4a4e55')
+    for x, z, sx, sz in ((0, -1.35, 2.8, 0.1), (0, 1.35, 2.8, 0.1), (-1.35, 0, 0.1, 2.8), (1.35, 0, 0.1, 2.8)):
+        lp.box((x, 5.5, z), (sx, 0.9, sz), wall)
+    for x, z in ((-1.3, -1.3), (1.3, -1.3), (-1.3, 1.3), (1.3, 1.3)):
+        lp.box((x, 6.3, z), (0.1, 1.6, 0.1), steel)
+    lp.box((0, 7.15, 0), (3.2, 0.12, 3.2), '#3a3d42')
+    lp.box((0.7, 5.95, 1.25), (0.4, 0.3, 0.3), '#2a2a30')                          # searchlight
+    lp.emissive = True
+    lp.box((0.7, 5.95, 1.41), (0.3, 0.22, 0.02), '#fffbe8')
+    lp.emissive = False
+    lp.beam((1.1, 0, 1.3), (1.1, 5.0, 1.3), 0.02, steel, sides=3)                  # ladder rails
+    lp.beam((0.7, 0, 1.3), (0.7, 5.0, 1.3), 0.02, steel, sides=3)
+
+
+def sandbag_wall(lp):
+    for row, y in enumerate((0.15, 0.42, 0.68, 0.94)):
+        n = 9 - (row % 2)
+        for i in range(n):
+            x = -1.3 + i * 0.325 + (0.16 if row % 2 else 0)
+            lp.blob((x, y, 0), 0.2, lp.rnd.choice(['#b8a272', '#a8946a', '#c2ad7e']), squash=(1, 0.55, 0.9),
+                    detail=0, jitter=0.05)
+
+
+def military_tent(lp):
+    lp.box((0, 0.9, 0), (4.0, 1.8, 3.0), '#5b6640')
+    lp.prism((0, 1.8, 0), 4.2, 3.2, 1.0, '#4f5a35', gable='#5b6640', yaw=90)
+    lp.box((0, 0.85, 1.51), (1.0, 1.6, 0.02), '#2a2c22')                            # door flap open
+    lp.box((0.65, 0.85, 1.55), (0.3, 1.6, 0.04), '#4f5a35', yaw=-25)
+    for x in (-1.4, 1.4):                                                            # guy ropes
+        lp.beam((x, 1.8, 1.5), (x * 1.2, 0, 2.5), 0.01, '#c9b98a', sides=3)
+        lp.beam((x, 1.8, -1.5), (x * 1.2, 0, -2.5), 0.01, '#c9b98a', sides=3)
+
+
+def hesco_barrier(lp):
+    lp.box((0, 0.6, 0), (0.98, 1.2, 0.98), '#a8946a', top='#8f7d58')
+    for x in (-0.49, 0.49):                                                          # wire mesh frame
+        for z in (-0.49, 0.49):
+            lp.box((x, 0.6, z), (0.04, 1.22, 0.04), '#6f7378')
+    for y in (0.3, 0.6, 0.9):
+        lp.box((0, y, 0.495), (1.0, 0.02, 0.01), '#6f7378')
+        lp.box((0, y, -0.495), (1.0, 0.02, 0.01), '#6f7378')
+        lp.box((0.495, y, 0), (0.01, 0.02, 1.0), '#6f7378')
+        lp.box((-0.495, y, 0), (0.01, 0.02, 1.0), '#6f7378')
+
+
+def checkpoint(lp):
+    lp.box((-1.5, 1.15, 0), (1.2, 2.3, 1.2), '#b9b7b0', top='#8f8d86')              # guard booth
+    lp.box((-1.5, 1.45, 0.61), (0.8, 0.6, 0.02), GLASS)
+    lp.box((-0.89, 1.45, 0), (0.02, 0.6, 0.8), GLASS)
+    lp.box((-1.5, 2.38, 0), (1.5, 0.12, 1.5), '#5b6067')
+    lp.box((-0.6, 0.5, 0), (0.25, 1.0, 0.25), '#2a2a30')                            # barrier post
+    for i in range(6):                                                                # red and white arm
+        lp.box((-0.3 + i * 0.5, 0.95, 0), (0.5, 0.12, 0.1), '#d64541' if i % 2 == 0 else '#f5f4f2')
+    lp.box((2.6, 0.45, 0), (0.15, 0.9, 0.15), '#2a2a30')
+
+
+def supply_pallet(lp):
+    lp.box((0, 0.07, 0), (1.3, 0.14, 1.1), '#a87848')
+    for x, z, h in ((-0.32, -0.27, 0.5), (0.32, -0.27, 0.5), (-0.32, 0.27, 0.5), (0.32, 0.27, 0.5), (0, 0, 0.45)):
+        y = 0.14 + h / 2 + (0.5 if (x, z) == (0, 0) else 0)
+        lp.box((x, y, z), (0.6, h, 0.52), lp.rnd.choice([OLIVE_DRAB, '#5b6640', '#8a7a52']))
+    lp.box((0, 0.7, 0.56), (1.3, 1.1, 0.01), '#3a3d2a')                              # cargo net (front)
+
+
+def field_gun(lp):
+    steel = '#4f5a35'
+    lp.box((0, 0.75, 0), (1.2, 0.6, 0.9), steel)                                      # shield and body
+    lp.box((0.35, 1.0, 0), (0.08, 1.1, 1.5), steel)
+    lp.beam((0.5, 0.95, 0), (2.6, 1.15, 0), 0.09, '#3a3d2a', sides=6)
+    lp.beam((2.5, 1.14, 0), (2.7, 1.16, 0), 0.12, '#2a2a2c', sides=6)                 # muzzle brake
+    for z in (-0.6, 0.6):
+        lp.beam((0, 0.45, z), (0, 0.45, z * 1.25), 0.45, TYRE, sides=9)
+    lp.beam((-0.3, 0.45, 0.1), (-2.3, 0.05, 0.6), 0.06, steel, sides=4)               # trail legs
+    lp.beam((-0.3, 0.45, -0.1), (-2.3, 0.05, -0.6), 0.06, steel, sides=4)
+
+
+def radar_dish(lp):
+    import math
+    lp.box((0, 0.6, 0), (1.2, 1.2, 1.2), '#5b6067')
+    lp.beam((0, 1.2, 0), (0, 2.2, 0), 0.12, '#3a3d42', sides=6)
+    for i in range(10):                                                              # the dish
+        a = i / 10 * math.tau
+        lp.beam((0, 2.3, 0.2), (math.cos(a) * 1.2, 2.5 + math.sin(a) * 1.2, 0.75), 0.07, '#c9c7c0', sides=3,
+                end_radius=0.2)
+    lp.beam((0, 2.5, 0.25), (0, 2.6, 1.4), 0.03, '#3a3d42', sides=4)
+    lp.emissive = True
+    lp.box((0.45, 1.0, 0.61), (0.15, 0.08, 0.01), '#7dff8a')
+    lp.emissive = False
+
+
+def helipad(lp):
+    lp.cylinder((0, 0, 0), 3.2, 0.06, '#5b5e63', sides=16)
+    lp.cylinder((0, 0.06, 0), 2.6, 0.01, '#f5f4f2', sides=16)
+    lp.cylinder((0, 0.07, 0), 2.45, 0.01, '#5b5e63', sides=16)
+    for x in (-0.6, 0.6):                                                            # the H
+        lp.box((x, 0.085, 0), (0.25, 0.01, 1.8), '#d9a521')
+    lp.box((0, 0.085, 0), (1.2, 0.01, 0.25), '#d9a521')
+
+
+def weapon_rack(lp):
+    wood = '#5e3b1f'
+    lp.box((0, 0.1, 0), (1.6, 0.2, 0.4), wood)
+    lp.box((0, 1.25, -0.15), (1.6, 0.12, 0.1), wood)
+    for x in (-0.75, 0.75):
+        lp.box((x, 0.7, -0.15), (0.1, 1.4, 0.1), wood)
+    for i in range(5):                                                               # rifles leaning in it
+        x = -0.55 + i * 0.27
+        lp.box((x, 0.75, 0.0), (0.05, 1.2, 0.1), '#26282d', yaw=0)
+        lp.box((x, 0.35, 0.03), (0.07, 0.35, 0.14), '#6b4a2b')
+
+
+def camo_net(lp):
+    for x, z in ((-1.8, -1.3), (1.8, -1.3), (-1.8, 1.3), (1.8, 1.3)):
+        lp.beam((x, 0, z), (x, 2.4, z), 0.05, '#5e3b1f', sides=4)
+    for i in range(12):                                                              # a lumpy net of leaves
+        x, z = (lp.rnd.random() - 0.5) * 3.8, (lp.rnd.random() - 0.5) * 2.8
+        lp.blob((x, 2.45, z), 0.55, lp.rnd.choice(['#4f5a35', '#5b6640', '#3f4829', '#6b6a48']),
+                squash=(1.3, 0.25, 1.3), detail=0, jitter=0.2)
+
+
+def burning_barrel(lp):
+    lp.cylinder((0, 0, 0), 0.32, 0.9, '#4a3a30', sides=8, top_colour='#1a1410')
+    for y in (0.2, 0.65):
+        lp.cylinder((0, y, 0), 0.33, 0.05, '#2a2622', sides=8)
+    lp.emissive = True
+    lp.cylinder((0, 0.88, 0), 0.24, 0.5, '#ff8c2a', sides=5, top_radius=0)
+    lp.cylinder((0.05, 0.88, 0.03), 0.12, 0.35, '#ffd84a', sides=5, top_radius=0)
+    lp.emissive = False
+
+
+# ── more town ────────────────────────────────────────────────────────────────
+def _car(lp, body, top_h=0.5, length=3.0):
+    lp.box((0, 0.6, 0), (length, 0.55, 1.4), body)
+    lp.box((-0.15, 1.12, 0), (length * 0.48, top_h, 1.3), body)
+    lp.box((length * 0.24 - 0.12, 1.12, 0), (0.02, top_h - 0.08, 1.15), GLASS)
+    lp.box((-length * 0.24 - 0.18, 1.12, 0), (0.02, top_h - 0.08, 1.15), GLASS)
+    lp.box((-0.15, 1.12, 0.66), (length * 0.42, top_h - 0.12, 0.02), GLASS)
+    lp.box((-0.15, 1.12, -0.66), (length * 0.42, top_h - 0.12, 0.02), GLASS)
+    lp.box((length / 2 + 0.01, 0.62, 0), (0.04, 0.2, 1.1), '#9aa0a8')
+    _wheels(lp, (-length * 0.32, length * 0.32), 0.68, 0.3)
+
+
+def sedan(lp):
+    body = lp.rnd.choice(['#2f5d8a', '#8a3b2a', '#c9c7c0', '#2a2a30', '#4f7a3a'])
+    _car(lp, body)
+    if lp.rnd.random() < 0.6:                                                        # smashed window, flat look
+        lp.box((-0.15, 1.12, 0.67), (0.5, 0.3, 0.02), '#151a20')
+
+
+def police_car(lp):
+    _car(lp, '#f5f4f2')
+    lp.box((0, 0.6, 0.71), (1.6, 0.3, 0.01), '#1f2a44')
+    lp.box((0, 0.6, -0.71), (1.6, 0.3, 0.01), '#1f2a44')
+    lp.box((-0.15, 1.39, 0), (0.2, 0.06, 1.1), '#2a2a30')
+    lp.emissive = True
+    lp.box((-0.15, 1.45, 0.3), (0.18, 0.1, 0.4), '#3a6bff')
+    lp.box((-0.15, 1.45, -0.3), (0.18, 0.1, 0.4), '#ff3a3a')
+    lp.emissive = False
+
+
+def ambulance(lp):
+    white = '#f5f4f2'
+    lp.box((-0.5, 1.2, 0), (2.8, 1.9, 1.8), white)                                   # box body
+    lp.box((1.4, 0.85, 0), (1.1, 1.1, 1.7), white)                                   # cab
+    lp.box((1.75, 1.15, 0), (0.5, 0.45, 1.55), GLASS)
+    lp.box((-0.5, 1.0, 0.91), (2.6, 0.18, 0.01), '#d64541')
+    lp.box((-0.5, 1.0, -0.91), (2.6, 0.18, 0.01), '#d64541')
+    for z in (0.915, -0.915):                                                        # red crosses
+        lp.box((-0.5, 1.6, z), (0.5, 0.15, 0.01), '#d64541')
+        lp.box((-0.5, 1.6, z), (0.15, 0.5, 0.01), '#d64541')
+    lp.emissive = True
+    lp.box((0.85, 2.18, 0.5), (0.15, 0.1, 0.3), '#ff3a3a')
+    lp.box((0.85, 2.18, -0.5), (0.15, 0.1, 0.3), '#3a6bff')
+    lp.emissive = False
+    _wheels(lp, (-1.3, 1.4), 0.85, 0.36)
+
+
+def street_light(lp):
+    lp.beam((0, 0, 0), (0, 4.4, 0), 0.08, '#5b6067', sides=6, end_radius=0.06)
+    for sx in (-1, 1):
+        lp.beam((0, 4.3, 0), (sx * 1.1, 4.55, 0), 0.04, '#5b6067', sides=4)
+        lp.box((sx * 1.2, 4.5, 0), (0.5, 0.1, 0.25), '#3a3d42')
+        lp.emissive = True
+        lp.box((sx * 1.2, 4.43, 0), (0.42, 0.04, 0.2), '#fff1c8')
+        lp.emissive = False
+
+
+def traffic_light(lp):
+    lp.beam((0, 0, 0), (0, 2.6, 0), 0.06, '#3a3d42', sides=6)
+    lp.box((0, 3.0, 0), (0.32, 0.9, 0.28), '#26282d')
+    lp.emissive = True
+    for y, c in ((3.28, '#ff3a3a'), (3.0, '#3a2a10'), (2.72, '#15301a')):
+        lp.box((0, y, 0.145), (0.18, 0.18, 0.02), c)
+    lp.emissive = False
+
+
+def trash_can(lp):
+    lp.cylinder((0, 0, 0), 0.3, 0.85, '#5b6067', sides=10, top_colour='#3a3d42')
+    lp.cylinder((0, 0.85, 0), 0.32, 0.06, '#4a4e55', sides=10)
+    for y in (0.25, 0.6):
+        lp.cylinder((0, y, 0), 0.31, 0.03, '#3a3d42', sides=10)
+    if lp.rnd.random() < 0.5:                                                         # knocked over rubbish
+        lp.blob((0.45, 0.08, 0.2), 0.15, '#3a3a3c', detail=0)
+
+
+def news_stand(lp):
+    lp.box((0, 0.55, 0), (0.55, 1.1, 0.45), '#2f5d8a')
+    lp.box((0, 0.85, 0.23), (0.45, 0.4, 0.02), '#7e9aac')
+    lp.box((0, 0.78, 0.21), (0.38, 0.3, 0.01), '#e9e2d0')
+    lp.box((0, 1.15, 0), (0.6, 0.08, 0.5), '#26405e')
+
+
+def shop_store(lp):
+    wall = lp.rnd.choice(['#d9c9a3', '#b9b7b0', '#a8b5a0'])
+    lp.flat((0, 0, 0), (5, 5), '#7a7872', 0.03)
+    lp.box((0, 1.5, -2), (5, 3.0, 1), wall)
+    lp.box((-2, 1.5, 0), (1, 3.0, 3), wall)
+    lp.box((2, 1.5, 0), (1, 3.0, 3), wall)
+    lp.box((-1.5, 1.5, 2), (2, 3.0, 1), wall)
+    lp.box((1.5, 1.5, 2), (2, 3.0, 1), wall)
+    lp.box((0, 2.5, 2), (1, 1.0, 1), wall)
+    for x in (-1.5, 1.5):                                                            # shop windows (broken)
+        lp.box((x, 1.2, 2.52), (1.3, 1.2, 0.02), lp.rnd.choice([GLASS, '#151a20']))
+    lp.box((0, 3.05, 0), (5.2, 0.1, 5.2), '#5b5e63')                                 # flat roof
+    lp.box((0, 2.75, 2.56), (4.2, 0.5, 0.06), lp.rnd.choice(['#c62f2a', '#1197b0', '#2f5d3a']))   # sign
+    lp.box((0, 2.75, 2.6), (2.4, 0.18, 0.01), '#f5f4f2')
+    lp.box((0, 2.2, 2.8), (4.6, 0.06, 0.8), '#d9a521', yaw=0)                        # awning
+    lp.box((1.5, 3.3, -1.2), (0.9, 0.5, 0.7), '#8a8f96')                             # roof AC unit
+
+
+def apartment(lp):
+    wall = lp.rnd.choice(['#b5a48a', '#9c8a78', '#a8a29a'])
+    lp.flat((0, 0, 0), (7, 7), '#7a7872', 0.03)
+    lp.box((0, 4.5, -3), (7, 9.0, 1), wall)
+    lp.box((-3, 4.5, 0), (1, 9.0, 5), wall)
+    lp.box((3, 4.5, 0), (1, 9.0, 5), wall)
+    lp.box((-2, 4.5, 3), (3, 9.0, 1), wall)
+    lp.box((2, 4.5, 3), (3, 9.0, 1), wall)
+    lp.box((0, 5.3, 3), (1, 7.4, 1), wall)
+    lp.box((0, 9.05, 0), (7.2, 0.15, 7.2), '#5b5e63')
+    for floor in range(3):                                                           # rows of windows
+        y = 1.4 + floor * 2.9 + (0.0 if floor else 0.3)
+        for k in (-2.2, -0.9, 0.9, 2.2):
+            for z, w in ((3.52, (0.8, 1.1, 0.02)), (-3.52, (0.8, 1.1, 0.02))):
+                if floor == 0 and z > 0 and abs(k) < 1:
+                    continue
+                c = '#151a20' if lp.rnd.random() < 0.3 else GLASS
+                lp.box((k, y + 0.6, z), w, c)
+            lp.box((3.52, y + 0.6, k), (0.02, 1.1, 0.8), GLASS)
+            lp.box((-3.52, y + 0.6, k), (0.02, 1.1, 0.8), GLASS)
+    lp.box((0, 2.4, 3.6), (1.4, 0.1, 0.6), '#5b5e63')                                # porch roof
+
+
+def gas_station(lp):
+    for x in (-2.2, 2.2):
+        for z in (-1.2, 1.2):
+            lp.box((x, 1.8, z), (0.3, 3.6, 0.3), '#e9e2d0')
+    lp.box((0, 3.75, 0), (6.0, 0.35, 3.6), '#c62f2a', top='#e9e2d0')
+    lp.box((0, 3.75, 1.81), (6.0, 0.3, 0.02), '#f5f4f2')
+    lp.emissive = True
+    lp.box((0, 3.55, 0), (4.0, 0.03, 0.4), '#fff6d8')
+    lp.emissive = False
+    for x in (-1.0, 1.0):                                                             # two pumps on islands
+        lp.box((x, 0.1, 0), (0.9, 0.2, 1.6), '#b9b7b0')
+        lp.box((x, 0.95, 0), (0.45, 1.5, 0.6), '#c62f2a', top='#f5f4f2')
+        lp.box((x, 1.2, 0.31), (0.3, 0.3, 0.02), '#1f2a22')
+
+
+def chainlink_fence(lp):
+    for x in (-0.48, 0.48):
+        lp.beam((x, 0, 0), (x, 2.0, 0), 0.04, '#8a8f96', sides=5)
+    lp.beam((-0.5, 1.95, 0), (0.5, 1.95, 0), 0.025, '#8a8f96', sides=4)
+    for i in range(6):                                                               # diamond mesh
+        x = -0.45 + i * 0.18
+        lp.beam((x, 0.05, 0), (x + 0.18, 1.9, 0), 0.006, '#a8adb3', sides=3)
+        lp.beam((x + 0.18, 0.05, 0), (x, 1.9, 0), 0.006, '#a8adb3', sides=3)
+    for i in range(4):                                                               # barbed top
+        lp.beam((-0.5 + i * 0.25, 2.0, 0), (-0.38 + i * 0.25, 2.15, 0.1), 0.008, '#6f7378', sides=3)
+
+
+def shopping_cart(lp):
+    metal = '#a8adb3'
+    lp.box((0, 0.75, 0), (0.85, 0.5, 0.55), metal)
+    lp.box((0, 0.78, 0), (0.8, 0.45, 0.5), '#5b6067')
+    lp.beam((-0.45, 1.0, -0.28), (-0.45, 1.0, 0.28), 0.03, '#d64541', sides=4)       # handle
+    for x in (-0.35, 0.35):
+        for z in (-0.22, 0.22):
+            lp.beam((x, 0.5, z), (x, 0.08, z), 0.015, metal, sides=3)
+            lp.cylinder((x, 0.0, z), 0.06, 0.08, '#1f1f22', sides=6)
+
+
+def tire_stack(lp):
+    for i in range(3 + lp.rnd.randrange(2)):
+        x, z = (lp.rnd.random() - 0.5) * 0.12, (lp.rnd.random() - 0.5) * 0.12
+        lp.cylinder((x, i * 0.24, z), 0.4, 0.23, TYRE, sides=10, top_colour='#2a2a2c')
+        lp.cylinder((x, i * 0.24 + 0.231, z), 0.2, 0.002, '#111113', sides=8)
+
+
+def pallet_stack(lp):
+    for i in range(3 + lp.rnd.randrange(3)):
+        y = i * 0.15
+        lp.box((0, y + 0.03, 0), (1.2, 0.03, 1.0), '#a87848')
+        for z in (-0.42, 0, 0.42):
+            lp.box((0, y + 0.09, z), (1.2, 0.09, 0.12), '#8a6038')
+        lp.box((0, y + 0.13, 0), (1.2, 0.03, 1.0), '#b08850', yaw=(lp.rnd.random() - 0.5) * 6)
+
+
+def parking_meter(lp):
+    lp.beam((0, 0, 0), (0, 1.1, 0), 0.04, '#5b6067', sides=5)
+    lp.box((0, 1.25, 0), (0.22, 0.32, 0.16), '#3a3d42')
+    lp.box((0, 1.3, 0.085), (0.14, 0.1, 0.01), '#9fe8ff')
+
+
+def broken_wall(lp):
+    brick = '#8d4a3a'
+    for i in range(6):
+        h = 0.6 + lp.rnd.random() * 2.2 if i not in (2, 3) else 0.3 + lp.rnd.random() * 0.6
+        lp.box((-1.25 + i * 0.5, h / 2, 0), (0.5, h, 0.5), lp.rnd.choice([brick, '#7a4032', '#9a5444']))
+    for _ in range(6):
+        x, z = (lp.rnd.random() - 0.5) * 2.6, 0.5 + lp.rnd.random() * 0.8
+        s = 0.15 + lp.rnd.random() * 0.2
+        lp.box((x, s / 2, z), (s * 1.5, s, s), brick, yaw=lp.rnd.random() * 90)
+
+
+def road_sign(lp):
+    lp.beam((0, 0, 0), (0, 2.2, 0), 0.04, '#8a8f96', sides=5)
+    lp.box((0, 2.0, 0.05), (0.7, 0.45, 0.03), '#2f6b3a')
+    lp.box((0, 2.0, 0.07), (0.5, 0.06, 0.01), '#f5f4f2')
+    lp.box((0.22, 2.0, 0.07), (0.08, 0.2, 0.01), '#f5f4f2')
+
 def _ore_marker(kind):
     from .resources import draw_node
 
@@ -1000,6 +1390,50 @@ ASSETS = {
                     light=dict(colour=(1.0, 0.97, 0.9), radius=14, strength=1.4, at=(0, 2.0, 1.2))),
     'bunker': A('Bunker', 'military', bunker, _perimeter(1, door=(0, 1), height=2)),
     'jerry_cans': A('Jerry cans', 'military', jerry_cans),
+    # caves
+    'cave_lantern': A('Cave lantern', 'props', cave_lantern,
+                      light=dict(colour=(1.0, 0.65, 0.3), radius=7, strength=1.1, at=(0.25, 1.4, 0), flicker=0.12)),
+    # more military
+    'military_truck': A('Army truck', 'military', military_truck, [(dx, 0, 2) for dx in (-2, -1, 0, 1, 2)]),
+    'humvee': A('Armored jeep', 'military', humvee, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)], variants=2),
+    'tank_wreck': A('Tank wreck', 'military', tank_wreck, [(dx, dz, 2) for dx in range(-3, 4) for dz in (-1, 0, 1)]),
+    'guard_tower': A('Guard tower', 'military', guard_tower, [(-1, -1, 4), (1, -1, 4), (-1, 1, 4), (1, 1, 4)],
+                     light=dict(colour=(1.0, 0.97, 0.9), radius=12, strength=1.2, at=(0.7, 5.9, 2.2))),
+    'sandbag_wall': A('Sandbag wall', 'military', sandbag_wall, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)]),
+    'military_tent': A('Army tent', 'military', military_tent, [(dx, dz, 2) for dx in (-2, -1, 0, 1, 2)
+                                                                for dz in (-1, 0, 1) if (dx, dz) != (0, 1)]),
+    'hesco_barrier': A('Hesco barrier', 'military', hesco_barrier, [(0, 0, 2)]),
+    'checkpoint': A('Checkpoint gate', 'military', checkpoint, [(-2, 0, 3), (-1, 0, 3)]),
+    'supply_pallet': A('Supply pallet', 'military', supply_pallet, [(0, 0, 1)], variants=2),
+    'field_gun': A('Field gun', 'military', field_gun, [(0, 0, 1), (1, 0, 1)]),
+    'radar_dish': A('Radar dish', 'military', radar_dish, [(0, 0, 2)]),
+    'helipad': A('Helipad', 'military', helipad),
+    'weapon_rack': A('Weapon rack', 'military', weapon_rack, [(0, 0, 1)]),
+    'camo_net': A('Camo net', 'military', camo_net),
+    'burning_barrel': A('Burning barrel', 'military', burning_barrel, [(0, 0, 1)],
+                        light=dict(colour=(1.0, 0.55, 0.22), radius=8, strength=1.3, at=(0, 1.2, 0), flicker=0.25)),
+    # more town
+    'sedan': A('Abandoned car', 'town', sedan, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)], variants=5),
+    'police_car': A('Police car', 'town', police_car, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
+    'ambulance': A('Ambulance', 'town', ambulance, [(-1, 0, 3), (0, 0, 3), (1, 0, 3)]),
+    'street_light': A('Street light', 'town', street_light, [(0, 0, 3)],
+                      light=dict(colour=(1.0, 0.9, 0.7), radius=13, strength=1.1, at=(0, 4.3, 0), flicker=0.02)),
+    'traffic_light': A('Traffic light', 'town', traffic_light, [(0, 0, 2)],
+                       light=dict(colour=(1.0, 0.25, 0.2), radius=3, strength=0.6, at=(0, 3.28, 0.4))),
+    'trash_can': A('Trash can', 'town', trash_can, [(0, 0, 1)], variants=2),
+    'news_stand': A('News stand', 'town', news_stand),
+    'shop_store': A('Corner shop', 'town', shop_store, _perimeter(2, door=(0, 2)), variants=3),
+    'apartment': A('Apartment block', 'town', apartment, _perimeter(3, door=(0, 3), height=5), variants=3),
+    'gas_station': A('Gas station', 'town', gas_station, [(-2, -1, 3), (2, -1, 3), (-2, 1, 3), (2, 1, 3),
+                                                          (-1, 0, 2), (1, 0, 2)],
+                     light=dict(colour=(1.0, 0.97, 0.88), radius=10, strength=1.0, at=(0, 3.4, 0))),
+    'chainlink_fence': A('Chain-link fence', 'town', chainlink_fence, [(0, 0, 2)]),
+    'shopping_cart': A('Shopping cart', 'town', shopping_cart),
+    'tire_stack': A('Tire stack', 'town', tire_stack, [(0, 0, 1)], variants=2),
+    'pallet_stack': A('Pallet stack', 'town', pallet_stack, [(0, 0, 1)], variants=2),
+    'parking_meter': A('Parking meter', 'town', parking_meter),
+    'broken_wall': A('Broken wall', 'town', broken_wall, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)], variants=3),
+    'road_sign': A('Road sign', 'town', road_sign),
     # farm
     'barn': A('Barn', 'farm', barn, _perimeter(3, door=(0, 3))),
     'silo': A('Silo', 'farm', silo, [(dx, dz, 4) for dx in (-1, 0, 1) for dz in (-1, 0, 1)]),
@@ -1034,11 +1468,13 @@ ASSETS = {
     'ore_copper': A('Copper node spawn', 'mining', _ore_marker('copper'), editor_only=True, ore='copper'),
     'ore_crystal': A('Crystal node spawn', 'mining', _ore_marker('crystal'), editor_only=True, ore='crystal'),
     'ore_logs': A('Log pile spawn (wood)', 'mining', _ore_marker('logs'), editor_only=True, ore='logs'),
+    'loot_crate': A('Loot crate (breakable)', 'mining', _ore_marker('crate'), editor_only=True, ore='crate'),
 }
 
 ASSET_CATEGORIES = [('trees', 'Trees'), ('shrubs', 'Shrubs'), ('buildings', 'Buildings'), ('props', 'Props'),
                     ('town', 'Town'), ('military', 'Military'), ('farm', 'Farm'), ('graveyard', 'Graveyard'),
-                    ('special', 'Special'), ('mining', 'Mining'), ('paths', 'Paths'), ('blocks', 'Blocks')]
+                    ('special', 'Special'), ('mining', 'Mining'), ('caves', 'Caves'), ('paths', 'Paths'),
+                    ('blocks', 'Blocks')]
 
 # Ground paths you can paint (texture tiles live in textures.py PATH_TILES)
 PATHS = {'dirt': 'Dirt path', 'gravel': 'Gravel', 'cobble': 'Cobblestone', 'road': 'Road', 'sand': 'Sand',

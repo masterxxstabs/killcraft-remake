@@ -20,6 +20,7 @@ from .pickups import Pickups
 from .powerups import PowerUps
 from .mining import Mining
 from .barricades import Barricades
+from .drops import WeaponDrops
 from .data.barricades import BARRICADES, MAX_CARRIED, PLACE_RANGE
 from .player import Player, REVIVE_TIME
 from .projectiles import Projectiles
@@ -106,6 +107,7 @@ class Game(Entity):
         self.powerups = PowerUps(self)
         self.mining = Mining(self)
         self.barricades = Barricades(self)
+        self.drops = WeaponDrops(self)          # guns dropped with X
         self.build_kind = None       # build mode: which barricade is being placed (None = not building)
         self.build_rot = 0
         self.build_spot = None
@@ -198,6 +200,7 @@ class Game(Entity):
         self.clear_allies()
         self.exit_build()
         self.barricades.clear()
+        self.drops.clear()
         self.mining.clear()
         self.world.destroy()
         self.world = World(map_data=map_data, size=self.arena_size)
@@ -224,6 +227,7 @@ class Game(Entity):
         self.powerups.clear()
         self.exit_build()
         self.barricades.clear()
+        self.drops.clear()
         self.mining.clear()
         self.end_quest()
         if self.from_editor is not None:            # play test: go back to the editor
@@ -540,6 +544,10 @@ class Game(Entity):
             if a is not near:
                 a.revive_progress = 0
         if near is None:
+            drop_msg = self.drops.prompt(p)
+            if drop_msg:
+                self.ui.set_prompt(drop_msg)
+                return
             if self.near_bench():
                 self.ui.set_prompt('Press E to use the workbench')
                 return
@@ -785,6 +793,12 @@ class Game(Entity):
             if key in ('b', 'escape') or (key == 'e' and self.craft_open):
                 self.close_shop()
             return
+        if key == 'x' and self.build_kind is None:
+            self.drops.drop(self.player)
+            return
+        if key == 'e' and self.drops.nearest(self.player.position) is not None and not self.player.downed:
+            self.drops.pick_up(self.player)
+            return
         if key == 'e' and self.near_bench() and not self.player.downed:
             self.open_craft()
             return
@@ -953,4 +967,5 @@ class Game(Entity):
             self.powerups.update(dt)
             self.mining.update(dt)
             self.barricades.update(dt)
+        self.drops.update(dt)
         self.ui.update(dt)

@@ -23,7 +23,7 @@ NEIGHBOURS = {
     'west': (-1, 0, 0), 'north': (0, 0, 1), 'south': (0, 0, -1),
 }
 CHUNK = 8
-NON_SOLID = {'leaves'}
+NON_SOLID = {'leaves', 'cave_roof'}     # drawn, but you walk through / under them
 REGION = 32                 # in game, meshes are merged into 32 x 32 m regions (far ones are hidden)
 MIN_SIZE, MAX_SIZE = 12, 256    # map 'size' is half the width: 34 = a 68 x 68 m arena, 256 = 512 x 512 m
 BIG_MAP = 48                # maps bigger than this (half width) spawn zombies around the players, not at the edges
@@ -579,6 +579,10 @@ class World:
         [('cabin', 0, 0, 0), ('well', 4, 0, 0), ('hay_bale', -3, 2, 0), ('hay_bale', -3, 3, 0)],
         [('car_wreck', 0, 0, 30), ('car_wreck', 3, 2, 200), ('barrel', -2, 1, 0), ('rubble', 1, -2, 0)],
         [('market_stall', 0, 0, 0), ('market_stall', 3, 0, 0), ('bench', 1.5, 3, 0), ('lamp_post', -2, 2, 0)],
+        [('military_tent', 0, 0, 0), ('sandbag_wall', 0, 4, 0), ('ammo_crate', 4, -2, 0), ('burning_barrel', 3, 2, 0),
+         ('loot_crate', -4, 2, 0)],
+        [('sedan', 0, 0, 20), ('police_car', 1, 4, 170), ('street_light', 4, -2, 0), ('trash_can', -3, -2, 0),
+         ('road_barrier', -3, 3, 90)],
     ]
 
     def points_of_interest(self, count):
@@ -605,12 +609,113 @@ class World:
                 self.add_prop(aid, x, z, (rot + turn) % 360)
             placed.append((cx, cz))
 
+    # ── caves ────────────────────────────────────────────────────────────────
+    def make_cave(self, x, z, depth=30, width=3, height=4, branches=1, extras=True, seed=None):
+        """Dig a cave into a new rock hill, starting at (x, z): the entrance is there.
+
+        depth     how far the main tunnel winds in (metres)
+        width     how wide the tunnels are (metres)
+        height    how tall the rock is (the roof is 1 lower)
+        branches  side tunnels off the main one
+        extras    lanterns along the way, ore and a loot crate in the chambers, and a zombie
+                  grave at the far end
+        Returns a summary dict. Everything is plain blocks, paths and props, so it saves like any map.
+        """
+        r = random.Random(seed)
+        margin = 2 if self.walls else 1
+        gx0, gz0 = self.to_grid(x, z)
+        floor, ends = set(), []
+
+        def carve(px, pz, rad):
+            for dx in range(-4, 5):
+                for dz in range(-4, 5):
+                    if dx * dx + dz * dz <= rad * rad + 0.3:
+                        c = (int(round(px + dx)), int(round(pz + dz)))
+                        if self.inside(c[0], c[1], margin + 2):
+                            floor.add(c)
+
+        def tunnel(px, pz, ang, steps):
+            line = []
+            for _ in range(steps):
+                ang += (r.random() - 0.5) * 0.55
+                nx, nz = px + math.cos(ang), pz + math.sin(ang)
+                if not self.inside(int(nx), int(nz), margin + 4):       # turn back from the map edge
+                    ang += math.pi * 0.6
+                    continue
+                px, pz = nx, nz
+                line.append((px, pz))
+                carve(px, pz, max(0.5, width / 2 + (r.random() - 0.5) * 0.5))
+            return line, ang
+
+        ang0 = r.random() * math.tau
+        main, ang = tunnel(gx0, gz0, ang0, max(4, int(depth)))
+        if not main:
+            return dict(cells=0)
+        ends.append(main[-1])
+        for _ in range(int(branches)):                 # side tunnels from somewhere along the main one
+            i = r.randrange(len(main) // 4, max(len(main) // 4 + 1, len(main) - 1))
+            bx, bz = main[i]
+            side = r.choice((-1, 1)) * (0.9 + r.random() * 0.6)
+            line, _ = tunnel(bx, bz, ang0 + side, max(4, int(depth * (0.35 + r.random() * 0.3))))
+            if line:
+                ends.append(line[-1])
+        for ex, ez in ends:                            # a chamber at the end of every tunnel
+            carve(ex, ez, width / 2 + 1.6)
+        # rock: everything within 2-3 cells of the tunnels that isn't tunnel
+        rock = set()
+        for fx, fz in floor:
+            for dx in range(-3, 4):
+                for dz in range(-3, 4):
+                    c = (fx + dx, fz + dz)
+                    if c not in floor and dx * dx + dz * dz <= 8.5 and self.inside(c[0], c[1], margin):
+                        rock.add(c)
+        entrance = {c for c in floor if math.hypot(c[0] - gx0, c[1] - gz0) < width / 2 + 1.6}
+        rock -= {c for c in rock if math.hypot(c[0] - gx0, c[1] - gz0) < width / 2 + 0.8}   # a clear mouth
+        # clear whatever stood there
+        for p in list(self.props):
+            if any((cx, cz) in floor or (cx, cz) in rock for cx, cz, _ in p['cells']) or \
+                    self.to_grid(p['x'], p['z']) in floor:
+                self.remove_prop(p)
+        for gx, gz in rock:
+            h = height + (1 if r.random() < 0.3 else 0)
+            self.clear_column(gx, gz)
+            self.column('stone', gx, gz, h)
+        for gx, gz in floor:
+            self.clear_column(gx, gz)
+            self.set_path(gx, gz, 'gravel')
+            if (gx, gz) not in entrance:
+                self.place('cave_roof', gx, height - 1, gz)
+        props = 0
+        if extras:
+            def put(aid, px, pz, rot=0.0):
+                nonlocal props
+                if aid in ASSETS:
+                    self.add_prop(aid, px - self.half + 0.5, pz - self.half + 0.5, rot)
+                    props += 1
+            for i in range(6, len(main), 9):           # lanterns along the main tunnel
+                lx, lz = main[i]
+                put('cave_lantern', round(lx), round(lz), r.random() * 360)
+            for k, (ex, ez) in enumerate(ends):
+                ex, ez = round(ex), round(ez)
+                put('ore_random', ex + 1, ez)
+                put('ore_crystal' if r.random() < 0.4 else 'ore_iron', ex - 1, ez + 1)
+                put('loot_crate', ex, ez - 1)
+                if k == 0:
+                    put('zombie_grave', ex, ez + 2, r.random() * 360)
+        self.flush()
+        return dict(cells=len(floor), rock=len(rock), tunnels=len(ends), props=props,
+                    length=len(main))
+
     # ── maps ─────────────────────────────────────────────────────────────────
     def load(self, data):
-        for x, z, kind, h in data.get('blocks', []):
+        for entry in data.get('blocks', []):
+            x, z, kind, h = entry[:4]
+            bottom = int(entry[4]) if len(entry) > 4 else 0     # columns can start above the ground (cave roofs)
             gx, gz = self.to_grid(x, z)
             if self.inside(gx, gz, 1 if self.walls else 0):
-                self.set_column(gx, gz, kind, int(h))
+                self.clear_column(gx, gz)
+                for y in range(bottom, int(h)):
+                    self.place(kind, gx, y, gz)
         for x, z, kind in data.get('paths', []):
             self.set_path(*self.to_grid(x, z), kind)
         for entry in data.get('props', []):
@@ -626,7 +731,10 @@ class World:
             if not self.inside(gx, gz, edge) or not col:
                 continue
             kinds = list(col.values())
-            blocks.append([gx - self.half, gz - self.half, kinds[0], max(col) + 1])
+            entry = [gx - self.half, gz - self.half, kinds[0], max(col) + 1]
+            if min(col) > 0:                       # floating column (a cave roof): say where it starts
+                entry.append(min(col))
+            blocks.append(entry)
         paths = [[gx - self.half, gz - self.half, kind] for (gx, gz), kind in sorted(self.paths.items())]
         props = [[p['id'], round(p['x'], 2), round(p['z'], 2), round(p['rot'], 1), round(p['scale'], 2)]
                  for p in self.props]
