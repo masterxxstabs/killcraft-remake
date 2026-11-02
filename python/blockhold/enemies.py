@@ -358,6 +358,9 @@ class Enemy:
         self.progress_t += dt
         if self.progress_t >= 1.0:
             self.progress_t = 0.0
+            if dist > 80 and g.world.big:        # huge map: left far behind -> come back near the players
+                self.resurface()
+                return True
             here = g.enemies.flow.steps_at(self.position.x, self.position.z)
             if here is None:
                 here = dist
@@ -446,6 +449,7 @@ class FlowField:
         self.dist = None
 
     BREAK_COST = 12          # extra steps a barricade "costs": short detours win, long ones don't
+    RANGE = 72               # huge maps: only search this far around the players (keeps it fast)
 
     def rebuild(self, targets, blockers=None):
         """blockers: {cell: barricade}. Zombies can go through those cells, but only by breaking them."""
@@ -453,11 +457,22 @@ class FlowField:
         heights = w.heights
         dist = [INF] * (n * n)
         queue = deque()
+        cells = []
         for t in targets:
             gx, gz = w.to_grid(t.position.x, t.position.z)
             if w.inside(gx, gz) and dist[w.gidx(gx, gz)]:
                 dist[w.gidx(gx, gz)] = 0
                 queue.append((gx, gz))
+                cells.append((gx, gz))
+        # the search window: the whole map, or (on big maps) the area around the players
+        if cells and n > self.RANGE * 2:
+            x0 = max(0, min(c[0] for c in cells) - self.RANGE)
+            x1 = min(n, max(c[0] for c in cells) + self.RANGE + 1)
+            z0 = max(0, min(c[1] for c in cells) - self.RANGE)
+            z1 = min(n, max(c[1] for c in cells) + self.RANGE + 1)
+        else:
+            x0, x1, z0, z1 = 0, n, 0, n
+        self.window = (x0, x1, z0, z1)
         if blockers:
             self.dist = self._dijkstra(dist, queue, blockers)
             return
@@ -465,7 +480,7 @@ class FlowField:
             gx, gz = queue.popleft()
             d = dist[gz * n + gx] + 1
             for nx, nz in ((gx + 1, gz), (gx - 1, gz), (gx, gz + 1), (gx, gz - 1)):
-                if 0 <= nx < n and 0 <= nz < n:
+                if x0 <= nx < x1 and z0 <= nz < z1:
                     j = nz * n + nx
                     if dist[j] > d and heights[j] <= 0.05:
                         dist[j] = d
@@ -475,6 +490,7 @@ class FlowField:
     def _dijkstra(self, dist, starts, blockers):
         w, n = self.world, self.world.n
         heights = w.heights
+        x0, x1, z0, z1 = self.window
         heap = [(0, gx, gz) for gx, gz in starts]
         heapq.heapify(heap)
         while heap:
@@ -482,7 +498,7 @@ class FlowField:
             if d > dist[gz * n + gx]:
                 continue
             for nx, nz in ((gx + 1, gz), (gx - 1, gz), (gx, gz + 1), (gx, gz - 1)):
-                if 0 <= nx < n and 0 <= nz < n:
+                if x0 <= nx < x1 and z0 <= nz < z1:
                     j = nz * n + nx
                     if heights[j] <= 0.05:
                         nd = d + 1

@@ -24,6 +24,9 @@ NEIGHBOURS = {
 }
 CHUNK = 8
 NON_SOLID = {'leaves'}
+REGION = 32                 # in game, meshes are merged into 32 x 32 m regions (far ones are hidden)
+MIN_SIZE, MAX_SIZE = 12, 256    # map 'size' is half the width: 34 = a 68 x 68 m arena, 256 = 512 x 512 m
+BIG_MAP = 48                # maps bigger than this (half width) spawn zombies around the players, not at the edges
 
 _protos = {}          # (asset id, variant) -> NodePath with the mesh
 
@@ -51,8 +54,8 @@ def rotate_cell(dx, dz, rot):
 
 
 class World:
-    def __init__(self, seed=None, map_data=None, editor=False):
-        self.half = int((map_data or {}).get('size', 34))
+    def __init__(self, seed=None, map_data=None, editor=False, size=34):
+        self.half = max(MIN_SIZE, min(MAX_SIZE, int((map_data or {}).get('size', size))))
         self.n = self.half * 2
         n2 = self.n * self.n
         self.block_h = [0] * n2           # solid block column height per cell
@@ -85,8 +88,58 @@ class World:
         else:
             self.load(map_data)
         self.flush()
+        self.regions = {}
         if not editor:
-            self.props_root.flattenStrong()      # merge all props into a few big meshes: much faster
+            self.bake()
+
+    @property
+    def big(self):
+        return self.half > BIG_MAP
+
+    def area_scale(self):
+        """How many times bigger than the classic 68 x 68 m arena this map is."""
+        return (self.n * self.n) / (68 * 68)
+
+    def bake(self):
+        """In game: merge blocks, paths and props into one mesh per 32 x 32 m region (much faster to draw,
+        and regions far away in the fog can be hidden). The editor keeps everything separate."""
+        def region(x, z):
+            key = (math.floor((x + self.half) / REGION), math.floor((z + self.half) / REGION))
+            r = self.regions.get(key)
+            if r is None:
+                r = self.regions[key] = self.root.attachNewNode(f'region_{key[0]}_{key[1]}')
+            return r
+        for (cx, cz), e in list(self.block_chunks.items()):
+            e.copyTo(region(cx * CHUNK - self.half + 1, cz * CHUNK - self.half + 1))
+            destroy(e)
+        for (cx, cz), nodes in list(self.path_chunks.items()):
+            for e in nodes:
+                e.copyTo(region(cx * CHUNK - self.half + 1, cz * CHUNK - self.half + 1))
+                destroy(e)
+        self.block_chunks, self.path_chunks = {}, {}
+        for p in self.props:
+            if p['np'] is not None:
+                p['np'].wrtReparentTo(region(p['x'], p['z']))
+        self.props_root.removeNode()
+        for key, r in self.regions.items():
+            r.flattenStrong()
+            r.setPythonTag('centre', Vec3((key[0] + 0.5) * REGION - self.half, 0, (key[1] + 0.5) * REGION - self.half))
+        self.view_t = 0.0
+
+    def update_view(self, cam, max_dist, dt=1.0):
+        """Hide regions that are lost in the fog anyway."""
+        if not self.regions:
+            return
+        self.view_t = getattr(self, 'view_t', 0.0) - dt
+        if self.view_t > 0:
+            return
+        self.view_t = 0.25
+        limit = max_dist + REGION * 0.75
+        for r in self.regions.values():
+            c = r.getPythonTag('centre')
+            far = math.hypot(c.x - cam.x, c.z - cam.z) > limit
+            if far != r.isHidden():
+                r.hide() if far else r.show()
 
     # ── grid helpers ───────────────────────────────────────────────────────
     def gidx(self, gx, gz):
@@ -411,15 +464,22 @@ class World:
     # ── random arena ─────────────────────────────────────────────────────────
     def build_random(self):
         n, r = self.n, self.rnd
+        k = max(1.0, self.area_scale())          # bigger arenas get more of everything
+
+        def many(count, cap):
+            return min(cap, round(count * k))
 
         def rand_cell(margin):
             return margin + int(r() * (n - margin * 2)), margin + int(r() * (n - margin * 2))
 
-        for k in range(3):                        # winding dirt tracks out from the middle
-            a = k * math.tau / 3 + r() * 1.2
+        tracks = 3 + min(9, int(math.sqrt(k) * 2) - 2)
+        for t in range(tracks):                   # winding dirt tracks out from the middle
+            a = t * math.tau / tracks + r() * 1.2
             x, z = (r() - 0.5) * 4, (r() - 0.5) * 4
+            if t >= 3:                            # big arenas: more tracks, starting all over the map
+                x, z = (r() - 0.5) * (self.half - 8) * 1.6, (r() - 0.5) * (self.half - 8) * 1.6
             turn = 0.0
-            for _ in range(80):
+            for _ in range(int(80 * math.sqrt(k))):
                 turn = turn * 0.9 + (r() - 0.5) * 0.35
                 a += turn
                 x += math.cos(a) * 0.7
@@ -432,7 +492,7 @@ class World:
                             gx, gz = self.to_grid(x + dx * 0.8, z + dz * 0.8)
                             if self.inside(gx, gz, 2):
                                 self.set_path(gx, gz, 'dirt')
-        for _ in range(22):                       # block trees
+        for _ in range(many(22, 420)):            # block trees
             gx, gz = rand_cell(2)
             if not self.free(gx, gz, 2, paths_ok=False):
                 continue
@@ -447,7 +507,7 @@ class World:
                                 continue
                             if self.block_at(gx + dx, y, gz + dz) is None:
                                 self.place('leaves', gx + dx, y, gz + dz, solid=False)
-        for _ in range(26):                       # crate piles
+        for _ in range(many(26, 300)):            # crate piles
             gx, gz = rand_cell(2)
             if not self.free(gx, gz, 1, paths_ok=False):
                 continue
@@ -455,7 +515,7 @@ class World:
             for dx in range(w):
                 for dz in range(d):
                     self.column('crate', gx + dx, gz + dz, 2 if r() < 0.3 else 1)
-        for _ in range(10):                       # ruined walls
+        for _ in range(many(10, 160)):            # ruined walls
             gx, gz = rand_cell(4)
             horiz, length = r() < 0.5, 4 + int(r() * 6)
             cells = [(gx + k, gz) if horiz else (gx, gz + k) for k in range(length)]
@@ -464,32 +524,37 @@ class World:
             for x, z in cells:
                 kind = 'mossy' if r() < 0.6 else ('brick' if r() < 0.6 else 'planks')
                 self.column(kind, x, z, 1 + int(r() * 3))
-        for _ in range(12):                       # pillars
+        for _ in range(many(12, 160)):            # pillars
             gx, gz = rand_cell(3)
             if not self.free(gx, gz, 1, paths_ok=False):
                 continue
             self.column('stone', gx, gz, 3 + int(r() * 3), top='obsidian')
-        benches = 0
-        for attempt in range(240):                # two workbenches: one near the start, one further out
+        if k > 1.5:
+            self.points_of_interest(many(1.2, 60))
+        benches, want = 0, min(14, 2 + int((k - 1) * 0.5))
+        for attempt in range(240 * want):         # workbenches: one near the start, the rest further out
             a = r() * math.tau
             dist = 7 + r() * 5 if benches == 0 else 16 + r() * max(2, self.half - 20)
             gx, gz = self.to_grid(math.cos(a) * dist, math.sin(a) * dist)
-            if not self.free(gx, gz, 1, paths_ok=attempt > 140):    # crowded map: beside a track is fine
+            if not self.free(gx, gz, 1, paths_ok=attempt > 140 * want):    # crowded map: beside a track is fine
                 continue
-            self.add_prop('workbench', gx - self.half + 0.5, gz - self.half + 0.5, (int(r() * 4)) * 90)
+            x, z = gx - self.half + 0.5, gz - self.half + 0.5
+            if any(math.hypot(b.x - x, b.z - z) < 24 for b in self.benches):
+                continue
+            self.add_prop('workbench', x, z, (int(r() * 4)) * 90)
             benches += 1
-            if benches == 2:
+            if benches == want:
                 break
         fires = 0
-        for _ in range(40):                       # a couple of campfires
+        for _ in range(many(40, 400)):            # a couple of campfires
             gx, gz = rand_cell(5)
-            if fires < 2 and self.free(gx, gz, 1, paths_ok=False):
+            if fires < many(2, 20) and self.free(gx, gz, 1, paths_ok=False):
                 self.add_prop('campfire', gx - self.half + 0.5, gz - self.half + 0.5, r() * 360)
                 fires += 1
         path_cells = sorted(self.paths)
         lamps = 0
-        for _ in range(60):                       # lamp posts beside the tracks
-            if not path_cells or lamps >= 5:
+        for _ in range(many(60, 900)):            # lamp posts beside the tracks
+            if not path_cells or lamps >= many(5, 60):
                 break
             gx, gz = path_cells[int(r() * len(path_cells))]
             side = (2, 0) if r() < 0.5 else (0, 2)
@@ -499,12 +564,46 @@ class World:
                     for p in self.props if p['id'] == 'lamp_post'):
                 self.add_prop('lamp_post', gx - self.half + 0.5, gz - self.half + 0.5, int(r() * 4) * 90)
                 lamps += 1
-        for _ in range(45):                       # low-poly bushes and flowers
+        for _ in range(many(45, 1400)):           # low-poly bushes and flowers
             gx, gz = rand_cell(2)
             if self.free(gx, gz, 0, paths_ok=False):
                 aid = ('bush', 'tall_grass', 'flowers', 'fern', 'rock', 'flower_bush')[int(r() * 6)]
                 self.add_prop(aid, gx - self.half + 0.2 + r() * 0.6, gz - self.half + 0.2 + r() * 0.6,
                               r() * 360, 0.85 + r() * 0.35)
+
+    POI = [   # little scenes dropped around big random arenas: (asset, x, z, turn) around a centre
+        [('house', 0, 0, 0), ('fence', -3, 3, 0), ('fence', -2, 3, 0), ('barrel', 3, -2, 0), ('crate', 3, -3, 0)],
+        [('ruin', 0, 0, 0), ('rubble', 2, 2, 0), ('rubble', -2, -1, 0), ('dead_tree', 3, -2, 0)],
+        [('tent', 0, 0, 0), ('tent', 3, 1, 90), ('campfire', 1.5, -2, 0), ('log_pile', -2, -2, 0), ('crate', -2, 1, 0)],
+        [('tower', 0, 0, 0), ('sandbags', 2, 2, 0), ('sandbags', -2, 2, 0), ('crate', 2, -1, 0)],
+        [('cabin', 0, 0, 0), ('well', 4, 0, 0), ('hay_bale', -3, 2, 0), ('hay_bale', -3, 3, 0)],
+        [('car_wreck', 0, 0, 30), ('car_wreck', 3, 2, 200), ('barrel', -2, 1, 0), ('rubble', 1, -2, 0)],
+        [('market_stall', 0, 0, 0), ('market_stall', 3, 0, 0), ('bench', 1.5, 3, 0), ('lamp_post', -2, 2, 0)],
+    ]
+
+    def points_of_interest(self, count):
+        """Big random arenas: scatter little scenes (a farmhouse, a camp, a watchtower...) to explore."""
+        r = self.rnd
+        placed = []
+        for _ in range(count * 6):
+            if len(placed) >= count:
+                break
+            gx, gz = 8 + int(r() * (self.n - 16)), 8 + int(r() * (self.n - 16))
+            cx, cz = gx - self.half + 0.5, gz - self.half + 0.5
+            if math.hypot(cx, cz) < 14 or any(math.hypot(cx - a, cz - b) < 16 for a, b in placed):
+                continue
+            if not self.free(gx, gz, 4, paths_ok=False):
+                continue
+            scene = self.POI[int(r() * len(self.POI))]
+            turn = int(r() * 4) * 90
+            a = math.radians(turn)
+            for aid, dx, dz, rot in scene:
+                if aid not in ASSETS:
+                    continue
+                x = cx + dx * math.cos(a) + dz * math.sin(a)
+                z = cz - dx * math.sin(a) + dz * math.cos(a)
+                self.add_prop(aid, x, z, (rot + turn) % 360)
+            placed.append((cx, cz))
 
     # ── maps ─────────────────────────────────────────────────────────────────
     def load(self, data):
@@ -639,12 +738,19 @@ class World:
     def random_spawn(self, away_from, min_dist=16):
         if self.zombie_spawns:
             far = [s for s in self.zombie_spawns if math.hypot(s.x - away_from[0], s.z - away_from[2]) >= 10]
+            if self.big:          # huge map: only graves within reach of the player
+                close = [s for s in far if math.hypot(s.x - away_from[0], s.z - away_from[2]) <= 55]
+                if not close:
+                    return self.ring_spawn(away_from, min_dist)
+                far = close
             s = random.choice(far or self.zombie_spawns)
             for _ in range(10):
                 x, z = s.x + (random.random() - 0.5) * 1.6, s.z + (random.random() - 0.5) * 1.6
                 if not self.blocked(x, z, 0.8, 0):
                     return Vec3(x, 0, z)
             return Vec3(s.x, 0, s.z)
+        if self.big:
+            return self.ring_spawn(away_from, min_dist)
         for _ in range(60):
             edge = random.randrange(4)
             along = (random.random() * 2 - 1) * (self.half - 3)
@@ -656,3 +762,16 @@ class World:
                 continue
             return Vec3(x, 0, z)
         return Vec3(self.half - 3, 0, self.half - 3)
+
+    def ring_spawn(self, around, min_dist=16):
+        """Somewhere free 24-42 m from a player (huge maps: the edges are too far away)."""
+        lo = max(min_dist, 24)
+        for _ in range(80):
+            a = random.random() * math.tau
+            d = lo + random.random() * 18
+            x, z = around[0] + math.cos(a) * d, around[2] + math.sin(a) * d
+            gx, gz = self.to_grid(x, z)
+            if not self.inside(gx, gz, 2) or self.blocked(x, z, 0.8, 0):
+                continue
+            return Vec3(x, 0, z)
+        return Vec3(around[0] + 3, 0, around[2] + 3)

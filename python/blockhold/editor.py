@@ -4,7 +4,7 @@ Controls
   Left click / drag     place the selected thing (drag paints paths, draws fences, scatters trees)
   Right click / drag    erase
   R                     turn buildings and props
-  [  ]                  brush size (paths, blocks, eraser)
+  [  ]                  brush size (paths, blocks, eraser): 1, 3, 5, 9 or 15 cells
   1 - 4                 block height
   W A S D / arrows      move the camera     Q / E  turn it     mouse wheel  zoom
   Ctrl+Z                undo
@@ -20,10 +20,12 @@ from .data.assets import ASSETS, ASSET_CATEGORIES, BLOCKS, PATHS
 from .render import WORLD_SHADER, col, node, set_fog, destroy
 from .ui import (BTN_H, EDGE, GREEN, INK, LINE, MUTED, NAVY, PAPER, RED, SLATE, TEAL, C, FlatButton, Window, box,
                  frame, glyph, text)
-from .world import World, prototype, rotate_cell
+from .world import MAX_SIZE, MIN_SIZE, World, prototype, rotate_cell
 
 SCATTER_SPACING = {'trees': 2.6, 'shrubs': 1.1, 'props': 1.2}
 UNDO_LIMIT = 40
+BRUSHES = [1, 3, 5, 9, 15]
+ROW = 0.044                    # palette row height
 
 
 class Editor:
@@ -33,8 +35,10 @@ class Editor:
         self.stem = stem
         self.name = data.get('name', 'My map')
         self.loaded_name = self.name
-        self.world = World(map_data=data, editor=True)
-        game.world = self.world
+        self.world = None
+        self.grid = None
+        self.page = 0
+        self.dlg = dict(size=34, walls=True, fill='empty')
         self.category, self.asset = 'trees', 'pine'
         self.path_kind, self.block_kind = 'dirt', 'stone'
         self.rot = 0
@@ -48,12 +52,12 @@ class Editor:
         self.last_cell = self.last_scatter = None
         self.toast_t = 0
         self.dialog = None
-        sp = self.world.player_spawn
-        self.pivot = Vec3(sp.x, 0, sp.z)
+        self.pivot = Vec3(0, 0, 0)
         self.yaw, self.pitch, self.dist = 35.0, 52.0, 30.0
         camera.fov = 60
-        camera.clip_plane_far = 1000
-        self.build_grid()
+        self.use_world(data)
+        sp = self.world.player_spawn
+        self.pivot = Vec3(sp.x, 0, sp.z)
         self.build_cursor()
         self.build_ui()
         self.select_asset('pine')
@@ -67,7 +71,24 @@ class Editor:
         camera.fov = self.game.fov
 
     # ── scene helpers ────────────────────────────────────────────────────────
+    def use_world(self, data):
+        """Show a map (new, opened, undone or resized): rebuild the world, the grid and the view."""
+        if self.world is not None:
+            self.world.destroy()
+        self.world = World(map_data=data, editor=True)
+        self.game.world = self.world
+        self.build_grid()
+        self.game.sky_dome.set_arena(self.world.half)
+        self.game.apply_sky(instant=True)          # the fog reaches further on big maps
+        h = self.world.half
+        self.pivot = Vec3(max(-h, min(h, self.pivot.x)), 0, max(-h, min(h, self.pivot.z)))
+
+    def max_zoom(self):
+        return max(80, self.world.half * 1.7)
+
     def build_grid(self):
+        if self.grid is not None:
+            destroy(self.grid)
         h, verts, lines = self.world.half, [], []
         for i in range(-h, h + 1):
             for a, b in (((i, 0.03, -h), (i, 0.03, h)), ((-h, 0.03, i), (h, 0.03, i))):
@@ -162,9 +183,7 @@ class Editor:
             self.toast('Nothing to undo')
             return
         data = self.undo_stack.pop()
-        self.world.destroy()
-        self.world = World(map_data=data, editor=True)
-        self.game.world = self.world
+        self.use_world(data)
         self.toast('Undone')
 
     def apply(self, p, first):
@@ -228,14 +247,41 @@ class Editor:
         self.toast(f'Saved to maps/{self.stem}.json')
 
     def new_map(self):
+        """Make the map the NEW dialog describes: its size, walls, and empty or a random arena to start from."""
+        d = self.dlg
+        self.close_dialog()
         self.push_undo()
         self.stem = None
         self.name = self.loaded_name = 'My map'
         self.name_field.text = self.name
-        self.world.destroy()
-        self.world = World(map_data=maps.blank_map(self.name), editor=True)
-        self.game.world = self.world
-        self.toast('New map (Ctrl+Z brings the old one back)')
+        if d['fill'] == 'random':
+            self.toast('Building a random arena...')
+            tmp = World(editor=True, size=d['size'])
+            data = tmp.to_map(self.name)
+            tmp.destroy()
+            data['props'].append(['player_spawn', 0.5, 0.5, 0, 1])
+        else:
+            data = maps.blank_map(self.name, d['size'])
+        data['walls'] = d['walls']
+        self.use_world(data)
+        self.pivot = Vec3(0, 0, 0)
+        self.toast(f"New map: {maps.size_label(self.world.half)}  (Ctrl+Z brings the old one back)")
+
+    def resize_map(self):
+        """Change the size of this map. Everything stays centred; what falls outside is removed."""
+        half = self.dlg['size']
+        self.close_dialog()
+        if half == self.world.half:
+            return
+        self.push_undo()
+        data = self.world.to_map(self.name)
+        data['size'] = half
+        edge = half - (1 if data.get('walls', True) else 0)
+        before = len(data['props'])
+        data['props'] = [q for q in data['props'] if abs(q[1]) < edge and abs(q[2]) < edge]
+        self.use_world(data)
+        lost = before - len(data['props'])
+        self.toast(f"Resized to {maps.size_label(half)}" + (f'  ({lost} objects outside were removed)' if lost else ''))
 
     def open_map(self, stem):
         self.close_dialog()
@@ -244,11 +290,9 @@ class Editor:
         self.stem, self.name = stem, data.get('name', stem)
         self.loaded_name = self.name
         self.name_field.text = self.name
-        self.world.destroy()
-        self.world = World(map_data=data, editor=True)
-        self.game.world = self.world
+        self.use_world(data)
         self.dirty = False
-        self.toast(f'Opened {self.name}')
+        self.toast(f'Opened {self.name}  ({maps.size_label(self.world.half)})')
 
     def play_test(self):
         self.name = self.name_field.text.strip() or 'My map'
@@ -292,8 +336,10 @@ class Editor:
                     self.last_cell = cell
         if self.world.dirty_blocks or self.world.dirty_paths:
             self.world.flush()
-        self.info_text.text = f'{len(self.world.props)} props   {len(self.world.paths)} path tiles   ' \
-                              f'{len(self.world.zombie_spawns)} zombie spawns'
+        info = f'{self.world.n} x {self.world.n} m   {len(self.world.props)} props   {len(self.world.paths)} path tiles   ' \
+               f'{len(self.world.zombie_spawns)} zombie spawns'
+        if self.info_text.text != info:
+            self.info_text.text = info
 
     def update_camera(self, dt):
         if not self.typing():
@@ -377,11 +423,10 @@ class Editor:
         elif key == 'scroll up':
             self.dist = max(6, self.dist * 0.88)
         elif key == 'scroll down':
-            self.dist = min(80, self.dist / 0.88)
+            self.dist = min(self.max_zoom(), self.dist / 0.88)
         elif key in ('[', ']'):
-            sizes = [1, 3, 5]
-            i = sizes.index(self.brush) + (1 if key == ']' else -1)
-            self.brush = sizes[max(0, min(2, i))]
+            i = BRUSHES.index(self.brush) + (1 if key == ']' else -1)
+            self.brush = BRUSHES[max(0, min(len(BRUSHES) - 1, i))]
             self.refresh_options()
         elif key in ('1', '2', '3', '4'):
             self.block_h = int(key)
@@ -411,7 +456,8 @@ class Editor:
         x = R - 0.03
         for label, fn, fill, w in (('EXIT', self.exit, SLATE, 0.12), ('PLAY TEST', self.play_test, TEAL, 0.18),
                                    ('SAVE', self.save, GREEN, 0.12), ('OPEN', self.open_dialog, SLATE, 0.12),
-                                   ('NEW', self.new_map, SLATE, 0.12)):
+                                   ('SIZE', lambda: self.size_dialog('resize'), SLATE, 0.12),
+                                   ('NEW', lambda: self.size_dialog('new'), SLATE, 0.12)):
             x -= w
             FlatButton(u, label, x, 0.49, w, 0.05, fn, fill=fill, edge=INK, size=0.95)
             x -= 0.012
@@ -431,6 +477,7 @@ class Editor:
 
     def select_category(self, cat):
         self.category = cat
+        self.page = 0
         self.eraser = False
         if cat not in ('paths', 'blocks'):
             first = next(k for k, a in ASSETS.items() if a['category'] == cat)
@@ -464,16 +511,18 @@ class Editor:
         p, x0 = self.palette, self.panel_x + 0.02
         w = self.panel_w - 0.04
         y = 0.39
-        for i, (cid, cname) in enumerate(ASSET_CATEGORIES):
+        cats = list(ASSET_CATEGORIES) + [('eraser', 'ERASER')]
+        cw = (w - 0.008) / 3
+        for i, (cid, cname) in enumerate(cats):
+            bx, by = x0 + (i % 3) * (cw + 0.004), y - (i // 3) * 0.045
+            if cid == 'eraser':
+                FlatButton(p, cname, bx, by, cw, 0.039, self.toggle_eraser, fill=RED if self.eraser else PAPER,
+                           edge=INK, fg=PAPER if self.eraser else INK, size=0.72, hover=0.12 if self.eraser else -0.06)
+                continue
             on = cid == self.category and not self.eraser
-            FlatButton(p, cname, x0 + (i % 2) * (w / 2 + 0.004), y - (i // 2) * 0.047, w / 2 - 0.004, 0.04,
-                       lambda c=cid: self.select_category(c), fill=INK if on else PAPER, edge=INK,
-                       fg=PAPER if on else INK, size=0.85, hover=0.15 if on else -0.06)
-        k = len(ASSET_CATEGORIES)                 # the eraser goes in the next free slot
-        FlatButton(p, 'ERASER', x0 + (k % 2) * (w / 2 + 0.004), y - (k // 2) * 0.047, w / 2 - 0.004, 0.04,
-                   self.toggle_eraser, fill=RED if self.eraser else PAPER, edge=INK, fg=PAPER if self.eraser else INK,
-                   size=0.85, hover=0.12 if self.eraser else -0.06)
-        y -= (k // 2 + 1) * 0.047 + 0.012
+            FlatButton(p, cname, bx, by, cw, 0.039, lambda c=cid: self.select_category(c), fill=INK if on else PAPER,
+                       edge=INK, fg=PAPER if on else INK, size=0.72, hover=0.15 if on else -0.06)
+        y -= ((len(cats) + 2) // 3) * 0.045 + 0.012
         if self.category == 'paths':
             items = [(k, n, self.path_kind == k) for k, n in PATHS.items()]
             pick = self.pick_tile
@@ -483,14 +532,30 @@ class Editor:
         else:
             items = [(k, a['name'], self.asset == k) for k, a in ASSETS.items() if a['category'] == self.category]
             pick = self.select_asset
-        for k, name, on in items:
+        # two columns, and pages when a category has more than fits
+        bottom = -0.25
+        rows = max(1, int((y - bottom) / ROW))
+        per = rows * 2
+        pages = max(1, -(-len(items) // per))
+        self.page = max(0, min(self.page, pages - 1))
+        iw = (w - 0.006) / 2
+        for i, (k, name, on) in enumerate(items[self.page * per:(self.page + 1) * per]):
             on = on and not self.eraser
-            FlatButton(p, name, x0, y, w, 0.04, lambda k=k: pick(k), fill=INK if on else PAPER,
-                       edge=INK if on else LINE, fg=PAPER if on else INK, size=0.88, align='left', hover=0.15 if on else -0.06)
-            y -= 0.046
-        self.options_y = y - 0.01
+            FlatButton(p, name, x0 + (i % 2) * (iw + 0.006), y - (i // 2) * ROW, iw, 0.039, lambda k=k: pick(k),
+                       fill=INK if on else PAPER, edge=INK if on else LINE, fg=PAPER if on else INK, size=0.7,
+                       align='left', hover=0.15 if on else -0.06)
+        if pages > 1:
+            py = bottom - 0.004
+            FlatButton(p, 'PREV', x0, py, 0.08, 0.036, lambda: self.turn_page(-1), fill=SLATE, edge=INK, size=0.7)
+            text(p, f'page {self.page + 1} / {pages}', x0 + w / 2, py - 0.018, 0.75, MUTED, origin=(0, 0))
+            FlatButton(p, 'NEXT', x0 + w - 0.08, py, 0.08, 0.036, lambda: self.turn_page(1), fill=SLATE, edge=INK, size=0.7)
+        self.options_y = bottom - 0.05
         self.options = Entity(parent=self.palette)
         self.refresh_options()
+
+    def turn_page(self, step):
+        self.page += step
+        self.refresh_palette()
 
     def refresh_options(self):
         for c in list(self.options.children):
@@ -500,10 +565,10 @@ class Editor:
         box(o, x0, y + 0.006, w, 0.004, LINE)
         y -= 0.02
         if self.eraser or self.category in ('paths', 'blocks'):
-            text(o, 'Brush  ( [ ] )', x0, y, 0.85, MUTED)
-            for i, s in enumerate((1, 3, 5)):
+            text(o, 'Brush  [ ]', x0, y, 0.85, MUTED)
+            for i, s in enumerate(BRUSHES):
                 on = self.brush == s
-                FlatButton(o, f'{s}x{s}', x0 + 0.15 + i * 0.065, y + 0.008, 0.06, 0.036,
+                FlatButton(o, str(s), x0 + 0.11 + i * 0.043, y + 0.008, 0.04, 0.036,
                            lambda s=s: (setattr(self, 'brush', s), self.refresh_options()),
                            fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.75)
             y -= 0.05
@@ -530,6 +595,57 @@ class Editor:
                      x0, y - 0.07, 0.75, TEAL)
             elif a.get('spawn') == 'player':
                 text(o, 'Where you start. Only one per map.', x0, y - 0.07, 0.75, TEAL)
+
+    def size_dialog(self, mode):
+        """NEW: pick a size, walls and what to start with. SIZE: change the size of this map."""
+        if self.dialog is None and mode == 'resize':      # opening it: start from this map's size
+            self.dlg['size'] = self.world.half
+        self.close_dialog()
+        d = self.dlg
+        self.dialog = Entity(parent=camera.ui, z=-0.8)
+        Entity(parent=self.dialog, model='quad', color=C(INK, 0.55), scale=(4, 1), z=0.05, collider='box')
+        win = Window(self.dialog, 'NEW MAP' if mode == 'new' else 'MAP SIZE', w=0.86, h=0.62, top=0.3)
+        b, x, y = win.body, win.left, win.top
+        redo = lambda: self.size_dialog(mode)
+
+        def setv(key, value):
+            d[key] = value
+            redo()
+        text(b, 'SIZE', x, y, 0.85, MUTED)
+        y -= 0.035
+        for i, (label, half) in enumerate(maps.MAP_SIZES):
+            on = d['size'] == half
+            FlatButton(b, label, x + i * 0.148, y, 0.14, 0.05, lambda h=half: setv('size', h),
+                       fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.95, hover=0.15 if on else -0.06)
+        y -= 0.075
+        FlatButton(b, '-', x, y, 0.06, 0.045, lambda: setv('size', max(MIN_SIZE, d['size'] - 4)), fill=SLATE, edge=INK)
+        text(b, f"{d['size'] * 2} x {d['size'] * 2} m", x + 0.17, y - 0.022, 1.3, INK, origin=(0, 0))
+        FlatButton(b, '+', x + 0.28, y, 0.06, 0.045, lambda: setv('size', min(MAX_SIZE, d['size'] + 4)), fill=SLATE, edge=INK)
+        text(b, f'{MIN_SIZE * 2} to {MAX_SIZE * 2} m across, in 8 m steps', x + 0.37, y - 0.022, 0.8, MUTED, origin=(-0.5, 0))
+        y -= 0.08
+        if mode == 'new':
+            text(b, 'WALLS', x, y, 0.85, MUTED)
+            text(b, 'START WITH', x + 0.3, y, 0.85, MUTED)
+            y -= 0.035
+            for i, (label, val) in enumerate((('On', True), ('Off', False))):
+                on = d['walls'] == val
+                FlatButton(b, label, x + i * 0.11, y, 0.1, 0.045, lambda v=val: setv('walls', v),
+                           fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.9)
+            for i, (label, val) in enumerate((('Empty ground', 'empty'), ('Random arena', 'random'))):
+                on = d['fill'] == val
+                FlatButton(b, label, x + 0.3 + i * 0.2, y, 0.19, 0.045, lambda v=val: setv('fill', v),
+                           fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.9)
+            y -= 0.07
+            note = ('Huge maps take a few seconds to build. Zombies come out of graves near you, '
+                    'or out of the ground around you if there are none close.') if d['size'] > 48 else \
+                   'A random arena gives you trees, ruins, tracks and workbenches to edit.'
+        else:
+            note = (f'Now {self.world.n} x {self.world.n} m. Everything stays centred; '
+                    'anything outside the new size is removed (Ctrl+Z undoes it).')
+        text(b, note, x, y, 0.8, MUTED, wordwrap=80)
+        FlatButton(b, 'CANCEL', x, win.btn_y, 0.2, BTN_H, self.close_dialog, fill=SLATE, edge=INK)
+        FlatButton(b, 'CREATE' if mode == 'new' else 'RESIZE', win.x + win.w - 0.06 - 0.24, win.btn_y, 0.24, BTN_H,
+                   self.new_map if mode == 'new' else self.resize_map, fill=GREEN, edge=INK)
 
     def open_dialog(self):
         self.dialog = Entity(parent=camera.ui, z=-0.8)

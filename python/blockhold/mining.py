@@ -57,7 +57,8 @@ class Mining:
             for spot in spots:
                 self.spawn(spot)
         else:
-            for _ in range(RANDOM_NODE_COUNT):
+            w = self.game.world
+            for _ in range(min(160, round(RANDOM_NODE_COUNT * max(1.0, w.area_scale())))):   # bigger map, more nodes
                 self.spawn(None)
 
     def random_spot(self):

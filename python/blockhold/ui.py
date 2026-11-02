@@ -641,7 +641,9 @@ class UI:
         if g.map_stem is None:
             box(b, xr, y - 0.035, size, size, NAVY)
             text(b, '?', xr + size / 2, y - 0.035 - size / 2, 5, PAPER, origin=(0, 0))
-            info = 'A new random arena every game,\nwith block trees, crates and ruins.'
+            info = ('A new random arena\nevery game, with block\ntrees, crates and ruins.\n\n'
+                    f'{maps.size_label(g.arena_size)}')
+
         else:
             data = maps.load_map(g.map_stem)
             img = maps.preview_image(data)
@@ -649,7 +651,8 @@ class UI:
             Entity(parent=b, model='quad', texture=Texture(img), origin=(-0.5, 0.5), position=(xr, y - 0.035, -0.001),
                    scale=(size, size))
             graves = sum(1 for p in data.get('props', []) if p[0] == 'zombie_grave')
-            info = (f"{len(data.get('props', []))} objects\n{len(data.get('paths', []))} path tiles\n"
+            info = (f"{maps.size_label(int(data.get('size', 34)))}\n"
+                    f"{len(data.get('props', []))} objects\n{len(data.get('paths', []))} path tiles\n"
                     f"{graves} zombie graves\nmaps/{g.map_stem}.json")
         text(b, info, xr + size + 0.03, y - 0.04, 0.85, INK)
         by = y - size - 0.07
@@ -658,8 +661,17 @@ class UI:
                        fill=SLATE, edge=SLATE_EDGE, size=1.0)
         FlatButton(b, 'NEW MAP', xr + (0.27 if g.map_stem is not None else 0), by, 0.2, 0.055, lambda: g.open_editor(),
                    fill=TEAL, edge=INK, size=1.0)
-        text(b, 'Build your own maps with trees, buildings, paths and zombie graves.', xr, by - 0.08, 0.8, MUTED,
-             wordwrap=55)
+        if g.map_stem is None:                   # how big the random arena is
+            text(b, 'ARENA SIZE', xr + 0.23, by - 0.012, 0.8, MUTED)
+            for i, (label, half) in enumerate(maps.MAP_SIZES):
+                on = g.arena_size == half
+                FlatButton(b, label, xr + i * 0.112, by - 0.07, 0.106, 0.045,
+                           lambda h=half: (g.set_arena_size(h), self.refresh_menu()),
+                           fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.85,
+                           hover=0.15 if on else -0.06)
+        if g.map_stem is not None:
+            text(b, 'Build your own maps with trees, buildings, paths and zombie graves.', xr, by - 0.08, 0.8, MUTED,
+                 wordwrap=55)
         win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
         win.bottom_right('PLAY', g.start_game)
 

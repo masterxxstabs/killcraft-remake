@@ -53,6 +53,16 @@ def save_map(data, stem=None):
     return stem
 
 
+# map sizes you can pick (the number is half the width: 34 = a 68 x 68 m arena)
+MAP_SIZES = [('Small', 20), ('Normal', 34), ('Large', 64), ('Huge', 128), ('Giant', 200)]
+
+
+def size_label(half):
+    """'Normal (68 x 68 m)' for a map size."""
+    name = next((n for n, h in MAP_SIZES if h == half), 'Custom')
+    return f'{name} ({half * 2} x {half * 2} m)'
+
+
 def blank_map(name='My map', size=34):
     return dict(format=1, name=name, size=size, walls=True, blocks=[], paths=[],
                 props=[['player_spawn', 0.5, 0.5, 0, 1]])

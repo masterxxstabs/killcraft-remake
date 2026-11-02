@@ -14,7 +14,7 @@
 #
 #  Fields:
 #    name       shown in the editor
-#    category   editor tab: trees, shrubs, buildings, props, special
+#    category   editor tab: trees, shrubs, buildings, props, town, military, farm, graveyard, special, mining
 #    build      function(lp) that adds the shapes
 #    solid      cells you can't walk through: (dx, dz, height) from the middle cell
 #    nature     True = random turn, size and nudge when placed (looks natural)
@@ -375,6 +375,522 @@ def workbench(lp):
         lp.blob((0.3 + (i % 2) * 0.22, 0.56, -0.05 + (i // 2) * 0.2), 0.08, c, jitter=0.3, detail=0)
 
 
+
+# ── more nature ──────────────────────────────────────────────────────────────
+def fallen_log(lp):
+    lp.beam((-1.3, 0.26, 0), (1.3, 0.24, 0.05), 0.26, BROWN, sides=7)
+    lp.beam((0.3, 0.4, 0.1), (0.7, 0.85, 0.35), 0.05, BROWN, end_radius=0.02)
+    lp.blob((-0.6, 0.5, 0.1), 0.18, '#4c8f3a', detail=0)                 # moss
+
+
+def dead_bush(lp):
+    import math
+    for i in range(7):
+        a = i / 7 * math.tau + lp.rnd.random() * 0.5
+        lp.beam((0, 0, 0), (math.cos(a) * 0.5, 0.5 + lp.rnd.random() * 0.4, math.sin(a) * 0.5), 0.03, '#6b5a44',
+                end_radius=0.01)
+
+
+# ── town ─────────────────────────────────────────────────────────────────────
+GLASS = '#2b3a4a'
+TYRE = '#1f1f22'
+
+
+def _wheels(lp, xs, z, r=0.3, y=None):
+    for x in xs:
+        for sz in (-z, z):
+            lp.beam((x, y or r, sz - 0.1), (x, y or r, sz + 0.1), r, TYRE, sides=7)
+
+
+def pickup_truck(lp):
+    body = lp.rnd.choice(['#3f5e7a', '#6b7a3a', '#8a8a86'])
+    lp.box((0, 0.65, 0), (3.0, 0.6, 1.45), body)
+    lp.box((0.35, 1.2, 0), (1.0, 0.55, 1.35), body)
+    lp.box((0.86, 1.2, 0), (0.02, 0.42, 1.2), GLASS)
+    lp.box((0.35, 1.2, 0.68), (0.8, 0.4, 0.02), GLASS)
+    lp.box((0.35, 1.2, -0.68), (0.8, 0.4, 0.02), GLASS)
+    lp.box((-0.9, 0.98, 0), (1.15, 0.06, 1.35), '#3a3a3c')               # bed floor
+    lp.box((1.52, 0.62, 0), (0.06, 0.3, 1.3), '#9aa0a8')                 # grille
+    lp.box((-0.9, 1.05, 0.2), (0.6, 0.3, 0.5), '#b08850')                # a crate in the back
+    _wheels(lp, (-0.95, 0.95), 0.7, 0.32)
+
+
+def bus_wreck(lp):
+    yellow, dark = '#d9a521', '#a87d18'
+    lp.box((0, 1.25, 0), (7.2, 2.0, 1.75), yellow, top='#c9c9c4')
+    lp.box((0, 0.5, 0), (7.22, 0.12, 1.77), '#2a2a30')
+    lp.box((0, 1.0, 0.885), (7.0, 0.08, 0.01), '#2a2a30')
+    lp.box((0, 1.0, -0.885), (7.0, 0.08, 0.01), '#2a2a30')
+    for i in range(8):                                                   # windows (some smashed)
+        x = -2.9 + i * 0.75
+        c = GLASS if lp.rnd.random() > 0.3 else '#151a20'
+        lp.box((x, 1.75, 0.885), (0.6, 0.55, 0.02), c)
+        lp.box((x, 1.75, -0.885), (0.6, 0.55, 0.02), c)
+    lp.box((3.61, 1.7, 0), (0.02, 0.7, 1.5), GLASS)
+    lp.box((3.62, 0.85, 0), (0.06, 0.35, 1.5), '#2a2a30')
+    lp.box((-3.61, 1.3, 0), (0.02, 1.2, 1.4), dark)
+    _wheels(lp, (-2.6, 2.4), 0.8, 0.42)
+
+
+def traffic_cone(lp):
+    lp.box((0, 0.02, 0), (0.42, 0.04, 0.42), '#2a2a30')
+    lp.cylinder((0, 0.04, 0), 0.17, 0.62, '#ff6a1a', sides=8, top_radius=0.03)
+    lp.cylinder((0, 0.3, 0), 0.115, 0.1, '#f5f4f2', sides=8, top_radius=0.1, cap=False)
+
+
+def road_barrier(lp):
+    concrete = '#b9b7b0'
+    lp.box((0, 0.12, 0), (1.0, 0.24, 0.6), concrete)
+    lp.box((0, 0.5, 0), (1.0, 0.55, 0.26), concrete, top='#c9c7c0')
+    lp.box((0, 0.6, 0.135), (0.5, 0.1, 0.01), '#d64541')
+    lp.box((0, 0.6, -0.135), (0.5, 0.1, 0.01), '#d64541')
+
+
+def stop_sign(lp):
+    lp.beam((0, 0, 0), (0, 2.2, 0), 0.04, '#8a8f96', sides=5)
+    lp.beam((0, 2.0, 0.04), (0, 2.0, 0.08), 0.32, '#c62f2a', sides=8)
+    lp.box((0, 2.0, 0.085), (0.38, 0.08, 0.005), '#f5f4f2')
+
+
+def fire_hydrant(lp):
+    red = '#c62f2a'
+    lp.cylinder((0, 0, 0), 0.16, 0.06, red, sides=8)
+    lp.cylinder((0, 0.06, 0), 0.12, 0.55, red, sides=8)
+    lp.cylinder((0, 0.61, 0), 0.13, 0.12, red, sides=8, top_radius=0.06)
+    lp.beam((-0.2, 0.42, 0), (0.2, 0.42, 0), 0.05, red, sides=6)
+    lp.beam((0, 0.4, 0), (0, 0.4, 0.2), 0.06, '#d9a521', sides=6)
+
+
+def mailbox(lp):
+    lp.beam((0, 0, 0), (0, 1.0, 0), 0.04, '#5e3b1f', sides=4)
+    lp.box((0, 1.12, 0), (0.25, 0.25, 0.5), '#3f5e7a')
+    lp.box((0.14, 1.25, -0.1), (0.02, 0.2, 0.05), '#c62f2a')
+
+
+def phone_booth(lp):
+    red = '#b8282a'
+    lp.box((0, 0.05, 0), (1.0, 0.1, 1.0), red)
+    for x, z in ((-0.45, -0.45), (0.45, -0.45), (-0.45, 0.45), (0.45, 0.45)):
+        lp.box((x, 1.2, z), (0.1, 2.3, 0.1), red)
+    for x, z, sx, sz in ((0, -0.45, 0.8, 0.04), (0, 0.45, 0.8, 0.04), (-0.45, 0, 0.04, 0.8), (0.45, 0, 0.04, 0.8)):
+        lp.box((x, 1.3, z), (sx, 1.7, sz), '#3c5266')
+        lp.box((x, 0.35, z), (sx, 0.5, sz), red)
+    lp.box((0, 2.4, 0), (1.05, 0.2, 1.05), red)
+    lp.emissive = True
+    lp.box((0, 2.25, 0.5), (0.6, 0.1, 0.02), '#fff6d8')
+    lp.emissive = False
+
+
+def dumpster(lp):
+    green = lp.rnd.choice(['#2f5d3a', '#3f5e7a'])
+    lp.box((0, 0.6, 0), (1.7, 1.0, 1.05), green, top='#26402c')
+    lp.box((0, 1.14, -0.15), (1.72, 0.06, 0.8), '#1f2a22', yaw=0)
+    lp.box((0, 0.6, 0.53), (1.6, 0.08, 0.02), '#1f2a22')
+    for x in (-0.7, 0.7):
+        for z in (-0.4, 0.4):
+            lp.cylinder((x, 0, z), 0.06, 0.1, TYRE, sides=6)
+    lp.blob((0.5, 1.15, 0.3), 0.22, '#1f1f22', detail=0)
+
+
+def trash_bags(lp):
+    for i in range(3 + lp.rnd.randrange(3)):
+        x, z = (lp.rnd.random() - 0.5) * 0.9, (lp.rnd.random() - 0.5) * 0.9
+        lp.blob((x, 0.2, z), 0.24 + lp.rnd.random() * 0.08, lp.rnd.choice(['#1f1f22', '#2a2a30', '#3a3a3c']),
+                squash=(1, 0.85, 1), detail=0, jitter=0.12)
+
+
+def utility_pole(lp):
+    wood = '#5a4330'
+    lp.beam((0, 0, 0), (0, 6.5, 0), 0.13, wood, sides=6, end_radius=0.1)
+    lp.box((0, 6.0, 0), (1.8, 0.12, 0.12), wood)
+    for x in (-0.8, -0.3, 0.3, 0.8):
+        lp.cylinder((x, 6.06, 0), 0.04, 0.16, '#6f8f9a', sides=5)
+    lp.box((0.18, 5.1, 0), (0.3, 0.45, 0.3), '#8a8f96')                 # transformer
+    for x in (-0.8, -0.3, 0.3, 0.8):                                      # cut wires hanging down
+        lp.beam((x, 6.2, 0), (x + 0.05, 5.0 + lp.rnd.random(), 0.6), 0.008, '#1f1f22', sides=3)
+
+
+def bus_stop(lp):
+    metal, glass = '#5b6067', '#7e9aac'
+    for x in (-1.4, 1.4):
+        lp.box((x, 1.2, -0.5), (0.08, 2.4, 0.08), metal)
+        lp.box((x, 1.2, 0.5), (0.08, 2.4, 0.08), metal)
+    lp.box((0, 2.45, 0), (3.1, 0.1, 1.3), metal)
+    lp.box((0, 1.3, -0.5), (2.8, 1.8, 0.03), glass)
+    lp.box((-1.4, 1.3, 0), (0.03, 1.8, 0.9), glass)
+    lp.box((0, 0.45, -0.3), (2.2, 0.06, 0.35), '#8a6038')
+    lp.box((1.4, 1.5, 0.05), (0.05, 0.9, 0.6), '#d9a521')               # timetable
+
+
+def gas_pump(lp):
+    lp.box((0, 0.08, 0), (1.0, 0.16, 0.6), '#b9b7b0')
+    lp.box((0, 0.95, 0), (0.7, 1.6, 0.45), '#c62f2a', top='#f5f4f2')
+    lp.box((0, 1.25, 0.23), (0.5, 0.35, 0.02), '#1f2a22')
+    lp.box((0, 0.65, 0.23), (0.5, 0.3, 0.02), '#f5f4f2')
+    lp.beam((0.36, 1.2, 0.1), (0.5, 0.4, 0.3), 0.03, '#1f1f22', sides=4)
+    lp.box((0.42, 1.35, 0.12), (0.08, 0.25, 0.12), '#2a2a30')
+
+
+def billboard(lp):
+    for x in (-1.4, 1.4):
+        lp.beam((x, 0, 0), (x, 3.0, 0), 0.1, '#5b6067', sides=6)
+    lp.box((0, 3.9, 0), (4.4, 2.0, 0.12), '#2a2a30')
+    lp.box((0, 3.9, 0.07), (4.2, 1.8, 0.02), lp.rnd.choice(['#d9a521', '#1197b0', '#c62f2a']))
+    lp.box((-0.8, 4.2, 0.085), (2.0, 0.35, 0.01), '#f5f4f2')
+    lp.box((0.9, 3.5, 0.085), (1.6, 0.5, 0.01), '#12121c')
+    lp.box((0, 2.85, 0.3), (4.2, 0.06, 0.5), '#5b6067')                   # catwalk
+
+
+def vending_machine(lp):
+    lp.box((0, 0.95, 0), (0.9, 1.9, 0.7), lp.rnd.choice(['#c62f2a', '#1f6fb0']))
+    lp.box((-0.15, 1.15, 0.36), (0.5, 1.2, 0.02), '#151a20')
+    lp.emissive = True
+    for i in range(4):
+        lp.box((-0.15, 0.7 + i * 0.28, 0.375), (0.42, 0.08, 0.01), '#ffd06b')
+    lp.box((0.3, 1.4, 0.36), (0.14, 0.3, 0.01), '#9fe8ff')
+    lp.emissive = False
+    lp.box((0, 0.3, 0.36), (0.6, 0.18, 0.02), '#12121c')
+
+
+def picnic_table(lp):
+    wood = '#9c6b3f'
+    lp.box((0, 0.75, 0), (1.8, 0.07, 0.8), wood)
+    for z in (-0.62, 0.62):
+        lp.box((0, 0.45, z), (1.8, 0.06, 0.3), wood)
+    for x in (-0.7, 0.7):
+        lp.beam((x, 0, -0.75), (x, 0.75, 0.0), 0.04, wood, sides=4)
+        lp.beam((x, 0, 0.75), (x, 0.75, 0.0), 0.04, wood, sides=4)
+
+
+# ── military ─────────────────────────────────────────────────────────────────
+OLIVE_DRAB = '#4f5a35'
+
+
+def shipping_container(lp):
+    c = lp.rnd.choice(['#a8432f', '#2f5d8a', '#4f7a3a', '#c98a2b'])
+    lp.box((0, 1.3, 0), (6.6, 2.6, 2.4), c, top='#7a7a74')
+    for i in range(23):                                                   # ribs
+        x = -3.1 + i * 0.28
+        lp.box((x, 1.3, 1.21), (0.08, 2.4, 0.02), c)
+        lp.box((x, 1.3, -1.21), (0.08, 2.4, 0.02), c)
+    lp.box((3.31, 1.3, 0), (0.02, 2.5, 2.3), '#5b5e63')
+    for z in (-0.4, 0.4):
+        lp.box((3.33, 1.3, z), (0.03, 2.3, 0.04), '#8a8f96')
+    lp.box((0, 2.0, 1.225), (1.6, 0.3, 0.01), '#f5f4f2')
+
+
+def barbed_wire(lp):
+    import math
+    wood = '#6b5a44'
+    for x in (-0.48, 0.48):
+        lp.beam((x - 0.2, 0, -0.25), (x + 0.2, 0.9, 0.25), 0.04, wood, sides=4)
+        lp.beam((x + 0.2, 0, -0.25), (x - 0.2, 0.9, 0.25), 0.04, wood, sides=4)
+    pts = []
+    for i in range(25):
+        a = i / 24 * math.tau * 6
+        pts.append((-0.5 + i / 24, 0.45 + math.sin(a) * 0.3, math.cos(a) * 0.3))
+    for a, b in zip(pts, pts[1:]):
+        lp.beam(a, b, 0.01, '#8a8f96', sides=3)
+
+
+def tank_trap(lp):
+    steel = '#3a3d42'
+    lp.beam((-0.6, 0.0, -0.3), (0.6, 1.1, 0.3), 0.08, steel, sides=4)
+    lp.beam((0.6, 0.0, -0.3), (-0.6, 1.1, 0.3), 0.08, steel, sides=4)
+    lp.beam((0, 0.0, 0.65), (0, 1.1, -0.65), 0.08, steel, sides=4)
+
+
+def ammo_crate(lp):
+    lp.box((0, 0.25, 0), (0.95, 0.5, 0.55), OLIVE_DRAB, top='#5b6640')
+    lp.box((0, 0.52, 0), (0.97, 0.05, 0.57), '#3f4829')
+    lp.box((0, 0.3, 0.28), (0.4, 0.12, 0.01), '#d9c98a')
+    for x in (-0.48, 0.48):
+        lp.box((x, 0.32, 0), (0.03, 0.08, 0.25), '#2a2a30')
+
+
+def fuel_drums(lp):
+    for x, z, c in ((-0.25, -0.2, '#2f5d8a'), (0.25, -0.2, '#a8432f'), (0, 0.25, '#2f5d8a')):
+        lp.cylinder((x, 0, z), 0.27, 0.85, c, sides=8, top_colour='#3a3a3c')
+        for y in (0.28, 0.58):
+            lp.cylinder((x, y, z), 0.28, 0.04, '#2a2a30', sides=8)
+
+
+def generator(lp):
+    lp.box((0, 0.1, 0), (1.3, 0.2, 0.8), '#2a2a30')
+    lp.box((0, 0.55, 0), (1.2, 0.7, 0.7), '#d9a521', top='#e6b83a')
+    lp.box((0.35, 0.6, 0.36), (0.35, 0.3, 0.02), '#1f2a22')
+    lp.beam((-0.45, 0.9, -0.2), (-0.45, 1.35, -0.2), 0.05, '#3a3d42', sides=5)
+    lp.cylinder((0.2, 0.9, -0.15), 0.12, 0.12, '#2a2a30', sides=6)
+
+
+def radio_mast(lp):
+    steel = '#8a8f96'
+    import math
+    for i in range(3):
+        a = i / 3 * math.tau
+        lp.beam((math.cos(a) * 0.5, 0, math.sin(a) * 0.5), (math.cos(a) * 0.12, 8.0, math.sin(a) * 0.12), 0.04, steel,
+                sides=4)
+    for y in range(1, 8):
+        r = 0.5 - y * 0.05
+        lp.cylinder((0, y, 0), r, 0.04, steel, sides=3, cap=False)
+    lp.box((0.3, 5.5, 0), (0.12, 0.6, 0.4), '#5b6067')
+    lp.emissive = True
+    lp.blob((0, 8.1, 0), 0.12, '#ff3a2a', detail=0, jitter=0)
+    lp.emissive = False
+
+
+def helicopter_wreck(lp):
+    body = OLIVE_DRAB
+    lp.blob((0.6, 1.0, 0), 1.2, body, squash=(1.5, 0.85, 0.8), detail=1, jitter=0.05)
+    lp.box((1.6, 1.15, 0), (0.6, 0.7, 1.3), '#2b3a4a')
+    lp.beam((-0.5, 1.2, 0), (-4.0, 1.5, 0.3), 0.22, body, end_radius=0.1)       # tail boom (bent)
+    lp.box((-4.0, 1.9, 0.3), (0.5, 1.0, 0.08), body)
+    lp.cylinder((0.5, 1.9, 0), 0.15, 0.35, '#2a2a30', sides=6)
+    for a, b in (((0.5, 2.3, 0), (3.5, 1.7, 1.5)), ((0.5, 2.3, 0), (-1.5, 2.0, 2.8)), ((0.5, 2.3, 0), (0.0, 0.1, -3.0))):
+        lp.beam(a, b, 0.06, '#2a2a30', sides=4)
+    lp.beam((-0.6, 0.06, -0.85), (1.6, 0.06, -0.85), 0.05, '#2a2a30', sides=4)
+    lp.beam((-0.6, 0.06, 0.85), (1.6, 0.06, 0.85), 0.05, '#2a2a30', sides=4)
+    lp.blob((-0.8, 0.3, 0.9), 0.4, '#3a3a3c', detail=0)                  # smoke-blackened debris
+
+
+def floodlight(lp):
+    import math
+    for i in range(3):
+        a = i / 3 * math.tau
+        lp.beam((math.cos(a) * 0.45, 0, math.sin(a) * 0.45), (0, 2.0, 0), 0.03, '#3a3d42', sides=4)
+    lp.box((0, 2.15, 0.05), (0.7, 0.45, 0.2), '#2a2a30')
+    lp.emissive = True
+    lp.box((0, 2.15, 0.16), (0.6, 0.36, 0.02), '#fffbe8')
+    lp.emissive = False
+
+
+def bunker(lp):
+    concrete = '#8f8d86'
+    lp.box((0, 1.0, -1), (3.0, 2.0, 1.0), concrete)
+    lp.box((-1, 1.0, 0.5), (1.0, 2.0, 2.0), concrete)
+    lp.box((1, 1.0, 0.5), (1.0, 2.0, 2.0), concrete)
+    lp.box((0, 2.15, 0), (3.4, 0.3, 3.4), '#7a7872')
+    lp.box((0, 1.5, -1.51), (1.8, 0.2, 0.02), '#151515')                  # gun slit
+    for x in (-1.6, 1.6):
+        lp.box((x, 0.35, 1.6), (0.5, 0.7, 0.5), '#b8a272')                 # sandbags by the door
+
+
+def jerry_cans(lp):
+    for i, x in enumerate((-0.18, 0.18)):
+        c = ('#4f5a35', '#a8432f')[i]
+        lp.box((x, 0.25, 0), (0.18, 0.5, 0.36), c)
+        lp.box((x, 0.53, -0.08), (0.04, 0.06, 0.12), '#2a2a30')
+
+
+# ── farm ─────────────────────────────────────────────────────────────────────
+def barn(lp):
+    red, white, roof = '#9c2f25', '#efe9dc', '#4a4a4c'
+    lp.flat((0, 0, 0), (7, 7), '#8a6a48', 0.03)
+    lp.box((0, 1.6, -3), (7, 3.2, 1), red)
+    lp.box((-3, 1.6, 0), (1, 3.2, 5), red)
+    lp.box((3, 1.6, 0), (1, 3.2, 5), red)
+    lp.box((-2, 1.6, 3), (3, 3.2, 1), red)
+    lp.box((2, 1.6, 3), (3, 3.2, 1), red)
+    lp.box((0, 2.6, 3), (1, 1.2, 1), red)
+    for x, z in ((-3, -3), (3, -3), (-3, 3), (3, 3)):
+        lp.box((x, 1.62, z), (1.06, 3.24, 1.06), white)
+    for x in (-1.2, 1.2):                                                   # big doors (open) with an X
+        lp.box((x, 1.0, 3.55), (0.9, 2.0, 0.08), red)
+        lp.beam((x - 0.4, 0.1, 3.6), (x + 0.4, 1.9, 3.6), 0.04, white, sides=4)
+        lp.beam((x + 0.4, 0.1, 3.6), (x - 0.4, 1.9, 3.6), 0.04, white, sides=4)
+    lp.prism((0, 3.2, 0), 8.0, 8.0, 3.0, roof, gable=red)
+    lp.box((0, 4.3, 4.01), (1.0, 0.8, 0.02), '#2a2a30')                   # hay loft door
+
+
+def silo(lp):
+    lp.cylinder((0, 0, 0), 1.3, 7.0, '#b9bcc0', sides=12, top_colour='#9aa0a8')
+    for y in (1.5, 3.0, 4.5, 6.0):
+        lp.cylinder((0, y, 0), 1.32, 0.08, '#8a8f96', sides=12)
+    lp.cylinder((0, 7.0, 0), 1.3, 1.2, '#8a8f96', sides=12, top_radius=0.15)
+    lp.beam((1.32, 0, 0), (1.32, 7.0, 0), 0.03, '#5b6067', sides=4)        # ladder
+
+
+def windmill(lp):
+    import math
+    steel = '#8a8f96'
+    for x, z in ((-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7), (0.7, 0.7)):
+        lp.beam((x, 0, z), (x * 0.15, 6.0, z * 0.15), 0.05, steel, sides=4)
+    for y in (1.5, 3.0, 4.5):
+        k = 1 - y / 6 * 0.85
+        lp.cylinder((0, y, 0), 0.7 * k * 1.41, 0.04, steel, sides=4, cap=False)
+    lp.box((0, 6.1, 0), (0.25, 0.25, 0.5), '#5b6067')
+    for i in range(12):                                                    # the fan
+        a = i / 12 * math.tau
+        lp.beam((0, 6.1, 0.3), (math.cos(a) * 1.4, 6.1 + math.sin(a) * 1.4, 0.35), 0.06, '#c9c7c0', sides=3,
+                end_radius=0.12)
+    lp.box((0, 6.1, -0.9), (0.04, 0.7, 1.0), '#a8432f')                    # tail vane
+
+
+def water_tower(lp):
+    wood = '#6b4a2b'
+    for x, z in ((-1.1, -1.1), (1.1, -1.1), (-1.1, 1.1), (1.1, 1.1)):
+        lp.beam((x * 1.1, 0, z * 1.1), (x, 4.5, z), 0.12, wood)
+    for y in (1.5, 3.0):
+        lp.beam((-1.1, y, -1.1), (1.1, y + 0.8, 1.1), 0.05, wood)
+        lp.beam((1.1, y, -1.1), (-1.1, y + 0.8, 1.1), 0.05, wood)
+    lp.box((0, 4.55, 0), (2.8, 0.15, 2.8), '#8a6038')
+    lp.cylinder((0, 4.6, 0), 1.45, 2.2, '#9c6b3f', sides=10)
+    for y in (5.0, 5.8, 6.5):
+        lp.cylinder((0, y, 0), 1.47, 0.08, '#2a2a30', sides=10)
+    lp.cylinder((0, 6.8, 0), 1.55, 0.8, '#4a3b2f', sides=10, top_radius=0)
+
+
+def scarecrow(lp):
+    lp.beam((0, 0, 0), (0, 2.0, 0), 0.05, '#6b4a2b', sides=4)
+    lp.beam((-0.75, 1.55, 0), (0.75, 1.55, 0), 0.04, '#6b4a2b', sides=4)
+    lp.box((0, 1.35, 0), (0.5, 0.6, 0.25), '#7a5a9a')                    # shirt
+    lp.box((-0.45, 1.52, 0), (0.45, 0.16, 0.18), '#7a5a9a')
+    lp.box((0.45, 1.52, 0), (0.45, 0.16, 0.18), '#7a5a9a')
+    lp.blob((0, 1.88, 0), 0.2, '#d9b84a', detail=0)                        # sack head
+    lp.cylinder((0, 2.02, 0), 0.32, 0.03, '#8a6a3a', sides=8)              # hat
+    lp.cylinder((0, 2.05, 0), 0.16, 0.18, '#8a6a3a', sides=8, top_radius=0.14)
+    lp.box((0, 1.9, 0.19), (0.12, 0.03, 0.01), '#2a2a30')
+
+
+def tractor(lp):
+    red = '#b8282a'
+    lp.box((0.5, 0.95, 0), (1.9, 0.75, 0.9), red, top='#c9332f')
+    lp.box((-0.75, 1.5, 0), (0.9, 1.2, 1.0), red)
+    lp.box((-0.75, 1.65, 0), (0.92, 0.65, 0.95), GLASS)
+    lp.box((-0.75, 2.15, 0), (1.1, 0.08, 1.2), '#2a2a30')
+    lp.beam((1.1, 1.3, 0.2), (1.1, 2.0, 0.2), 0.05, '#2a2a30', sides=5)     # exhaust
+    for z in (-0.7, 0.7):
+        lp.beam((-0.75, 0.62, z - 0.18), (-0.75, 0.62, z + 0.18), 0.62, TYRE, sides=9)
+        lp.beam((-0.75, 0.62, z * 1.3), (-0.75, 0.62, z * 1.31), 0.3, '#d9a521', sides=9)
+        lp.beam((1.15, 0.36, z - 0.1), (1.15, 0.36, z + 0.1), 0.36, TYRE, sides=8)
+
+
+def wheelbarrow(lp):
+    lp.box((0, 0.55, 0), (0.9, 0.3, 0.6), '#5b6067', top='#6b4a2b')
+    lp.beam((0.55, 0.22, -0.05), (0.55, 0.22, 0.05), 0.22, TYRE, sides=7)
+    for z in (-0.25, 0.25):
+        lp.beam((0.5, 0.35, z * 0.5), (-0.9, 0.55, z), 0.03, '#6b4a2b', sides=4)
+        lp.beam((-0.3, 0.0, z), (-0.3, 0.42, z), 0.03, '#5b6067', sides=4)
+
+
+def outhouse(lp):
+    wood = '#7a5230'
+    lp.box((0, 1.1, 0), (1.1, 2.2, 1.1), wood, top='#5e3b1f')
+    lp.box((0, 1.0, 0.56), (0.7, 1.9, 0.02), '#8a6038')
+    lp.box((0, 1.65, 0.575), (0.14, 0.14, 0.01), '#2a2a30')               # the moon-shaped hole
+    lp.prism((0, 2.2, 0), 1.3, 1.3, 0.35, '#4a3b2f', gable=wood)
+
+
+def corn_crop(lp):
+    for i in range(4):
+        x = -0.36 + i * 0.24 + (lp.rnd.random() - 0.5) * 0.06
+        h = 1.2 + lp.rnd.random() * 0.6
+        lp.beam((x, 0, 0), (x, h, 0), 0.025, '#6f8f3a', sides=4)
+        for k in range(3):
+            y = 0.4 + k * 0.35
+            lp.blade((x, y, 0), 0.5, 0.06, 0.8, '#7fa045', yaw=lp.rnd.random() * 360)
+        lp.box((x + 0.04, h * 0.6, 0), (0.06, 0.2, 0.06), '#e0c35a')
+
+
+def pumpkins(lp):
+    for i in range(2 + lp.rnd.randrange(3)):
+        x, z = (lp.rnd.random() - 0.5) * 0.9, (lp.rnd.random() - 0.5) * 0.9
+        r = 0.16 + lp.rnd.random() * 0.12
+        lp.blob((x, r * 0.8, z), r, '#e07a1f', squash=(1, 0.8, 1), detail=0, jitter=0.05)
+        lp.beam((x, r * 1.5, z), (x + 0.03, r * 1.5 + 0.1, z), 0.025, '#4c6b2a', sides=4)
+
+
+def picket_fence(lp):
+    white = '#efe9dc'
+    for i in range(5):
+        x = -0.4 + i * 0.2
+        lp.box((x, 0.45, 0), (0.1, 0.9, 0.04), white)
+        lp.cylinder((x, 0.9, 0), 0.05, 0.1, white, sides=4, top_radius=0)
+    for y in (0.3, 0.65):
+        lp.box((0, y, -0.04), (1.0, 0.07, 0.03), white)
+
+
+# ── graveyard ────────────────────────────────────────────────────────────────
+def gravestone(lp):
+    stone = lp.rnd.choice(['#8a8a88', '#9a9a98', '#7a7c80'])
+    kind = lp.rnd.randrange(3)
+    lp.blob((0, 0.0, 0.45), 0.42, '#5a4a38', squash=(0.8, 0.2, 1.3), detail=0, jitter=0.05)
+    if kind == 0:
+        lp.box((0, 0.42, -0.1), (0.55, 0.84, 0.14), stone)
+        lp.box((0, 0.9, -0.1), (0.4, 0.12, 0.14), stone)
+    elif kind == 1:
+        lp.box((0, 0.5, -0.1), (0.14, 1.0, 0.12), stone)
+        lp.box((0, 0.72, -0.1), (0.55, 0.13, 0.12), stone)
+    else:
+        lp.box((0, 0.3, -0.1), (0.6, 0.6, 0.2), stone, top='#a8a8a6')
+        lp.box((0.05, 0.33, -0.1), (0.62, 0.5, 0.18), stone, yaw=8)
+    lp.box((0, 0.55, -0.02), (0.3, 0.04, 0.01), '#5a5a58')
+
+
+def stone_cross(lp):
+    stone = '#8f8f8c'
+    lp.box((0, 0.15, 0), (0.6, 0.3, 0.5), stone)
+    lp.box((0, 1.1, 0), (0.2, 1.7, 0.18), stone)
+    lp.box((0, 1.5, 0), (0.85, 0.2, 0.18), stone)
+
+
+def iron_fence(lp):
+    iron = '#26282d'
+    for i in range(6):
+        x = -0.42 + i * 0.168
+        lp.beam((x, 0, 0), (x, 1.3, 0), 0.02, iron, sides=4)
+        lp.cylinder((x, 1.3, 0), 0.04, 0.12, iron, sides=4, top_radius=0)
+    for y in (0.2, 1.1):
+        lp.box((0, y, 0), (1.0, 0.05, 0.04), iron)
+    lp.box((0.5, 0.7, 0), (0.09, 1.4, 0.09), '#7a7c80')
+
+
+def crypt(lp):
+    stone, dark = '#8f8d86', '#6f6d68'
+    lp.box((0, 0.1, 0), (3.2, 0.2, 3.4), dark)
+    lp.box((0, 1.4, -0.4), (2.8, 2.4, 2.4), stone)
+    for x in (-1.15, 1.15):
+        lp.cylinder((x, 0.2, 1.2), 0.17, 2.4, '#a5a39c', sides=8)
+    lp.box((0, 1.1, 0.81), (1.0, 1.8, 0.02), '#2a2622')                   # door
+    lp.prism((0, 2.6, 0), 3.2, 3.4, 0.9, dark, gable=stone)
+    lp.box((0, 3.6, 1.6), (0.12, 0.5, 0.1), stone)
+    lp.box((0, 3.68, 1.6), (0.35, 0.1, 0.1), stone)
+
+
+def coffin(lp):
+    wood = '#4e3220'
+    lp.box((0, 0.2, 0), (0.7, 0.4, 1.9), wood, top='#2a1d12')
+    lp.box((0.42, 0.3, 0.1), (0.06, 0.6, 1.9), '#5e3b1f', yaw=8)           # lid knocked aside
+    lp.box((0, 0.42, -0.6), (0.4, 0.02, 0.1), '#c9a227')
+
+
+def grave_lantern(lp):
+    lp.beam((0, 0, 0), (0, 1.3, 0), 0.05, '#26282d', sides=4)
+    lp.beam((0, 1.3, 0), (0.3, 1.35, 0), 0.03, '#26282d', sides=4)
+    lp.box((0.3, 1.12, 0), (0.18, 0.26, 0.18), '#26282d')
+    lp.emissive = True
+    lp.box((0.3, 1.1, 0), (0.14, 0.18, 0.14), '#ffb85a')
+    lp.emissive = False
+
+
+def church(lp):
+    wall, roof = '#b8b2a4', '#4a4a4c'
+    lp.flat((0, 0, 0), (7, 9), '#7a7872', 0.03)
+    lp.box((0, 2.0, -4), (7, 4.0, 1), wall)
+    lp.box((-3, 2.0, 0), (1, 4.0, 7), wall)
+    lp.box((3, 2.0, 0), (1, 4.0, 7), wall)
+    lp.box((-2, 2.0, 4), (3, 4.0, 1), wall)
+    lp.box((2, 2.0, 4), (3, 4.0, 1), wall)
+    lp.box((0, 3.3, 4), (1, 1.4, 1), wall)
+    for z in (-2, 0, 2):                                                     # tall windows
+        for x in (-3.52, 3.52):
+            lp.box((x, 2.4, z), (0.05, 1.8, 0.6), '#5a3b6b')
+    lp.prism((0, 4.0, 0), 8.0, 10.0, 3.0, roof, gable=wall)
+    lp.box((0, 5.5, 4.0), (1.6, 3.0, 1.6), wall)                             # bell tower
+    lp.cylinder((0, 7.0, 4.0), 1.2, 2.2, roof, sides=4, top_radius=0)
+    lp.box((0, 9.4, 4.0), (0.1, 0.6, 0.1), '#c9a227')
+    lp.box((0, 9.5, 4.0), (0.35, 0.1, 0.1), '#c9a227')
+
 def _ore_marker(kind):
     from .resources import draw_node
 
@@ -447,6 +963,65 @@ ASSETS = {
     'car_wreck': A('Car wreck', 'props', car_wreck, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
     'signpost': A('Signpost', 'props', signpost, [(0, 0, 2)]),
     'rubble': A('Rubble', 'props', rubble, nature=True, variants=2),
+    # more nature
+    'fallen_log': A('Fallen log', 'trees', fallen_log, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)]),
+    'dead_bush': A('Dead bush', 'shrubs', dead_bush, nature=True, variants=2),
+    # town
+    'pickup_truck': A('Pickup truck', 'town', pickup_truck, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)], variants=3),
+    'bus_wreck': A('Bus wreck', 'town', bus_wreck, [(dx, 0, 3) for dx in range(-3, 4)]),
+    'traffic_cone': A('Traffic cone', 'town', traffic_cone),
+    'road_barrier': A('Road barrier', 'town', road_barrier, [(0, 0, 1)]),
+    'stop_sign': A('Stop sign', 'town', stop_sign),
+    'fire_hydrant': A('Fire hydrant', 'town', fire_hydrant, [(0, 0, 1)]),
+    'mailbox': A('Mailbox', 'town', mailbox),
+    'phone_booth': A('Phone booth', 'town', phone_booth, [(0, 0, 3)],
+                     light=dict(colour=(1.0, 0.95, 0.8), radius=4, strength=0.7, at=(0, 2.2, 0.6))),
+    'dumpster': A('Dumpster', 'town', dumpster, [(0, 0, 2)], variants=2),
+    'trash_bags': A('Trash bags', 'town', trash_bags, nature=True, variants=3),
+    'utility_pole': A('Utility pole', 'town', utility_pole, [(0, 0, 3)]),
+    'bus_stop': A('Bus stop', 'town', bus_stop, [(-1, 0, 3), (1, 0, 3)]),
+    'gas_pump': A('Gas pump', 'town', gas_pump, [(0, 0, 2)]),
+    'billboard': A('Billboard', 'town', billboard, [(-1, 0, 3), (1, 0, 3)], variants=3),
+    'vending_machine': A('Vending machine', 'town', vending_machine, [(0, 0, 2)], variants=2,
+                         light=dict(colour=(1.0, 0.85, 0.55), radius=4, strength=0.8, at=(0, 1.1, 0.6), flicker=0.02)),
+    'picnic_table': A('Picnic table', 'town', picnic_table),
+    # military
+    'shipping_container': A('Shipping container', 'military', shipping_container,
+                            [(dx, dz, 3) for dx in range(-3, 4) for dz in (-1, 0, 1)], variants=4),
+    'barbed_wire': A('Barbed wire', 'military', barbed_wire, [(0, 0, 1)]),
+    'tank_trap': A('Tank trap', 'military', tank_trap, [(0, 0, 1)]),
+    'ammo_crate': A('Ammo crate', 'military', ammo_crate, [(0, 0, 1)]),
+    'fuel_drums': A('Fuel drums', 'military', fuel_drums, [(0, 0, 1)]),
+    'generator': A('Generator', 'military', generator, [(0, 0, 1)]),
+    'radio_mast': A('Radio mast', 'military', radio_mast, [(0, 0, 3)],
+                    light=dict(colour=(1.0, 0.2, 0.15), radius=6, strength=0.9, at=(0, 8.1, 0), flicker=0.3)),
+    'helicopter_wreck': A('Helicopter wreck', 'military', helicopter_wreck, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
+    'floodlight': A('Floodlight', 'military', floodlight,
+                    light=dict(colour=(1.0, 0.97, 0.9), radius=14, strength=1.4, at=(0, 2.0, 1.2))),
+    'bunker': A('Bunker', 'military', bunker, _perimeter(1, door=(0, 1), height=2)),
+    'jerry_cans': A('Jerry cans', 'military', jerry_cans),
+    # farm
+    'barn': A('Barn', 'farm', barn, _perimeter(3, door=(0, 3))),
+    'silo': A('Silo', 'farm', silo, [(dx, dz, 4) for dx in (-1, 0, 1) for dz in (-1, 0, 1)]),
+    'windmill': A('Windmill', 'farm', windmill, [(0, 0, 3)]),
+    'water_tower': A('Water tower', 'farm', water_tower, [(-1, -1, 3), (1, -1, 3), (-1, 1, 3), (1, 1, 3)]),
+    'scarecrow': A('Scarecrow', 'farm', scarecrow),
+    'tractor': A('Tractor', 'farm', tractor, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
+    'wheelbarrow': A('Wheelbarrow', 'farm', wheelbarrow),
+    'outhouse': A('Outhouse', 'farm', outhouse, [(0, 0, 3)]),
+    'corn_crop': A('Corn', 'farm', corn_crop, nature=True, variants=3),
+    'pumpkins': A('Pumpkins', 'farm', pumpkins, nature=True, variants=3),
+    'picket_fence': A('Picket fence', 'farm', picket_fence, [(0, 0, 1)]),
+    # graveyard
+    'gravestone': A('Gravestone', 'graveyard', gravestone, variants=3),
+    'stone_cross': A('Stone cross', 'graveyard', stone_cross, [(0, 0, 2)]),
+    'iron_fence': A('Iron fence', 'graveyard', iron_fence, [(0, 0, 1)]),
+    'crypt': A('Crypt', 'graveyard', crypt, _perimeter(1, door=(0, 1))),
+    'coffin': A('Coffin', 'graveyard', coffin),
+    'grave_lantern': A('Grave lantern', 'graveyard', grave_lantern,
+                       light=dict(colour=(1.0, 0.65, 0.3), radius=5, strength=0.9, at=(0.3, 1.1, 0), flicker=0.15)),
+    'church': A('Old church', 'graveyard', church, [(dx, dz, 4) for dx in range(-3, 4) for dz in range(-4, 5)
+                                                     if (abs(dx) == 3 or abs(dz) == 4) and (dx, dz) != (0, 4)]),
     # special
     'zombie_grave': A('Zombie grave (spawn)', 'special', zombie_grave, spawn='zombie'),
     'player_spawn': A('Player start', 'special', player_spawn, editor_only=True, spawn='player'),
@@ -462,6 +1037,7 @@ ASSETS = {
 }
 
 ASSET_CATEGORIES = [('trees', 'Trees'), ('shrubs', 'Shrubs'), ('buildings', 'Buildings'), ('props', 'Props'),
+                    ('town', 'Town'), ('military', 'Military'), ('farm', 'Farm'), ('graveyard', 'Graveyard'),
                     ('special', 'Special'), ('mining', 'Mining'), ('paths', 'Paths'), ('blocks', 'Blocks')]
 
 # Ground paths you can paint (texture tiles live in textures.py PATH_TILES)

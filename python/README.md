@@ -76,17 +76,36 @@ Pick a map on the main menu's **MAPS** tab: the random arena, the example maps *
 and **Forest Camp**, or one you made. Press **NEW MAP** or **EDIT THIS MAP** to open the
 editor.
 
+### Huge maps
+
+Maps can be anything from 24 x 24 m up to **512 x 512 m**. With the random arena selected,
+pick its size under **ARENA SIZE**: Small (40 m), Normal (68 m), Large (128 m), Huge (256 m)
+or Giant (400 m). Bigger arenas get more of everything: trees, ruins, tracks, workbenches, ore
+nodes, and little scenes to find (farmhouses, camps, watchtowers, car wrecks).
+
+On big maps zombies don't walk in from the far edges: they climb out of zombie graves near
+you, or out of the ground 24 to 42 m around you if there are none close. A zombie you leave far
+behind digs down and comes back near you. Far-away parts of the map are hidden in the fog so
+big maps stay playable (expect a somewhat lower frame rate than on small maps).
+
+![A Huge (256 x 256 m) random arena opened in the map editor](docs/huge_map.jpg)
+
 ![The map editor](docs/editor.jpg)
 
 **The palette (left)** has tabs for the things you can place:
 
 | Tab | What's in it |
 | --- | --- |
-| Trees | pine, snowy pine, oak, autumn tree, birch, dead tree, stump |
-| Shrubs | bush, flower bush, tall grass, fern, flowers, mushrooms, rocks, boulder, hedge |
+| Trees | pine, snowy pine, oak, autumn tree, birch, dead tree, stump, fallen log |
+| Shrubs | bush, flower bush, tall grass, fern, flowers, mushrooms, rocks, boulder, hedge, dead bush |
 | Buildings | house, log cabin, ruined house, watchtower, market stall, well, tent, stone wall, fence, sandbags |
 | Props | crate, barrel, hay bale, log pile, lamp post, bench, campfire, car wreck, signpost, rubble |
+| Town | pickup truck, bus wreck, traffic cone, road barrier, stop sign, fire hydrant, mailbox, phone booth, dumpster, trash bags, utility pole, bus stop, gas pump, billboard, vending machine, picnic table |
+| Military | shipping container, barbed wire, tank trap, ammo crate, fuel drums, generator, radio mast, helicopter wreck, floodlight, bunker, jerry cans |
+| Farm | barn, silo, windmill, water tower, scarecrow, tractor, wheelbarrow, outhouse, corn, pumpkins, picket fence |
+| Graveyard | gravestone, stone cross, iron fence, crypt, coffin, grave lantern, old church |
 | Special | **zombie grave** (zombies climb out of these) and the **player start** |
+| Mining | workbench and ore / log pile spawns |
 | Paths | dirt, gravel, cobblestone, road, sand, wood floor |
 | Blocks | stone, brick, planks, crate, log, obsidian and leaves columns, 1–4 high |
 
@@ -98,13 +117,19 @@ editor.
 | Right click | erase (whatever the selected tool places) |
 | ERASER button | erase everything under the brush |
 | R | turn buildings and props 90° |
-| [ and ] | brush size 1×1, 3×3, 5×5 (paths, blocks, eraser) |
+| [ and ] | brush size 1, 3, 5, 9 or 15 cells across (paths, blocks, eraser) |
 | 1–4 | block height |
 | W A S D / arrows | move the camera |
 | Q / E | turn the camera |
 | Mouse wheel | zoom |
 | Ctrl+Z | undo |
 | Esc | leave the editor |
+
+**NEW** asks how big the map should be (a preset or any size in 8 m steps, up to 512 x 512 m),
+whether it has walls, and whether to start from empty ground or a random arena you can edit.
+**SIZE** makes the current map bigger or smaller; everything stays centred and anything outside
+the new size is removed (Ctrl+Z brings it back). On big maps the camera zooms out further.
+Phone booths, vending machines, floodlights, radio masts and grave lanterns light up at night.
 
 The preview turns red where something won't fit. Trees and shrubs get a random turn and size,
 so drag across the map to scatter a forest. **PLAY TEST** drops you into your map, and **Esc →

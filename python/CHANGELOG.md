@@ -3,6 +3,18 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.11.0
+- Huge maps: from 24 x 24 m up to 512 x 512 m
+- Pick the random arena's size on the MAPS tab: Small, Normal, Large, Huge or Giant
+- Big random arenas have more trees, ruins, tracks, workbenches and ore, plus farmhouses, camps and watchtowers to find
+- On big maps zombies climb out of the ground around you instead of walking in from the far edges
+- Far-away parts of the map are hidden in the fog to keep big maps running well
+- Map editor: NEW lets you choose the size, walls, and empty ground or a random arena to start from
+- Map editor: SIZE makes a map bigger or smaller
+- Map editor: bigger brushes (up to 15 x 15) and you can zoom out further on big maps
+- 47 new map assets in new Town, Military, Farm and Graveyard tabs: vehicles, shipping containers, barns, a church, crypts and more
+- Some of them light up at night: phone booths, vending machines, floodlights, radio masts and grave lanterns
+
 ## 1.10.0
 - Barricades, like the original game: craft them at a workbench (they can't be bought) and press G to build
 - Spike barricades hurt zombies, plank barricades you can vault over, and tall palisade walls

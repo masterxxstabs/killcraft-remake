@@ -104,7 +104,9 @@ class Sky:
                                       float(horizon[2] * dark), 1.0)
 
     def set_arena(self, half):
-        self.mountains.scale = max(0.6, half / 34)
+        k = max(0.6, half / 34)
+        self.mountains.scale = k
+        camera.clip_plane_far = max(1000, 260 * k)     # the mountain ring has to stay inside the view
 
     def show(self, on):
         self.dome.enabled = on

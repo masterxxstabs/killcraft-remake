@@ -28,7 +28,7 @@ from .sounds import Sounds
 from .updater import Updater, restart
 from .ui import UI
 from .weapons import Weapons
-from .world import World
+from .world import MAX_SIZE, MIN_SIZE, World
 from . import maps
 
 from .paths import USER_DIR as SAVE_DIR
@@ -60,9 +60,10 @@ class Game(Entity):
         self.save = load_json(SAVE_FILE, dict(best_wave=0, best_score=0, total_kills=0, games=0))
         st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
                                            fov=90, auto_update=True, muted=False, map=None,
-                                           atmosphere=DEFAULT_ATMOSPHERE))
+                                           atmosphere=DEFAULT_ATMOSPHERE, arena_size=34))
         self.atmosphere_id = st['atmosphere'] if st['atmosphere'] in ATMOSPHERES else DEFAULT_ATMOSPHERE
         self.atmosphere_override = None      # the map editor uses its own bright look
+        self.arena_size = max(MIN_SIZE, min(MAX_SIZE, int(st['arena_size'])))   # random arena size (half width)
         self.sensitivity = st['sensitivity']
         self.fov = st['fov']
         self.auto_update = st['auto_update']
@@ -134,7 +135,7 @@ class Game(Entity):
     def save_settings(self):
         write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id,
                                        fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted,
-                                       map=self.map_stem, atmosphere=self.atmosphere_id))
+                                       map=self.map_stem, atmosphere=self.atmosphere_id, arena_size=self.arena_size))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
@@ -173,6 +174,10 @@ class Game(Entity):
         self.map_stem = stem
         self.save_settings()
 
+    def set_arena_size(self, half):
+        self.arena_size = half
+        self.save_settings()
+
     def start_game(self, map_data=None, from_editor=False):
         """Start a run on map_data, or on the map picked in the menu (None = random arena)."""
         if map_data is None and not from_editor and self.map_stem:
@@ -195,7 +200,7 @@ class Game(Entity):
         self.barricades.clear()
         self.mining.clear()
         self.world.destroy()
-        self.world = World(map_data=map_data)
+        self.world = World(map_data=map_data, size=self.arena_size)
         self.sky_dome.set_arena(self.world.half)
         self.lighting.clear()
         self.start_quest()
@@ -655,6 +660,9 @@ class Game(Entity):
         """Sky, fog and light level: the chosen atmosphere, tinted by a wave modifier (Blood Moon...)."""
         a = self.atmosphere()
         sky, fog, near, far = hex_rgb(a['sky']), hex_rgb(a['fog']), a['fog_near'], a['fog_far']
+        if self.atmosphere_override == 'editor':          # big maps: see further while editing
+            k = max(1.0, self.world.half / 60)
+            near, far = near * k, far * k
         if mod and 'sky' in mod:
             k = a['mod_dim']
             sky = tuple(c * k for c in hex_rgb(mod['sky']))
@@ -884,6 +892,8 @@ class Game(Entity):
         self.blend_sky(min(1, dt * 1.5))
         self.sky_dome.update(dt)
         self.lighting.update(dt)
+        if self.state != 'editor':
+            self.world.update_view(camera.world_position, self.sky[7] + 10, dt)   # hide regions lost in the fog
         if self.state in ('playing', 'dead'):
             self.simulate(dt)
         elif self.state == 'editor':
