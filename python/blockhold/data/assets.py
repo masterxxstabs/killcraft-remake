@@ -1483,6 +1483,7 @@ ASSETS = {
     'ore_iron': A('Iron node spawn', 'mining', _ore_marker('iron'), editor_only=True, ore='iron'),
     'ore_copper': A('Copper node spawn', 'mining', _ore_marker('copper'), editor_only=True, ore='copper'),
     'ore_crystal': A('Crystal node spawn', 'mining', _ore_marker('crystal'), editor_only=True, ore='crystal'),
+    'ore_coal': A('Coal node spawn', 'mining', _ore_marker('coal'), editor_only=True, ore='coal'),
     'ore_logs': A('Log pile spawn (wood)', 'mining', _ore_marker('logs'), editor_only=True, ore='logs'),
     'loot_crate': A('Loot crate (breakable)', 'mining', _ore_marker('crate'), editor_only=True, ore='crate'),
 }

@@ -12,6 +12,7 @@ import random
 from panda3d.core import NodePath, TransparencyAttrib
 from ursina import Vec3
 from .data.barricades import BARRICADES, MAX_PLACED, REPAIR_COST, REPAIR_RATE
+from .data.items import ITEMS, SMELTING
 from .lowpoly import LowPoly
 from .net import new_id
 from .render import destroy, node, set_glow
@@ -99,6 +100,8 @@ class Barricades:
                      pitch=0.0, shots=0, reload=0.0)
         if d.get('mine'):
             b.update(arm=d['mine']['arm'])
+        if d.get('furnace'):
+            b.update(jobs=[], out={}, t=0.0)          # jobs: [ingot id, how many still to make]
         for c in cells:
             self.taken.add(c)
             if d['height'] > 0:
@@ -189,7 +192,7 @@ class Barricades:
                 return f"Sentry turret: {turret['ammo']}/{t['ammo']} ammo", None
             cost = t['reload_cost']
             have = all(player.resources.get(r, 0) >= n for r, n in cost.items())
-            price = ', '.join(f'{n} {r}' for r, n in cost.items())
+            price = ', '.join(f"{n} {ITEMS[r]['name'].lower()}" for r, n in cost.items())
             if not have:
                 return f"Turret ammo {turret['ammo']}/{t['ammo']}: reloading needs {price}", None
             if use_held:
@@ -204,6 +207,14 @@ class Barricades:
                 return 'Reloading the turret...', turret['reload']
             turret['reload'] = 0
             return f"Turret ammo {turret['ammo']}/{t['ammo']}: hold E to reload ({price})", None
+        fur, _ = self.nearest(player.position, 2.2, kinds=('furnace',))
+        if fur is not None and fur['hp'] >= fur['max_hp']:
+            ingot, k = self.furnace_progress(fur)
+            done = sum(fur['out'].values())
+            extra = f'  ({done} ready)' if done else ''
+            if ingot:
+                return f"Press E to use the furnace: smelting {ITEMS[ingot]['name']}{extra}", k
+            return 'Press E to use the furnace' + extra, None
         b, _ = self.nearest(player.position, 1.9)
         if b is None or b['hp'] >= b['max_hp'] or b['d'].get('mine'):
             return None, None
@@ -240,10 +251,80 @@ class Barricades:
                 self.update_mine(b, dt)
             if d.get('turret'):
                 self.update_turret(b, dt)
+            if d.get('furnace'):
+                self.update_furnace(b, dt)
 
     def wave_scale(self):
         """Turrets and spikes hit harder in later waves (5% per wave), so they stay useful."""
         return 1 + 0.05 * max(0, self.game.wave_number - 1)
+
+    # ── furnaces ─────────────────────────────────────────────────────────────
+    def smelt(self, b, player, ore_id, count):
+        """Load count ingots' worth of ore (and coal) from player's backpack into furnace b."""
+        rec = next((r for r in SMELTING if r[0] == ore_id), None)
+        if rec is None or b not in self.list:
+            return 0
+        ore, ingot, need_ore, need_coal, _ = rec
+        inv = player.inventory
+        n = min(count, inv.count(ore) // need_ore, inv.count('coal') // need_coal)
+        if n <= 0:
+            return 0
+        inv.remove(ore, n * need_ore)
+        inv.remove('coal', n * need_coal)
+        for job in b['jobs']:
+            if job[0] == ingot:
+                job[1] += n
+                break
+        else:
+            b['jobs'].append([ingot, n])
+        self.game.events.emit('furnace_loaded', id=b['id'], player=player, ingot=ingot, count=n)
+        return n
+
+    def collect(self, b, player):
+        """Move finished ingots into player's backpack (whatever doesn't fit stays in the furnace)."""
+        got = {}
+        for ingot, n in list(b['out'].items()):
+            left = player.inventory.add(ingot, n)
+            if n - left:
+                got[ingot] = n - left
+            if left:
+                b['out'][ingot] = left
+            else:
+                del b['out'][ingot]
+        if got:
+            self.game.events.emit('furnace_collected', id=b['id'], player=player, got=got)
+        return got
+
+    def update_furnace(self, b, dt):
+        if not b['jobs']:
+            b['t'] = 0.0
+            return
+        ingot, n = b['jobs'][0]
+        secs = next(r[4] for r in SMELTING if r[1] == ingot)
+        b['t'] += dt
+        if b['t'] >= secs:
+            b['t'] -= secs
+            b['out'][ingot] = b['out'].get(ingot, 0) + 1
+            b['jobs'][0][1] -= 1
+            if b['jobs'][0][1] <= 0:
+                b['jobs'].pop(0)
+                b['t'] = 0.0
+
+    def furnace_progress(self, b):
+        """(ingot being made, 0..1 progress) or (None, 0)."""
+        if not b.get('jobs'):
+            return None, 0.0
+        ingot = b['jobs'][0][0]
+        secs = next(r[4] for r in SMELTING if r[1] == ingot)
+        return ingot, b['t'] / secs
+
+    def lights(self):
+        """Furnaces glow while they're smelting."""
+        out = []
+        for b in self.list:
+            if b['d'].get('furnace') and b['jobs']:
+                out.append((b['pos'] + Vec3(0, 0.6, 0), (1.0, 0.55, 0.22), 6, 1.2))
+        return out
 
     def update_thorns(self, b, dt):
         b['tick'] -= dt

@@ -7,7 +7,8 @@ import math
 import random
 from ursina import Vec3, camera
 from .net import PlayerInput, new_id
-from .data.resources import RESOURCES
+from .data.items import ITEMS
+from .inventory import Inventory, ResourceView, total_protection
 from .data.barricades import BARRICADES
 
 STAND_EYE, CROUCH_EYE, SLIDE_EYE, DOWNED_EYE = 1.62, 1.08, 0.92, 0.55
@@ -50,7 +51,7 @@ class Player:
         self.regen = 0.0
         self.reload_mult = 1.0
         self.fire_rate_mult = 1.0
-        self.armor = 0.0
+        self.base_armor = 0.0    # from the shop's Plating upgrade (worn armor adds to it, see `armor`)
         self.magnet = 3.0
         self.buffs = {}
         self.dead = False
@@ -63,8 +64,28 @@ class Player:
         self.score = 0
         self.kills = 0
         self.upgrade_levels = {}
-        self.resources = {k: 0 for k in RESOURCES}     # mined ore, spent at workbenches
+        self.inventory = Inventory(on_change=self._inv_changed)        # the backpack (I) and worn armor
+        self.resources = ResourceView(self.inventory, self._backpack_full)   # resources in it, as {id: amount}
         self.placeables = {k: 0 for k in BARRICADES}   # crafted barricades waiting to be placed (G)
+
+    @property
+    def armor(self):
+        """How much less damage this player takes: Plating upgrades plus worn armor that isn't broken."""
+        return total_protection(self.base_armor, self.inventory)
+
+    def _inv_changed(self):
+        if self.is_local and getattr(self.game, 'ui', None) is not None:
+            self.game.ui.inventory_changed()
+
+    def _backpack_full(self, item_id, lost):
+        g = self.game
+        g.events.emit('backpack_full', player=self, item=item_id, lost=lost)
+        if self.is_local:
+            t = getattr(self, '_full_t', 0)
+            import time
+            if time.time() - t > 3:
+                self._full_t = time.time()
+                g.ui.banner('BACKPACK FULL', '#d9912b', 1.6, f"{lost} {ITEMS[item_id]['name']} didn't fit (press I)")
 
     def eye(self):
         return Vec3(self.position.x, self.position.y + self.eye_height, self.position.z)
@@ -81,7 +102,11 @@ class Player:
         g = self.game
         if self.dead or self.downed or g.god_mode:
             return
+        raw = amount
         amount *= 1 - self.armor
+        broke = self.inventory.wear(raw)              # worn armor soaks it up and wears down
+        if broke and self.is_local:
+            g.ui.banner('ARMOR BROKEN', '#d64541', 1.8, ', '.join(broke) + ' needs replacing')
         self.health -= amount
         g.events.emit('player_hurt', player=self, amount=amount)
         if self.is_local:

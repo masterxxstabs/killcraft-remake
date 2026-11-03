@@ -83,7 +83,6 @@ HUD_PARTS = [
     ('powers', 'Power-ups'),
     ('ability', 'Ability'),
     ('weapon', 'Weapon / ammo'),
-    ('resources', 'Resources'),
     ('hint', 'Shop hint'),
     ('banner', 'Wave banner'),
     ('boss', 'Boss health'),

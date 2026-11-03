@@ -10,6 +10,7 @@
 #    thorns       hurts zombies that push against it or attack it
 #    turret       shoots zombies by itself (refill its ammo by holding E next to it)
 #    mine         explodes when a zombie steps on it
+#    furnace      smelts ore into ingots (press E next to it; see SMELTING in items.py)
 #    build        draws it (see blockhold/lowpoly.py); turrets also have build_head (the part that aims)
 # ─────────────────────────────────────────────────────────────────────────────
 import math
@@ -138,17 +139,34 @@ def landmine(lp):
     lp.emissive = False
 
 
+def furnace(lp):
+    """A squat stone furnace with a glowing mouth and a chimney."""
+    stones = ['#7c7a74', '#6d6b66', '#8a8882']
+    lp.box((0, 0.55, 0), (1.0, 1.1, 0.95), stones[0], top=stones[1])
+    for y in (0.2, 0.55, 0.9):                                   # rough stone courses
+        for x in (-0.36, 0.0, 0.36):
+            lp.box((x + (0.1 if y == 0.55 else 0), y, 0.48), (0.3, 0.3, 0.04), lp.rnd.choice(stones))
+    lp.box((0, 1.13, 0), (1.08, 0.08, 1.02), '#5f5d58')
+    lp.cylinder((0.25, 1.17, -0.2), 0.16, 0.85, '#5f5d58', sides=6)   # chimney
+    lp.box((0, 0.35, 0.49), (0.5, 0.36, 0.03), '#1a1410')        # the mouth
+    lp.emissive = True
+    lp.box((0, 0.3, 0.5), (0.4, 0.22, 0.02), '#ff8c2a')
+    lp.box((0, 0.24, 0.51), (0.3, 0.08, 0.01), '#ffd84a')
+    lp.emissive = False
+    lp.box((0, 0.58, 0.5), (0.56, 0.05, 0.04), '#3a3d42')       # iron lintel
+
+
 THREE_WIDE = [(-1, 0), (0, 0), (1, 0)]
 
 BARRICADES = {
     'spikes': dict(
         name='Spike barricade', build=spike_barricade, cells=THREE_WIDE, height=1, hp=450,
-        cost={'wood': 20, 'iron': 5},
+        cost={'wood': 20, 'iron_ingot': 3},
         desc='Crossed sharpened stakes. Zombies that push against it or attack it get hurt.',
         thorns=dict(dps=22, hit=30)),
     'planks': dict(
         name='Plank barricade', build=plank_barricade, cells=THREE_WIDE, height=1, hp=650,
-        cost={'wood': 25, 'iron': 5},
+        cost={'wood': 25, 'iron_ingot': 3},
         desc='Waist-high planks with spikes. Zombies have to break it; you can vault over it.'),
     'palisade': dict(
         name='Palisade wall', build=palisade, cells=THREE_WIDE, height=3, hp=1400,
@@ -156,12 +174,17 @@ BARRICADES = {
         desc='A tall wall of pointed logs. Takes a long time to break and stops spit.'),
     'turret': dict(
         name='Sentry turret', build=turret_base, build_head=turret_head, cells=[(0, 0)], height=1, hp=400,
-        cost={'iron': 60, 'copper': 40, 'crystal': 2},
+        cost={'iron_ingot': 30, 'copper_ingot': 20, 'crystal': 2},
         desc='Shoots zombies by itself. Hold E next to it to refill its ammo.',
-        turret=dict(range=18, rate=9, damage=16, ammo=300, head_y=0.95, reload_cost={'iron': 10, 'copper': 10})),
+        turret=dict(range=18, rate=9, damage=16, ammo=300, head_y=0.95, reload_cost={'iron_ingot': 5, 'copper_ingot': 5})),
+    'furnace': dict(
+        name='Furnace', build=furnace, cells=[(0, 0)], height=2, hp=600,
+        cost={'stone': 30, 'coal': 10},
+        desc='Smelts ore into ingots (2 ore + 1 coal each). Press E next to it. Workbenches need ingots.',
+        furnace=True),
     'landmine': dict(
         name='Landmine', build=landmine, cells=[(0, 0)], height=0, hp=1,
-        cost={'iron': 15, 'copper': 10, 'stone': 5},
+        cost={'iron_ingot': 8, 'copper_ingot': 5, 'coal': 5},
         desc='Explodes when a zombie steps on it. Arms 2 seconds after you place it.',
         mine=dict(radius=3.6, damage=450, trigger=1.1, arm=2.0)),
 }

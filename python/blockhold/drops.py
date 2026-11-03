@@ -40,8 +40,34 @@ class WeaponDrops:
         g.events.emit('weapon_dropped', id=item['id'], weapon=d['id'], player=player, pos=pos)
         return item
 
+    def drop_item(self, player, it):
+        """Drop a backpack item (a pile, or a piece of armor) on the ground in front of player."""
+        fwd = player.forward()
+        flat = Vec3(fwd.x, 0, fwd.z).normalized() if (fwd.x or fwd.z) else Vec3(0, 0, 1)
+        pos = Vec3(player.position.x, 0, player.position.z) + flat * 1.0
+        if self.game.world.height_at(pos.x, pos.z) > 0:
+            pos = Vec3(player.position.x, 0, player.position.z)
+        item = self.spawn(dict(item=it), pos, player.yaw, player)
+        self.game.sounds.play('equip', volume=0.6, pitch=0.8)
+        self.game.events.emit('item_dropped', id=item['id'], item=it['id'], count=it['n'], player=player)
+        return item
+
     def spawn(self, pack, pos, yaw=0.0, owner=None):
         g = self.game
+        if 'item' in pack:                                   # a backpack item: a little sack in its colour
+            from .data.items import ITEMS
+            d = dict(ITEMS[pack['item']['id']], id=pack['item']['id'])
+            e = node(g.world_root, position=Vec3(pos.x, 0.1, pos.z), rotation_y=yaw)
+            body = node(e)
+            from .lowpoly import LowPoly
+            lp = LowPoly(seed=7)
+            lp.blob((0, 0.18, 0), 0.24, d['colour'], squash=(1, 0.8, 1), detail=0, jitter=0.1)
+            lp.box((0, 0.36, 0), (0.12, 0.08, 0.12), '#8a6a3a')
+            node(body, model=lp.mesh())
+            item = dict(id=new_id(), pack=pack, d=d, pos=Vec3(pos.x, 0, pos.z), e=e, body=body, owner=owner,
+                        phase=len(self.list) * 1.3)
+            self.list.append(item)
+            return item
         d = g.weapons.get_def(pack['wid'])
         e = node(g.world_root, position=Vec3(pos.x, 0.1, pos.z), rotation_y=yaw)
         body = node(e, rotation_z=90, scale=0.75)            # lying on its side
@@ -64,6 +90,25 @@ class WeaponDrops:
         item = item or self.nearest(player.position)
         if item is None or player.downed or player.dead:
             return False
+        if 'item' in item['pack']:                           # a backpack item
+            it = item['pack']['item']
+            if 'dur' in it:
+                ok = player.inventory.put_back(dict(it, x=0, y=0))
+                left = 0 if ok else 1
+            else:
+                left = player.inventory.add(it['id'], it['n'])
+            if left >= it['n'] or (left and 'dur' in it):
+                g.ui.banner('BACKPACK FULL', '#d9912b', 1.4, 'Make room first (press I)')
+                g.sounds.play('deny')
+                return False
+            if left:                                         # only some of the pile fitted
+                it['n'] = left
+                return True
+            self.list.remove(item)
+            destroy(item['e'])
+            g.sounds.play('equip', volume=0.7)
+            g.events.emit('item_picked_up', id=item['id'], item=it['id'], player=player)
+            return True
         if g.weapons.owns(item['d']['id']):
             g.ui.banner('ALREADY GOT ONE', '#d9912b', 1.4, f"You already carry a {item['d']['name']}")
             g.sounds.play('deny')
@@ -76,6 +121,9 @@ class WeaponDrops:
 
     def prompt(self, player):
         item = self.nearest(player.position)
+        if item and 'item' in item['pack']:
+            n = item['pack']['item']['n']
+            return f"Press E to pick up {item['d']['name']}" + (f' x{n}' if n > 1 else '')
         return f"Press E to pick up the {item['d']['name']}" if item else ''
 
     def clear(self):

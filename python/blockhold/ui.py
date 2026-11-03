@@ -362,6 +362,18 @@ class UI:
         self.build_shop()
         self.build_craft()
         self.build_dead()
+        self.build_bag()
+
+    def build_bag(self):
+        from .bag_ui import BagScreen
+        self.bag = BagScreen(self)
+
+    def inventory_changed(self):
+        """The local player's backpack changed: redraw whatever shows it."""
+        if getattr(self, 'bag', None) is not None and self.bag.active:
+            self.bag.refresh()
+        if getattr(self, 'craft', None) is not None and self.craft.enabled:
+            self.refresh_craft()
 
     def rebuild_hud(self):
         """Build the HUD again (new colours / layout), keeping whether it was showing."""
@@ -384,12 +396,15 @@ class UI:
         shown = {n: getattr(self, n).enabled for n in ('menu', 'pause', 'shop', 'craft', 'dead')}
         for n in ('menu', 'pause', 'shop', 'craft', 'dead'):
             destroy(getattr(self, n))
+        self.bag.close()
+        destroy(self.bag.root)
         self.rebuild_hud()
         self.build_menu()
         self.build_pause()
         self.build_shop()
         self.build_craft()
         self.build_dead()
+        self.build_bag()
         for n, on in shown.items():
             getattr(self, n).enabled = on
         if shown['menu']:
@@ -425,7 +440,7 @@ class UI:
             'quest': (L + 0.03, T - 0.135, 0.412, 0.042), 'money': (R - 0.33, T - 0.03, 0.3, 0.095),
             'feed': (R - 0.33, T - 0.135, 0.3, 0.1), 'health': (L + 0.03, B + 0.1, 0.46, 0.07),
             'powers': (L + 0.03, B + 0.152 + 3 * 0.047, 0.3, 0.18), 'ability': (-0.07, B + 0.175, 0.14, 0.145),
-            'weapon': (R - 0.33, B + 0.105, 0.3, 0.075), 'resources': (R - 0.33, B + 0.142, 0.3, 0.032),
+            'weapon': (R - 0.33, B + 0.105, 0.3, 0.075),
             'hint': (-0.27, B + 0.205, 0.54, 0.045), 'banner': (-0.46, 0.27, 0.92, 0.13),
             'boss': (-0.36, T - 0.14, 0.72, 0.075)}
         el = self.parts
@@ -535,16 +550,6 @@ class UI:
         self.build_title = text(self.build_box, '', 0, B + 0.264, 1.0, FG, origin=(0, 0))
         self.build_sub = text(self.build_box, '', 0, B + 0.23, 0.72, '#aeb3c4', origin=(0, 0))
 
-        # bottom right: mined resources (shown once you have some)
-        self.res_box = Entity(parent=el['resources'], enabled=False)
-        box(self.res_box, R - 0.33, B + 0.142, 0.3, 0.032, P, z=0.003)
-        self.res_text = {}
-        step = 0.296 / len(RESOURCES)
-        for i, (rid, r) in enumerate(RESOURCES.items()):
-            x = R - 0.324 + i * step
-            box(self.res_box, x, B + 0.133, 0.013, 0.013, r['color'], z=0.001)
-            self.res_text[rid] = text(self.res_box, '0', x + 0.018, B + 0.126, 0.66, FG, origin=(-0.5, 0))
-
         # bottom right: a compact weapon box (name, slots, ammo) that stays clear of the gun
         wp = el['weapon']
         frame(wp, R - 0.33, B + 0.105, 0.3, 0.075, PAPER, INK)
@@ -578,9 +583,6 @@ class UI:
         self.banner_root.enabled = True
         self.banner_text.text, self.banner_sub.text = 'WAVE 7', 'Here they come'
         self.hint.enabled = True
-        self.res_box.enabled = True
-        for i, t in enumerate(self.res_text.values()):
-            st(t, str(20 + i * 7))
         for i, (row, chip, name, secs) in enumerate(self.power_rows[:2]):
             row.enabled = True
             st(name, ('Gold Rush', 'Overdrive')[i])
@@ -719,11 +721,6 @@ class UI:
             if self.board_t <= 0:
                 self.board_t = 0.25
                 self.build_scoreboard()
-        res = p.resources
-        self.res_box.enabled = any(res.values())
-        if self.res_box.enabled:
-            for rid, t in self.res_text.items():
-                self.set_text(t, str(res.get(rid, 0)))
         powers = g.powerups.hud_rows()
         for i, (row, chip, name, secs) in enumerate(self.power_rows):
             row.enabled = i < len(powers)
@@ -895,7 +892,7 @@ class UI:
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
          ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
          ('Reload', 'R'), ('Ability', 'Q')],
-        [('Switch weapon', '1-9 / wheel'), ('Craft / pick up', 'E'), ('Drop gun', 'X'), ('Build (R turns)', 'G'),
+        [('Switch weapon', '1-9 / wheel'), ('Craft / pick up', 'E'), ('Backpack / drop gun', 'I / X'), ('Build (R turns)', 'G'),
          ('Revive / repair', 'Hold E'), ('Shop', 'B'), ('Scoreboard', 'Hold Tab'),
          ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute / fullscreen', 'M / F11')],
     ]
@@ -1089,13 +1086,14 @@ class UI:
         win.clear()
         win.right.text = ''
         # header: what you've got
-        x = win.x + win.w - 0.06 - (len(RESOURCES) - 1) * 0.11 - 0.07
-        for rid, r in RESOURCES.items():
+        mats = ('stone', 'wood', 'coal', 'iron_ingot', 'copper_ingot', 'crystal')     # what workbenches use
+        x = win.x + win.w - 0.06 - (len(mats) - 1) * 0.11 - 0.07
+        for rid, r in ((k, RESOURCES[k]) for k in mats):
             box(b, x, win.y - 0.035, 0.024, 0.024, r['color'], z=-0.01)
             text(b, str(p.resources.get(rid, 0)), x + 0.032, win.y - 0.047, 1.2, INK, origin=(-0.5, 0))
             x += 0.11
         recipes = all_recipes()
-        cats = [('items', 'Items'), ('build', 'Barricades')] + list(CATEGORIES)
+        cats = [('items', 'Items'), ('armor', 'Armor'), ('build', 'Build')] + list(CATEGORIES)
         mine = [r for r in recipes if r['category'] == self.craft_cat]
         sel = next((r for r in mine if r['id'] == self.craft_sel), None) or (mine[0] if mine else recipes[0])
         self.craft_sel = sel['id']
@@ -1107,7 +1105,7 @@ class UI:
             FlatButton(b, cname, x + (i % 5) * 0.11, y - (i // 5) * 0.05, 0.104, 0.042,
                        lambda c=cid: self.select_recipe(None, c), fill=INK if on else PAPER, edge=INK,
                        fg=PAPER if on else INK, size=0.8, hover=0.15 if on else -0.06)
-        y -= 0.115
+        y -= 0.05 * ((len(cats) + 4) // 5) + 0.015
         for r in mine:
             blocker = g.craft_blocker(r)
             is_sel = r is sel
@@ -1117,8 +1115,9 @@ class UI:
                        fill=INK if is_sel else PAPER, edge=INK if is_sel else LINE, fg=fg, size=1.0, align='left',
                        right=right, hover=0.15 if is_sel else -0.06)
             y -= 0.058
-        tip = ('Press G to build what you carry. Chop log piles for wood (the Axe is fastest).'
-               if self.craft_cat == 'build' else 'Mine ore nodes with a melee weapon (the Pickaxe is fastest).')
+        tip = {'build': 'Press G to build what you carry. The Furnace turns ore into ingots.',
+               'armor': 'Armor goes in your backpack: press I and drag it onto HEAD or BODY.'}.get(
+            self.craft_cat, 'Workbenches use ingots: smelt ore and coal in a Furnace (Build tab).')
         text(b, tip, x, win.btn_y + 0.045, 0.8, MUTED)
 
         # right: the selected recipe

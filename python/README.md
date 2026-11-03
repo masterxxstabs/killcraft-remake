@@ -45,6 +45,7 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | C or Ctrl | crouch; press it while sprinting to slide |
 | E | use a workbench (crafting) or pick up a dropped gun; hold it to revive a downed ally, repair a barricade or refill a turret |
 | X | drop the gun you're holding (it keeps its ammo, upgrades and attachments) |
+| I | backpack: your items and the armor you're wearing |
 | G | build mode: place the barricades you crafted (R turns them, the wheel switches, right click stops) |
 | 1–9 or mouse wheel | switch weapon |
 | R | reload |
@@ -260,12 +261,13 @@ about a minute later. The **Pickaxe** mines 2.5x faster (craft it from 25 stone,
 | Copper ore | copper and some stone |
 | Crystal (rare, purple) | crystal and some stone |
 | Log pile | wood (the Axe chops 3x faster) |
+| Coal (dark rock) | coal (fuel for the furnace) and some stone |
 
-Your resources show above your weapon. Walk up to a **workbench** and press **E** to craft:
+What you mine goes in your backpack (**I**). Walk up to a **workbench** and press **E** to craft:
 
 - **Any gun in the game**, instead of buying it with coins. Better guns need more iron and
   copper, and the energy weapons and heavy guns need crystal.
-- **Bandage** (heals 40), **Medkit** (full heal) and **Armor plating** (5% less damage, stacks to 40%).
+- **Bandage** (heals 40), **Medkit** (full heal) and **armor** to wear (see below).
 - **Barricades** (see below). These can only be crafted, never bought.
 
 Workbenches work during waves too, but zombies don't wait while you craft. Random arenas get two
@@ -276,6 +278,39 @@ a `craft=` field in `weapons.py`.
 **In your own maps:** the editor's **Mining** tab has the workbench and ore spawns (random,
 stone, iron, copper, crystal or log pile). If a map has ore spawns, nodes only grow there, so you can build
 a mine or a quarry. Without any, nodes appear anywhere there's room.
+
+### Backpack, furnace and armor
+
+Everything you mine, chop or loot goes in your **backpack** (press **I**), a grid where every item
+takes up some space, like a real bag. Ore, coal, stone and wood stack in piles; ingots take 2 cells,
+helmets 2 x 2 and vests 2 x 3 or 3 x 3.
+
+- **Drag** an item to move it, press **R** while dragging to turn it, and drop a pile onto a pile of
+  the same thing to merge them.
+- Drop something **outside the window** to put it on the ground; walk up to it and press **E** to
+  pick it up again.
+- When the backpack is full, what you mine is lost, so tidy up or drop things you don't need.
+
+**Workbenches use ingots, not ore.** Craft a **Furnace** (30 stone + 10 coal, in the workbench's
+**Build** tab), place it with **G**, then press **E** next to it. Load ore and coal (2 ore + 1 coal
+makes 1 ingot, about 3 seconds each). The furnace keeps going while you fight; come back and press
+**TAKE INGOTS**. Coal comes from the dark coal rocks.
+
+**Armor** is crafted at the workbench (**Armor** tab) and goes in your backpack. Open the backpack and
+drag it onto **HEAD** or **BODY** (or right-click it) to wear it.
+
+| Armor | Slot | Damage taken off | Lasts for |
+| --- | --- | --- | --- |
+| Scrap helmet | head | 8% | 150 damage |
+| Combat helmet | head | 14% | 300 |
+| Riot helmet | head | 20% | 500 |
+| Padded vest | body | 12% | 250 |
+| Kevlar vest | body | 22% | 450 |
+| Plate carrier | body | 32% | 800 |
+
+Armor wears down as it soaks up hits (the green bar on it) and stops protecting you when it breaks.
+It adds to the shop's Plating upgrade, up to 75% in total. Items and costs are in
+`blockhold/data/items.py` and `blockhold/data/crafting.py`.
 
 ### Barricades
 

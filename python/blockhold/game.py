@@ -394,6 +394,7 @@ class Game(Entity):
     def close_shop(self):
         if not self.shop_open:
             return
+        self.ui.bag.close()            # the backpack / furnace screen (drops whatever you were dragging back in)
         self.shop_open = False
         self.craft_open = False
         self.ui.shop.enabled = False
@@ -421,6 +422,20 @@ class Game(Entity):
         self.ui.craft.enabled = True
         self.show_cursor(True)
 
+    def open_bag(self, furnace=None):
+        """The backpack (I), or a furnace's screen (E next to it, the backpack is shown too)."""
+        if self.player.downed or self.player.dead or self.shop_open:
+            return
+        self.exit_build()
+        self.shop_open = True
+        self.aiming = False
+        camera.fov = self.fov
+        self.ui.scope.enabled = False
+        self.weapons.trigger(False)
+        self.ui.hud.enabled = False
+        self.ui.bag.open(furnace)
+        self.show_cursor(True)
+
     def can_craft(self, r, player=None):
         p = player or self.player
         return all(p.resources.get(res, 0) >= n for res, n in r['cost'].items())
@@ -432,8 +447,8 @@ class Game(Entity):
             return 'OWNED'
         if r['kind'] == 'heal' and p.health >= p.max_health:
             return 'FULL HEALTH'
-        if r['kind'] == 'armor' and p.armor >= r['max'] - 1e-6:
-            return 'MAXED'
+        if r['kind'] == 'item' and p.inventory.free_spot(r['item']) is None:
+            return 'NO ROOM'
         if r['kind'] == 'placeable' and p.placeables.get(r['placeable'], 0) >= MAX_CARRIED:
             return 'CARRYING MAX'
         if not self.can_craft(r, p):
@@ -453,8 +468,8 @@ class Game(Entity):
             self.weapons.give(r['weapon'])
         elif r['kind'] == 'heal':
             p.heal(r['amount'])
-        elif r['kind'] == 'armor':
-            p.armor = min(r['max'], p.armor + r['amount'])
+        elif r['kind'] == 'item':
+            p.inventory.add(r['item'], 1)
         elif r['kind'] == 'placeable':
             p.placeables[r['placeable']] = p.placeables.get(r['placeable'], 0) + 1
         self.events.emit('crafted', player=p, recipe=rid)
@@ -832,7 +847,10 @@ class Game(Entity):
         if self.state != 'playing':
             return
         if self.shop_open:
-            if key in ('b', 'escape') or (key == 'e' and self.craft_open):
+            if self.ui.bag.active and self.ui.bag.input(key):
+                return
+            if key in ('b', 'escape') or (key == 'e' and self.craft_open) or \
+                    (key in ('i', 'e', 'tab') and self.ui.bag.active):
                 self.close_shop()
             return
         if key == 'x' and self.build_kind is None:
@@ -840,6 +858,13 @@ class Game(Entity):
             return
         if key == 'e' and self.drops.nearest(self.player.position) is not None and not self.player.downed:
             self.drops.pick_up(self.player)
+            return
+        if key == 'i' and not self.player.downed:
+            self.open_bag()
+            return
+        fur = self.barricades.nearest(self.player.position, 2.2, kinds=('furnace',))[0]
+        if key == 'e' and fur is not None and not self.player.downed:
+            self.open_bag(fur)
             return
         if key == 'e' and self.near_bench() and not self.player.downed:
             self.open_craft()

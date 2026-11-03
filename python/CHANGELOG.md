@@ -3,6 +3,15 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.15.0
+- Backpack (press I): a grid inventory where every item takes up space. Drag to move, R to turn, drop outside to leave it on the ground
+- Ore, coal, stone, wood, crystal and ingots are now items in your backpack (the resource counter is gone)
+- New resource: coal, from dark coal rocks
+- Furnace: craft it from stone and coal, place it, and smelt ore into ingots (2 ore + 1 coal each). It keeps working while you fight
+- Workbenches now use ingots instead of ore
+- Armor: craft helmets and vests and wear them from the backpack. They take damage off and wear out as they protect you
+- Loot crates can now hold coal and ingots
+
 ## 1.14.0
 - UI styles that reshape every screen: Flat, Rounded, Soft (pill buttons), Tactical (cut corners and a typewriter font), Glass (see-through panels), Minimal (no outlines) and Chunky
 - Pick a style under Settings; it mixes with any colour theme

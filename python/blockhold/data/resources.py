@@ -13,13 +13,10 @@
 #              (crates can be shot as well as hit, and give nothing until they break)
 # ─────────────────────────────────────────────────────────────────────────────
 
-RESOURCES = {
-    'stone': dict(name='Stone', color='#a3a39f'),
-    'iron': dict(name='Iron', color='#c3cfdb'),
-    'copper': dict(name='Copper', color='#e0813a'),
-    'crystal': dict(name='Crystal', color='#c07bff'),
-    'wood': dict(name='Wood', color='#b98a52'),
-}
+from .items import ITEMS
+
+# every resource (they're backpack items, see items.py): name and colour
+RESOURCES = {k: dict(name=d['name'], color=d['colour']) for k, d in ITEMS.items() if d['kind'] == 'resource'}
 
 NODE_TYPES = {
     'stone': dict(name='Stone', hp=120, yields={'stone': 30}, weight=5,
@@ -30,12 +27,15 @@ NODE_TYPES = {
                    rock=['#7b7166', '#6e655b', '#877c70'], ore=['#e0813a', '#c96a2b', '#f09a55']),
     'crystal': dict(name='Crystal', hp=220, yields={'crystal': 4, 'stone': 4}, weight=0.7,
                     rock=['#4a4458', '#3d384a', '#565066'], ore=['#c07bff', '#d6a3ff', '#9b5ae0']),
+    'coal': dict(name='Coal', hp=130, yields={'coal': 16, 'stone': 4}, weight=3,
+                 rock=['#55555a', '#4a4a50', '#5f5f64'], ore=['#1c1c20', '#26262b', '#121215']),
     # chopped rather than mined: the Fire Axe is fastest (its `chop` in weapons.py)
     'logs': dict(name='Log pile', hp=140, yields={'wood': 30}, weight=4, wood=True,
                  rock=['#6e5233', '#634a2e', '#7a5b39'], ore=['#cdb083', '#c4a574', '#d8bd92']),
     # supply crates: smash or shoot them open for a random handful of crafting resources
     'crate': dict(name='Supply crate', hp=60, yields={}, weight=1.5, wood=True, crate=True,
-                  loot=[('wood', 6, 14, 1.0), ('stone', 4, 10, 0.6), ('iron', 3, 9, 0.6), ('copper', 3, 8, 0.5),
+                  loot=[('wood', 6, 14, 1.0), ('stone', 4, 10, 0.6), ('coal', 3, 8, 0.6), ('iron', 3, 9, 0.5),
+                        ('copper', 3, 8, 0.4), ('iron_ingot', 1, 3, 0.25), ('copper_ingot', 1, 3, 0.2),
                         ('crystal', 1, 2, 0.12)],
                   rock=['#9a7448', '#8a6a40', '#a87e50'], ore=['#4a4e55', '#3a3d42', '#5b6067']),
 }

@@ -28,7 +28,7 @@ def _hands(p):
 
 
 def _armor(p):
-    p.armor = min(0.6, p.armor + 0.06)
+    p.base_armor = min(0.6, p.base_armor + 0.06)
 
 
 def _magnet(p):
