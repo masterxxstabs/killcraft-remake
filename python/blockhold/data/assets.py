@@ -238,12 +238,23 @@ def fence(lp):
         lp.box((0, y, 0), (1.0, 0.1, 0.06), '#a87848')
 
 
-def sandbags(lp):
-    for row, y in enumerate((0.15, 0.42, 0.68)):
-        for i in range(3 - (row == 2)):
-            x = -0.32 + i * 0.32 + (0.16 if row == 2 else 0)
-            lp.blob((x, y, 0), 0.2, '#b8a272', squash=(1, 0.55, 0.9), detail=0, jitter=0.05)
+def _bag_rows(lp, width, rows):
+    """Rows of stacked sandbags, each row sitting on the one below, joints staggered."""
+    tones = ['#b8a272', '#a8946a', '#c2ad7e']
+    n = max(2, round(width / 0.36))
+    for row in range(rows):
+        y = 0.1 + row * 0.19
+        k = n - (row % 2)
+        x0 = -(k - 1) * 0.36 / 2
+        for i in range(k):
+            x = x0 + i * 0.36 + (lp.rnd.random() - 0.5) * 0.02
+            c = lp.rnd.choice(tones)
+            lp.box((x, y, 0), (0.34, 0.18, 0.5), c, yaw=(lp.rnd.random() - 0.5) * 6)
+            lp.box((x, y + 0.095, 0), (0.28, 0.025, 0.42), c)          # the rounded top of the bag
 
+
+def sandbags(lp):
+    _bag_rows(lp, 1.0, 4)
 
 def tent(lp):
     lp.prism((0, 0, 0), 2.6, 2.8, 1.7, '#c9b98a', gable='#b5a577')
@@ -484,12 +495,11 @@ def phone_booth(lp):
 def dumpster(lp):
     green = lp.rnd.choice(['#2f5d3a', '#3f5e7a'])
     lp.box((0, 0.6, 0), (1.7, 1.0, 1.05), green, top='#26402c')
-    lp.box((0, 1.14, -0.15), (1.72, 0.06, 0.8), '#1f2a22', yaw=0)
+    lp.box((0, 1.13, 0), (1.74, 0.06, 1.08), '#1f2a22')                               # lid, flush on top
     lp.box((0, 0.6, 0.53), (1.6, 0.08, 0.02), '#1f2a22')
     for x in (-0.7, 0.7):
         for z in (-0.4, 0.4):
             lp.cylinder((x, 0, z), 0.06, 0.1, TYRE, sides=6)
-    lp.blob((0.5, 1.15, 0.3), 0.22, '#1f1f22', detail=0)
 
 
 def trash_bags(lp):
@@ -814,7 +824,8 @@ def picket_fence(lp):
 def gravestone(lp):
     stone = lp.rnd.choice(['#8a8a88', '#9a9a98', '#7a7c80'])
     kind = lp.rnd.randrange(3)
-    lp.blob((0, 0.0, 0.45), 0.42, '#5a4a38', squash=(0.8, 0.2, 1.3), detail=0, jitter=0.05)
+    lp.flat((0, 0, 0.55), (0.7, 1.2), '#5a4a38', 0.02)                                # the grave in front of it
+    lp.box((0, 0.05, 0.55), (0.55, 0.1, 1.0), '#5f4c38')
     if kind == 0:
         lp.box((0, 0.42, -0.1), (0.55, 0.84, 0.14), stone)
         lp.box((0, 0.9, -0.1), (0.4, 0.12, 0.14), stone)
@@ -860,9 +871,9 @@ def crypt(lp):
 def coffin(lp):
     wood = '#4e3220'
     lp.box((0, 0.2, 0), (0.7, 0.4, 1.9), wood, top='#2a1d12')
-    lp.box((0.42, 0.3, 0.1), (0.06, 0.6, 1.9), '#5e3b1f', yaw=8)           # lid knocked aside
-    lp.box((0, 0.42, -0.6), (0.4, 0.02, 0.1), '#c9a227')
-
+    lp.box((0, 0.36, 0), (0.6, 0.02, 1.8), '#1a120b')                                 # dark inside
+    lp.box((0.78, 0.04, 0.12), (0.72, 0.08, 1.92), '#5e3b1f', yaw=9)                  # lid knocked off beside it
+    lp.box((0.78, 0.085, 0.12), (0.4, 0.01, 0.1), '#c9a227', yaw=9)
 
 def grave_lantern(lp):
     lp.beam((0, 0, 0), (0, 1.3, 0), 0.05, '#26282d', sides=4)
@@ -895,14 +906,15 @@ def church(lp):
 # ── caves ────────────────────────────────────────────────────────────────────
 def cave_lantern(lp):
     lp.beam((0, 0, 0), (0, 1.6, 0), 0.04, '#5e3b1f', sides=4)
-    lp.beam((0, 1.6, 0), (0.25, 1.65, 0), 0.025, '#5e3b1f', sides=4)
-    lp.box((0.25, 1.42, 0), (0.16, 0.24, 0.16), '#2a2a30')
+    lp.beam((0, 1.58, 0), (0.28, 1.6, 0), 0.025, '#5e3b1f', sides=4)
+    lp.beam((0.25, 1.6, 0), (0.25, 1.52, 0), 0.008, '#2a2a30', sides=3)            # the hook it hangs from
+    lp.box((0.25, 1.5, 0), (0.12, 0.03, 0.12), '#2a2a30')
+    lp.box((0.25, 1.36, 0), (0.16, 0.24, 0.16), '#2a2a30')
     lp.emissive = True
-    lp.box((0.25, 1.4, 0), (0.12, 0.17, 0.12), '#ffb85a')
+    lp.box((0.25, 1.36, 0), (0.12, 0.2, 0.12), '#ffb85a')
     lp.emissive = False
-    for _ in range(3):                                                      # a few stones at its foot
+    for _ in range(3):                                                               # a few stones at its foot
         lp.blob(((lp.rnd.random() - 0.5) * 0.5, 0.05, (lp.rnd.random() - 0.5) * 0.5), 0.1, STONE[1], detail=0)
-
 
 # ── more military ────────────────────────────────────────────────────────────
 CANVAS = '#6b6a48'
@@ -924,7 +936,7 @@ def humvee(lp):
     lp.box((0, 0.8, 0), (3.2, 0.7, 1.85), tan, top='#968a66')
     lp.box((-0.3, 1.4, 0), (1.7, 0.55, 1.7), tan)
     lp.box((0.56, 1.4, 0), (0.02, 0.4, 1.5), GLASS)
-    lp.box((1.35, 1.17, 0), (0.6, 0.06, 1.7), '#5b5e4a')                             # sloped bonnet
+    lp.box((1.1, 1.16, 0), (0.95, 0.02, 1.7), '#5b5e4a')                             # bonnet, flush on top
     lp.cylinder((-0.3, 1.68, 0), 0.32, 0.25, '#4a4a3c', sides=8)                     # turret ring
     lp.beam((-0.3, 1.88, 0), (0.6, 1.92, 0), 0.04, '#26282d', sides=5)              # gun
     lp.box((1.62, 0.8, 0), (0.06, 0.4, 1.6), '#2a2a30')
@@ -961,18 +973,14 @@ def guard_tower(lp):
     lp.emissive = True
     lp.box((0.7, 5.95, 1.41), (0.3, 0.22, 0.02), '#fffbe8')
     lp.emissive = False
-    lp.beam((1.1, 0, 1.3), (1.1, 5.0, 1.3), 0.02, steel, sides=3)                  # ladder rails
-    lp.beam((0.7, 0, 1.3), (0.7, 5.0, 1.3), 0.02, steel, sides=3)
+    lp.beam((0.95, 0, 1.25), (0.95, 5.0, 1.25), 0.025, steel, sides=4)              # ladder rails and rungs
+    lp.beam((0.55, 0, 1.25), (0.55, 5.0, 1.25), 0.025, steel, sides=4)
+    for k in range(1, 17):
+        lp.box((0.75, k * 0.3, 1.25), (0.42, 0.03, 0.03), steel)
 
 
 def sandbag_wall(lp):
-    for row, y in enumerate((0.15, 0.42, 0.68, 0.94)):
-        n = 9 - (row % 2)
-        for i in range(n):
-            x = -1.3 + i * 0.325 + (0.16 if row % 2 else 0)
-            lp.blob((x, y, 0), 0.2, lp.rnd.choice(['#b8a272', '#a8946a', '#c2ad7e']), squash=(1, 0.55, 0.9),
-                    detail=0, jitter=0.05)
-
+    _bag_rows(lp, 2.9, 5)
 
 def military_tent(lp):
     lp.box((0, 0.9, 0), (4.0, 1.8, 3.0), '#5b6640')
@@ -1009,11 +1017,14 @@ def checkpoint(lp):
 
 def supply_pallet(lp):
     lp.box((0, 0.07, 0), (1.3, 0.14, 1.1), '#a87848')
-    for x, z, h in ((-0.32, -0.27, 0.5), (0.32, -0.27, 0.5), (-0.32, 0.27, 0.5), (0.32, 0.27, 0.5), (0, 0, 0.45)):
-        y = 0.14 + h / 2 + (0.5 if (x, z) == (0, 0) else 0)
-        lp.box((x, y, z), (0.6, h, 0.52), lp.rnd.choice([OLIVE_DRAB, '#5b6640', '#8a7a52']))
-    lp.box((0, 0.7, 0.56), (1.3, 1.1, 0.01), '#3a3d2a')                              # cargo net (front)
-
+    for x, z in ((-0.32, -0.27), (0.32, -0.27), (-0.32, 0.27), (0.32, 0.27)):
+        lp.box((x, 0.39, z), (0.6, 0.5, 0.52), lp.rnd.choice([OLIVE_DRAB, '#5b6640', '#8a7a52']))
+    lp.box((0, 0.865, 0), (0.6, 0.45, 0.52), lp.rnd.choice([OLIVE_DRAB, '#8a7a52']))          # one on top
+    lp.box((0, 0.39, 0), (1.23, 0.05, 1.07), '#2a2a30')                              # a band round the bottom layer
+    lp.box((0, 0.865, 0), (0.62, 0.05, 0.54), '#2a2a30')                               # and one round the top crate
+    lp.box((0, 1.092, 0), (0.05, 0.01, 0.54), '#2a2a30')
+    lp.box((0, 0.865, 0.265), (0.05, 0.45, 0.01), '#2a2a30')
+    lp.box((0, 0.865, -0.265), (0.05, 0.45, 0.01), '#2a2a30')
 
 def field_gun(lp):
     steel = '#4f5a35'
@@ -1028,18 +1039,15 @@ def field_gun(lp):
 
 
 def radar_dish(lp):
-    import math
     lp.box((0, 0.6, 0), (1.2, 1.2, 1.2), '#5b6067')
-    lp.beam((0, 1.2, 0), (0, 2.2, 0), 0.12, '#3a3d42', sides=6)
-    for i in range(10):                                                              # the dish
-        a = i / 10 * math.tau
-        lp.beam((0, 2.3, 0.2), (math.cos(a) * 1.2, 2.5 + math.sin(a) * 1.2, 0.75), 0.07, '#c9c7c0', sides=3,
-                end_radius=0.2)
-    lp.beam((0, 2.5, 0.25), (0, 2.6, 1.4), 0.03, '#3a3d42', sides=4)
+    lp.beam((0, 1.2, 0), (0, 2.1, 0), 0.12, '#3a3d42', sides=6)
+    lp.box((0, 2.15, 0.05), (0.35, 0.2, 0.35), '#3a3d42')
+    lp.beam((0, 2.2, 0.1), (0, 2.75, 0.7), 0.15, '#c9c7c0', sides=12, end_radius=1.25)   # the dish (a shallow cone)
+    lp.beam((0, 2.5, 0.4), (0, 3.15, 1.25), 0.03, '#3a3d42', sides=4)                  # feed arm and horn
+    lp.box((0, 3.17, 1.27), (0.12, 0.12, 0.12), '#2a2a30')
     lp.emissive = True
     lp.box((0.45, 1.0, 0.61), (0.15, 0.08, 0.01), '#7dff8a')
     lp.emissive = False
-
 
 def helipad(lp):
     lp.cylinder((0, 0, 0), 3.2, 0.06, '#5b5e63', sides=16)
@@ -1064,22 +1072,30 @@ def weapon_rack(lp):
 
 def camo_net(lp):
     for x, z in ((-1.8, -1.3), (1.8, -1.3), (-1.8, 1.3), (1.8, 1.3)):
-        lp.beam((x, 0, z), (x, 2.4, z), 0.05, '#5e3b1f', sides=4)
-    for i in range(12):                                                              # a lumpy net of leaves
-        x, z = (lp.rnd.random() - 0.5) * 3.8, (lp.rnd.random() - 0.5) * 2.8
-        lp.blob((x, 2.45, z), 0.55, lp.rnd.choice(['#4f5a35', '#5b6640', '#3f4829', '#6b6a48']),
-                squash=(1.3, 0.25, 1.3), detail=0, jitter=0.2)
-
+        lp.beam((x, 0, z), (x, 2.35, z), 0.05, '#5e3b1f', sides=4)
+    tones = ['#4f5a35', '#5b6640', '#3f4829', '#6b6a48']
+    for i in range(5):                                                               # a net that covers the posts
+        for j in range(4):
+            x = -2.0 + i * 1.0 + (lp.rnd.random() - 0.5) * 0.3
+            z = -1.5 + j * 1.0 + (lp.rnd.random() - 0.5) * 0.3
+            sag = 0.12 * (1 - abs(x) / 2.0) * (1 - abs(z) / 1.5)
+            lp.blob((x, 2.4 - sag, z), 0.62, lp.rnd.choice(tones), squash=(1.2, 0.22, 1.2), detail=0, jitter=0.15)
 
 def burning_barrel(lp):
+    import math
     lp.cylinder((0, 0, 0), 0.32, 0.9, '#4a3a30', sides=8, top_colour='#1a1410')
     for y in (0.2, 0.65):
         lp.cylinder((0, y, 0), 0.33, 0.05, '#2a2622', sides=8)
     lp.emissive = True
-    lp.cylinder((0, 0.88, 0), 0.24, 0.5, '#ff8c2a', sides=5, top_radius=0)
-    lp.cylinder((0.05, 0.88, 0.03), 0.12, 0.35, '#ffd84a', sides=5, top_radius=0)
+    for i in range(6):                                                               # ragged tongues of flame
+        a = i / 6 * math.tau + lp.rnd.random() * 0.4
+        r = 0.08 + lp.rnd.random() * 0.12
+        x, z = math.cos(a) * r, math.sin(a) * r
+        h = 0.25 + lp.rnd.random() * 0.35
+        lp.cylinder((x, 0.86, z), 0.07 + lp.rnd.random() * 0.04, h, lp.rnd.choice(['#ff8c2a', '#ff6a1a']), sides=4,
+                    top_radius=0)
+    lp.cylinder((0, 0.86, 0), 0.12, 0.42, '#ffd84a', sides=5, top_radius=0)
     lp.emissive = False
-
 
 # ── more town ────────────────────────────────────────────────────────────────
 def _car(lp, body, top_h=0.5, length=3.0):

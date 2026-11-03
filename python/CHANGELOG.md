@@ -3,6 +3,10 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.12.1
+- Fixed misaligned parts on several map assets: sandbags and the sandbag wall (rows now sit on each other), supply pallet, radar dish, camo net, burning barrel, cave lantern, coffin, gravestone, armored jeep, dumpster
+- The guard tower ladder has rungs now
+
 ## 1.12.0
 - Caves in the map editor: pick the depth, width, rock height and side tunnels, then click to dig one
 - Caves have a rock roof you walk under, chambers with ore and a loot crate, lanterns, and a zombie grave at the end
