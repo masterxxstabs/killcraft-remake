@@ -71,6 +71,9 @@ class World:
         self.zombie_spawns = []
         self.ore_spawns = []              # (position, ore kind or 'random') from map markers
         self.benches = []                 # workbench positions
+        self.animal_spawns = []           # (position, animal kind or 'random') from spawner markers
+        self.npcs = []                    # NPC props (their 'data' says who they are; npcs.py brings them to life)
+        self.random_arena = map_data is None
         self.rnd = random.Random(seed).random
         self.atlas = Atlas(tile=32)
         self.prop_lights = []              # (prop, light dict) for props that glow
@@ -227,15 +230,27 @@ class World:
                 self.dirty_paths.add(((gx + dx) // CHUNK, (gz + dz) // CHUNK))
 
     # ── props ────────────────────────────────────────────────────────────────
-    def add_prop(self, aid, x, z, rot=0.0, scale=1.0, tilt=0.0, roll=0.0):
+    def add_prop(self, aid, x, z, rot=0.0, scale=1.0, tilt=0.0, roll=0.0, data=None):
         """Place an asset. rot turns it any amount around the vertical axis; tilt leans it forward / back and
-        roll leans it sideways (looks only: what you can't walk through follows rot, to the nearest 90°)."""
+        roll leans it sideways (looks only: what you can't walk through follows rot, to the nearest 90°).
+        data: extra settings saved with the prop (an NPC's name, looks, dialogue, trades and quest)."""
         a = ASSETS.get(aid)
         if a is None:
             print('unknown asset in map:', aid)
             return None
         p = dict(id=aid, x=x, z=z, rot=rot, scale=scale, tilt=tilt, roll=roll, np=None, cells=[])
-        if self.editor or not a.get('editor_only'):
+        if a.get('npc'):
+            from .data.npcs import fill_npc
+            p['data'] = fill_npc(data or dict(role=a['npc']))
+        if a.get('npc') and self.editor:              # the editor shows the NPC as they'll look
+            from .npcs import npc_model
+            np = self.props_root.attachNewNode(aid)
+            np.setPos(x, 0, z)
+            np.setHpr(-rot, tilt, roll)
+            np.setScale(scale)
+            npc_model(p['data']).reparentTo(np)
+            p['np'] = np
+        elif self.editor or not a.get('editor_only'):
             variant = int(abs(x * 7.31 + z * 13.17)) % a.get('variants', 1)
             np = self.props_root.attachNewNode(aid)
             np.setPos(x, 0, z)
@@ -259,6 +274,10 @@ class World:
             self.zombie_spawns.append(Vec3(x, 0, z))
         if a.get('ore'):
             self.ore_spawns.append((Vec3(x, 0, z), a['ore']))
+        if a.get('animal'):
+            self.animal_spawns.append((Vec3(x, 0, z), a['animal']))
+        if a.get('npc'):
+            self.npcs.append(p)
         if a.get('station') == 'workbench':
             self.benches.append(Vec3(x, 0, z))
         if a.get('light') and not self.editor:
@@ -282,6 +301,10 @@ class World:
             self.player_spawn = Vec3(0, 0, 0)
         if a.get('ore'):
             self.ore_spawns = [s for s in self.ore_spawns if (s[0].x, s[0].z) != (p['x'], p['z'])]
+        if a.get('animal'):
+            self.animal_spawns = [s for s in self.animal_spawns if (s[0].x, s[0].z) != (p['x'], p['z'])]
+        if a.get('npc') and p in self.npcs:
+            self.npcs.remove(p)
         if a.get('station') == 'workbench':
             self.benches = [b for b in self.benches if (b.x, b.z) != (p['x'], p['z'])]
         self.prop_lights = [pl for pl in self.prop_lights if pl[0] is not p]
@@ -728,12 +751,15 @@ class World:
         for x, z, kind in data.get('paths', []):
             self.set_path(*self.to_grid(x, z), kind)
         for entry in data.get('props', []):
+            extra = None
+            if entry and isinstance(entry[-1], dict):     # props with settings (NPCs) end with them
+                entry, extra = entry[:-1], entry[-1]
             aid, x, z = entry[0], entry[1], entry[2]
             rot = entry[3] if len(entry) > 3 else 0
             scale = entry[4] if len(entry) > 4 else 1
             tilt = entry[5] if len(entry) > 5 else 0
             roll = entry[6] if len(entry) > 6 else 0
-            self.add_prop(aid, x, z, rot, scale, tilt, roll)
+            self.add_prop(aid, x, z, rot, scale, tilt, roll, extra)
 
     def to_map(self, name=None):
         edge = 1 if self.walls else 0
@@ -750,8 +776,10 @@ class World:
         props = []
         for p in self.props:
             entry = [p['id'], round(p['x'], 2), round(p['z'], 2), round(p['rot'], 1), round(p['scale'], 2)]
-            if p.get('tilt') or p.get('roll'):          # only maps that use it carry tilt and roll
+            if p.get('tilt') or p.get('roll') or p.get('data'):    # only maps that use it carry tilt and roll
                 entry += [round(p.get('tilt', 0), 1), round(p.get('roll', 0), 1)]
+            if p.get('data'):
+                entry.append(p['data'])
             props.append(entry)
         return dict(format=1, name=name or self.name, size=self.half, walls=self.walls,
                     blocks=blocks, paths=paths, props=props)

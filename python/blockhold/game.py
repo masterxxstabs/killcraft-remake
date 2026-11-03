@@ -21,6 +21,8 @@ from .powerups import PowerUps
 from .mining import Mining
 from .barricades import Barricades
 from .drops import WeaponDrops
+from .animals import Animals
+from .npcs import Npcs
 from .data.barricades import BARRICADES, MAX_CARRIED, PLACE_RANGE
 from .player import Player, REVIVE_TIME
 from .projectiles import Projectiles
@@ -129,6 +131,8 @@ class Game(Entity):
         self.mining = Mining(self)
         self.barricades = Barricades(self)
         self.drops = WeaponDrops(self)          # guns dropped with X
+        self.animals = Animals(self)            # deer, pigs and chickens
+        self.npcs = Npcs(self)                  # traders, quest givers and talkers from the map
         self.build_kind = None       # build mode: which barricade is being placed (None = not building)
         self.build_rot = 0
         self.build_spot = None
@@ -243,6 +247,8 @@ class Game(Entity):
         self.barricades.clear()
         self.drops.clear()
         self.mining.clear()
+        self.animals.clear()
+        self.npcs.clear()
         self.world.destroy()
         self.world = World(map_data=map_data, size=self.arena_size)
         self.sky_dome.set_arena(self.world.half)
@@ -251,6 +257,8 @@ class Game(Entity):
         self.player.reset()
         self.player.position = Vec3(self.world.player_spawn)
         self.mining.reset()
+        self.animals.reset()
+        self.npcs.reset()
         self.weapons.reset()
         self.weapons.set_visible(True)
         self.wave_number = self.remaining = 0
@@ -270,6 +278,8 @@ class Game(Entity):
         self.barricades.clear()
         self.drops.clear()
         self.mining.clear()
+        self.animals.clear()
+        self.npcs.clear()
         self.end_quest()
         if self.from_editor is not None:            # play test: go back to the editor
             data, self.from_editor = self.from_editor, None
@@ -396,6 +406,7 @@ class Game(Entity):
         if not self.shop_open:
             return
         self.ui.bag.close()            # the backpack / furnace screen (drops whatever you were dragging back in)
+        self.ui.talk.close()
         self.shop_open = False
         self.craft_open = False
         self.ui.shop.enabled = False
@@ -435,6 +446,20 @@ class Game(Entity):
         self.weapons.trigger(False)
         self.ui.hud.enabled = False
         self.ui.bag.open(furnace)
+        self.show_cursor(True)
+
+    def open_talk(self, npc):
+        """Talk to an NPC (E next to them)."""
+        if self.player.downed or self.player.dead or self.shop_open:
+            return
+        self.exit_build()
+        self.shop_open = True
+        self.aiming = False
+        camera.fov = self.fov
+        self.ui.scope.enabled = False
+        self.weapons.trigger(False)
+        self.ui.hud.enabled = False
+        self.ui.talk.open(npc)
         self.show_cursor(True)
 
     def can_craft(self, r, player=None):
@@ -603,6 +628,10 @@ class Game(Entity):
             drop_msg = self.drops.prompt(p)
             if drop_msg:
                 self.ui.set_prompt(drop_msg)
+                return
+            npc_msg = self.npcs.prompt(p)
+            if npc_msg:
+                self.ui.set_prompt(npc_msg)
                 return
             if self.near_bench():
                 self.ui.set_prompt('Press E to use the workbench')
@@ -836,6 +865,9 @@ class Game(Entity):
         self._pressed.add(key)
         if key == 'f11':
             window.fullscreen = not window.fullscreen
+        if self.state == 'editor' and self.editor.typing():     # typing a name: keys are letters, not shortcuts
+            self.editor.input(key)
+            return
         if key == 'm':
             self.toggle_mute()
         if self.state == 'editor':
@@ -851,7 +883,7 @@ class Game(Entity):
             if self.ui.bag.active and self.ui.bag.input(key):
                 return
             if key in ('b', 'escape') or (key == 'e' and self.craft_open) or \
-                    (key in ('i', 'e', 'tab') and self.ui.bag.active):
+                    (key in ('i', 'e', 'tab') and self.ui.bag.active) or (key == 'e' and self.ui.talk.active):
                 self.close_shop()
             return
         if key == 'x' and self.build_kind is None:
@@ -862,6 +894,10 @@ class Game(Entity):
             return
         if key == 'i' and not self.player.downed:
             self.open_bag()
+            return
+        npc = self.npcs.nearest(self.player.position)
+        if key == 'e' and npc is not None and not self.player.downed:
+            self.open_talk(npc)
             return
         fur = self.barricades.nearest(self.player.position, 2.2, kinds=('furnace',))[0]
         if key == 'e' and fur is not None and not self.player.downed:
@@ -1035,5 +1071,7 @@ class Game(Entity):
             self.powerups.update(dt)
             self.mining.update(dt)
             self.barricades.update(dt)
+            self.animals.update(dt)
+            self.npcs.update(dt)
         self.drops.update(dt)
         self.ui.update(dt)

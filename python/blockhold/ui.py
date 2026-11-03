@@ -366,7 +366,9 @@ class UI:
 
     def build_bag(self):
         from .bag_ui import BagScreen
+        from .npc_ui import TalkScreen
         self.bag = BagScreen(self)
+        self.talk = TalkScreen(self)
 
     def inventory_changed(self):
         """The local player's backpack changed: redraw whatever shows it."""
@@ -398,6 +400,8 @@ class UI:
             destroy(getattr(self, n))
         self.bag.close()
         destroy(self.bag.root)
+        self.talk.close()
+        destroy(self.talk.root)
         self.rebuild_hud()
         self.build_menu()
         self.build_pause()

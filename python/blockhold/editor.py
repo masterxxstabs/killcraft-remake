@@ -61,6 +61,7 @@ class Editor:
         self.last_cell = self.last_scatter = None
         self.toast_t = 0
         self.dialog = None
+        self.npc_panel = None   # the NPC editor (npc_editor.py) while it's open
         self.pivot = Vec3(0, 0, 0)
         self.yaw, self.pitch, self.dist = 35.0, 52.0, 30.0
         camera.fov = 60
@@ -181,7 +182,10 @@ class Editor:
         if ASSETS[self.asset].get('spawn') == 'player':       # only one player start
             for old in [q for q in self.world.props if ASSETS[q['id']].get('spawn') == 'player']:
                 self.world.remove_prop(old)
-        self.world.add_prop(self.asset, x, z, rot, scale, self.tilt, self.roll)
+        q = self.world.add_prop(self.asset, x, z, rot, scale, self.tilt, self.roll)
+        if q is not None and ASSETS[self.asset].get('npc'):     # a new NPC: open their panel straight away
+            self.painting = False
+            self.open_npc_panel(q)
         return True
 
     # ── actions ──────────────────────────────────────────────────────────────
@@ -232,7 +236,7 @@ class Editor:
                     jitter = Vec3((random.random() - 0.5) * 0.6, 0, (random.random() - 0.5) * 0.6)
                     if self.place_prop(p + (jitter if not first else Vec3(0, 0, 0))):
                         self.last_scatter = Vec3(p)
-            elif first or (cell != self.last_cell and len(a['solid']) <= 1):
+            elif first or (cell != self.last_cell and len(a['solid']) <= 1 and not a.get('npc')):
                 # small props can be drawn in lines (fences, walls, hedges); big ones need a click each
                 self.place_prop(p, random_look=False)
                 self.last_cell = cell
@@ -334,7 +338,7 @@ class Editor:
 
     # ── per frame ────────────────────────────────────────────────────────────
     def typing(self):
-        return self.name_field.active
+        return self.name_field.active or (self.npc_panel is not None and self.npc_panel.typing())
 
     def update(self, dt):
         if self.toast_t > 0:
@@ -416,6 +420,10 @@ class Editor:
         self.ghost_root.setColorScale(0.7, 1.3, 0.8, 0.6) if valid else self.ghost_root.setColorScale(1.6, 0.4, 0.4, 0.6)
 
     def input(self, key):
+        if self.npc_panel is not None:
+            if key == 'escape' and not self.npc_panel.typing():
+                self.npc_panel.done()
+            return
         if self.dialog:
             if key == 'escape':
                 self.close_dialog()
@@ -462,6 +470,8 @@ class Editor:
             self.turn(0, 15 if key == 't' else -15, 0)
         elif key in ('y', 'h'):                          # roll left / right
             self.turn(0, 0, 15 if key == 'y' else -15)
+        elif key == 'n' and self.selected is not None and ASSETS[self.selected['id']].get('npc'):
+            self.open_npc_panel(self.selected)
         elif key == 'delete' and self.selected is not None:
             self.push_undo()
             self.world.remove_prop(self.selected)
@@ -552,6 +562,45 @@ class Editor:
                                          ('90°', lambda: self.turn(90, 0, 0, snap=True)),
                                          ('RESET', lambda: (self.set_turn(0, 0, 0), self.refresh_rot_panel())))):
             FlatButton(p, label, x0 + 0.02 + i * 0.082, by, 0.076, 0.036, fn, fill=SLATE, edge=INK, size=0.72)
+        if self.selected is not None and ASSETS[self.selected['id']].get('npc'):
+            q = self.selected
+            FlatButton(p, f"EDIT NPC  (N):  {q['data']['name']}", x0, top - 0.35, w, 0.05,
+                       lambda: self.open_npc_panel(q), fill=GREEN, edge=INK, size=0.8)
+
+    # ── NPCs ─────────────────────────────────────────────────────────────────
+    def open_npc_panel(self, q):
+        from .npc_editor import NpcEditor
+        self.close_npc_panel()
+        self.push_undo()
+        self.npc_panel = NpcEditor(self, q)
+        self.dialog = self.npc_panel.root
+        # look at the NPC's face, with them on the right of the screen (the panel covers the left)
+        self.yaw = (q['rot'] + 180) % 360
+        self.pitch, self.dist = 8.0, 10.0
+        yr = math.radians(self.yaw)
+        right = Vec3(math.cos(yr), 0, -math.sin(yr))
+        fwd = Vec3(math.sin(yr), 0, math.cos(yr))
+        self.pivot = Vec3(q['x'], 0, q['z']) - right * 3.2 + fwd * 1.0
+        if self.rot_panel is not None:                  # (it's back when the NPC panel closes)
+            destroy(self.rot_panel)
+            self.rot_panel = None
+
+    def close_npc_panel(self):
+        if self.npc_panel is not None:
+            self.npc_panel.destroy()
+            self.npc_panel = None
+            self.dialog = None
+            self.dirty = True
+            self.refresh_rot_panel()
+
+    def refresh_npc_model(self, q):
+        """Show an NPC in the map the way their settings say."""
+        from .npcs import npc_model
+        if q.get('np') is None:
+            return
+        for child in q['np'].getChildren():
+            child.removeNode()
+        npc_model(q['data']).reparentTo(q['np'])
 
     # ── UI ───────────────────────────────────────────────────────────────────
     def toast(self, msg, colour=TEAL):
@@ -814,6 +863,9 @@ class Editor:
         win.bottom_right('CANCEL', self.close_dialog, w=0.2)
 
     def close_dialog(self):
+        if self.npc_panel is not None:
+            self.close_npc_panel()
+            return
         if self.dialog:
             destroy(self.dialog)
             self.dialog = None

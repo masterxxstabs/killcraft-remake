@@ -3,6 +3,17 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.18.0
+- NPCs for your maps: traders, quest givers and talkers. Press E next to one to talk, trade or take a job
+- EDIT NPC panel in the map editor (like the Custom NPCs mod): name, role, colours, hat, dialogue, trades and quests
+- Quests: bring items, kill zombies or hunt animals for coins and items
+- Passive animals: deer, pigs and chickens from spawners in the editor. They graze and run from you and zombies
+- Hunt them for raw meat, cook it in the furnace and right-click it in your backpack to eat it
+- New assets: church (pews, altar, lectern, candles, stained glass, bell tower, gate, confessional)
+- More town props: privacy and broken fences, chain-link gate, garden shed, playground, parking lots
+- Run-down buildings: abandoned house, burnt-out house, boarded-up shop, collapsed garage
+- More plants: willow, tall pine, sapling, cattails, sunflowers, wheat, berry and rose bushes, dead grass, ivy, pond
+
 ## 1.17.0
 - Map editor: turn things to any angle, and tilt or roll them, with the new ROTATION panel (or Z / X, T / G, Y / H)
 - Ctrl+click something you already placed to pick it, then turn it, or press Delete to remove it

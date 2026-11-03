@@ -43,7 +43,7 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | Space | jump; hold it against a ledge to climb up |
 | Shift | sprint (sprint at low cover to vault over it) |
 | C or Ctrl | crouch; press it while sprinting to slide |
-| E | use a workbench (crafting) or pick up a dropped gun; hold it to revive a downed ally, repair a barricade or refill a turret |
+| E | talk to an NPC, use a workbench (crafting) or pick up a dropped gun; hold it to revive a downed ally, repair a barricade or refill a turret |
 | X | drop the gun you're holding (it keeps its ammo, upgrades and attachments) |
 | I | backpack: your items, the armor you're wearing and the weapons in your hands |
 | G | build mode: place the barricades you crafted (R turns them, the wheel switches, right click stops) |
@@ -133,14 +133,16 @@ big maps stay playable (expect a somewhat lower frame rate than on small maps).
 
 | Tab | What's in it |
 | --- | --- |
-| Trees | pine, snowy pine, oak, autumn tree, birch, dead tree, stump, fallen log |
-| Shrubs | bush, flower bush, tall grass, fern, flowers, mushrooms, rocks, boulder, hedge, dead bush |
-| Buildings | house, log cabin, ruined house, watchtower, market stall, well, tent, stone wall, fence, sandbags |
+| Trees | pine, tall pine, snowy pine, oak, willow, autumn tree, birch, sapling, dead tree, stump, fallen log |
+| Shrubs | bush, berry bush, rose bush, sunflowers, wheat, cattails, dead grass, ivy wall, pond, flower bush, tall grass, fern, flowers, mushrooms, rocks, boulder, hedge, dead bush |
+| Buildings | house, log cabin, ruined house, abandoned house, burnt-out house, boarded-up shop, collapsed garage, watchtower, market stall, well, tent, stone wall, fence, sandbags |
 | Props | crate, barrel, hay bale, log pile, lamp post, bench, campfire, car wreck, signpost, rubble |
-| Town | pickup truck, bus wreck, abandoned car, police car, ambulance, traffic cone, road barrier, stop sign, road sign, traffic light, street light, fire hydrant, mailbox, phone booth, news stand, parking meter, dumpster, trash can, trash bags, utility pole, bus stop, gas pump, gas station, billboard, vending machine, picnic table, shopping cart, tire stack, pallet stack, chain-link fence, broken wall, corner shop, apartment block |
+| Town | pickup truck, bus wreck, abandoned car, police car, ambulance, traffic cone, road barrier, stop sign, road sign, traffic light, street light, fire hydrant, mailbox, phone booth, news stand, parking meter, dumpster, trash can, trash bags, utility pole, bus stop, gas pump, gas station, billboard, vending machine, picnic table, shopping cart, tire stack, pallet stack, chain-link fence and gate, privacy fence, broken fence, garden shed, swing set, slide, trash pile, parking lot, parking space, wheel stop, parking sign, broken wall, corner shop, apartment block |
 | Military | shipping container, army truck, armored jeep, tank wreck, helicopter wreck, guard tower, bunker, army tent, checkpoint gate, sandbag wall, hesco barrier, barbed wire, tank trap, ammo crate, supply pallet, weapon rack, fuel drums, jerry cans, generator, field gun, radar dish, radio mast, floodlight, helipad, camo net, burning barrel |
 | Farm | barn, silo, windmill, water tower, scarecrow, tractor, wheelbarrow, outhouse, corn, pumpkins, picket fence |
 | Graveyard | gravestone, stone cross, iron fence, crypt, coffin, grave lantern, old church |
+| Church | pews, altar, lectern, candle stand, stained-glass wall, bell tower, church gate, confessional |
+| Animals & NPCs | deer, pig, chicken and random **animal spawners**, and **NPCs**: trader, quest giver, talker |
 | Special | **zombie grave** (zombies climb out of these) and the **player start** |
 | Mining | workbench, ore / log pile spawns, and **loot crates** (break them for resources) |
 | Caves | dig a cave: set its depth, width, rock height and side tunnels, then click where the entrance goes |
@@ -159,6 +161,7 @@ big maps stay playable (expect a somewhat lower frame rate than on small maps).
 | T / G | tilt forward / back 15° |
 | Y / H | roll left / right 15° |
 | Ctrl+click | pick something you already placed, to turn it (Delete removes it, Esc lets go) |
+| N | edit the NPC you picked |
 | [ and ] | brush size 1, 3, 5, 9 or 15 cells across (paths, blocks, eraser) |
 | 1–4 | block height |
 | W A S D / arrows | move the camera |
@@ -202,6 +205,26 @@ The map is flat ground, so a cave is a rock hill with winding tunnels and a roof
 (not a hole into the ground). Every cave is different: Ctrl+Z and click again for another one. Erase
 or reshape parts with the ERASER and the Blocks tab. If the cave adds ore spawns, ore only grows at
 spawn markers on that map, so add a few outside too.
+
+**Animals.** Put an animal spawner down and a few deer (3), pigs (3) or chickens (4) live around
+it; the random spawner picks one kind. They wander, stop to graze, and run when a player or a zombie
+gets close (deer are the shyest; crouch to sneak up on them). Shoot or hit one for **raw meat**
+(chickens also drop feathers, deer a hide). A new one comes back to the spawner after a minute or so.
+Random arenas get a few herds of their own.
+
+**NPCs.** Place a trader, quest giver or talker and the **EDIT NPC** panel opens (or Ctrl+click an
+NPC and press **N**). It works like the Custom NPCs mod's edit screen, with four tabs:
+
+| Tab | What you set |
+| --- | --- |
+| LOOK | name, role (trader / quest giver / talker), skin, shirt, trousers and hair colours, a hat (cap, helmet, cowboy hat, beanie, hood), beard, goggles, apron, or start over from a ready-made NPC |
+| DIALOGUE | the greeting, up to four lines they say when you pick TALK, and their goodbye |
+| TRADES | up to six swaps: what the player gives (items or coins) and what they get (items, coins or a weapon) |
+| QUEST | the job: bring N of an item, kill N zombies or hunt N animals; the reward (coins and / or an item); whether it repeats; and what they say when they offer it, while you're working on it and when you're done |
+
+The NPC in the map changes as you edit. In a game, walk up to an NPC and press **E**: they turn
+to you and say their greeting, with buttons for **TALK**, **TRADE** (traders), **JOB** (quest
+givers) and **BYE**. Accept a job, do it, and come back to hand it in. NPCs are saved with the map.
 
 **Loot crates** (Mining tab) are supply crates you smash with a melee weapon or shoot open for a
 random handful of wood, stone, iron, copper and sometimes crystal. They come back about a minute later.
@@ -328,7 +351,11 @@ drag it onto **HEAD** or **BODY** (or right-click it) to wear it.
 | Plate carrier | body | 32% | 800 |
 
 Armor wears down as it soaks up hits (the green bar on it) and stops protecting you when it breaks.
-It adds to the shop's Plating upgrade, up to 75% in total. Items and costs are in
+It adds to the shop's Plating upgrade, up to 75% in total.
+
+**Food.** Hunt animals for raw meat, put it in a furnace (it cooks like ore smelts) and
+**right-click** the cooked meat in your backpack to eat it: +35 health (raw meat gives only 5).
+Feathers, hides, old gold coins and sealed letters are trade goods for NPC traders. Items and costs are in
 `blockhold/data/items.py` and `blockhold/data/crafting.py`.
 
 ### Barricades
@@ -520,6 +547,8 @@ Edit them, save, and start the game again. No build step is needed.
 | `blockhold/data/allies.py` | hireable survivors: price, health, gun, look |
 | `blockhold/data/resources.py` | resources and ore nodes: health, what they give, how often they spawn |
 | `blockhold/data/crafting.py` | workbench recipes and how gun costs are worked out |
+| `blockhold/data/animals.py` | deer, pigs and chickens: health, speed, how shy they are, meat, models |
+| `blockhold/data/npcs.py` | NPC presets (looks, dialogue, trades, quests) and the editor's colour choices |
 
 For example, to add a new gun, copy one of the `dict(...)` entries in `weapons.py`, give it
 a new `id` and `name`, and change the numbers. It appears in the shop automatically, with its
@@ -549,6 +578,10 @@ are drawn in code in `blockhold/textures.py`. Change the colours there, or add a
 | `blockhold/game.py` | main loop, input, waves, shop, saving |
 | `blockhold/world.py` | builds the arena from a map (or at random); collisions and line-of-sight |
 | `blockhold/editor.py` | the map editor |
+| `blockhold/npc_editor.py` | the editor's EDIT NPC panel |
+| `blockhold/npcs.py` | NPCs in a game: models, quests and trading |
+| `blockhold/npc_ui.py` | the talk window (dialogue, trade, jobs) |
+| `blockhold/animals.py` | passive animals: wandering, fleeing, hunting |
 | `blockhold/maps.py` | saving, loading and previewing maps |
 | `blockhold/lowpoly.py` | builds the flat-shaded low-poly models |
 | `blockhold/data/assets.py` | every placeable asset (trees, buildings, props...) |

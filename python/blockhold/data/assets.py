@@ -24,6 +24,8 @@
 #    ore        an ore node grows here in game ('random' or a node type from resources.py)
 #    station    'workbench' = players craft here (press E)
 #    light      a light it gives off: dict(colour=(r, g, b), radius, strength, at=(x, y, z), flicker)
+#    animal     a spawner: animals of this kind live here ('random' or a kind from animals.py)
+#    npc        an NPC with this role (trader, quest, talker); edit who they are in the editor
 # ─────────────────────────────────────────────────────────────────────────────
 
 BROWN = '#6b4528'
@@ -1297,6 +1299,421 @@ def road_sign(lp):
     lp.box((0, 2.0, 0.07), (0.5, 0.06, 0.01), '#f5f4f2')
     lp.box((0.22, 2.0, 0.07), (0.08, 0.2, 0.01), '#f5f4f2')
 
+
+# ── church ───────────────────────────────────────────────────────────────────
+PEW_WOOD = '#6b4528'
+
+
+def pew(lp):
+    lp.box((0, 0.45, 0), (2.7, 0.08, 0.5), PEW_WOOD, top='#7a5230')
+    lp.box((0, 0.85, -0.24), (2.7, 0.7, 0.07), PEW_WOOD)
+    lp.box((0, 1.2, -0.24), (2.75, 0.06, 0.12), '#5e3b1f')
+    for x in (-1.32, 1.32):
+        lp.box((x, 0.5, -0.02), (0.08, 1.0, 0.56), '#5e3b1f')
+    lp.box((0, 0.2, 0.18), (2.6, 0.05, 0.08), '#4e3220')                     # kneeler
+
+
+def altar(lp):
+    lp.box((0, 0.5, 0), (2.6, 1.0, 0.9), '#cfc8b8', top='#ddd6c6')
+    lp.box((0, 1.02, 0), (2.7, 0.04, 1.0), '#f2efe6')                       # cloth
+    lp.box((0, 0.7, 0.51), (0.9, 0.6, 0.02), '#8a2a2a')                    # front hanging
+    lp.box((0, 0.75, 0.52), (0.06, 0.4, 0.01), '#c9a227')
+    lp.box((0, 0.85, 0.52), (0.24, 0.06, 0.01), '#c9a227')
+    lp.box((0, 1.45, -0.3), (0.06, 0.8, 0.06), '#c9a227')                  # cross on the altar
+    lp.box((0, 1.65, -0.3), (0.34, 0.06, 0.06), '#c9a227')
+    for x in (-1.0, 1.0):
+        lp.cylinder((x, 1.04, 0), 0.05, 0.08, '#c9a227', sides=6)
+        lp.cylinder((x, 1.12, 0), 0.03, 0.3, '#f2efe6', sides=6)
+        lp.emissive = True
+        lp.cylinder((x, 1.42, 0), 0.025, 0.07, '#ffd06b', sides=5, top_radius=0)
+        lp.emissive = False
+
+
+def lectern(lp):
+    lp.box((0, 0.05, 0), (0.6, 0.1, 0.5), '#5e3b1f')
+    lp.box((0, 0.6, 0), (0.18, 1.0, 0.18), '#6b4528')
+    lp.box((0, 1.15, 0.05), (0.62, 0.06, 0.45), '#6b4528', yaw=0)
+    lp.box((0, 1.2, 0.05), (0.42, 0.03, 0.3), '#f2efe6')                    # an open book
+    lp.box((0, 1.21, 0.05), (0.02, 0.03, 0.3), '#8a2a2a')
+
+
+def candle_stand(lp):
+    iron = '#26282d'
+    lp.cylinder((0, 0, 0), 0.22, 0.05, iron, sides=8)
+    lp.beam((0, 0, 0), (0, 1.3, 0), 0.03, iron, sides=5)
+    lp.cylinder((0, 1.3, 0), 0.3, 0.03, iron, sides=10)
+    for i in range(5):
+        import math
+        a = i / 5 * math.tau
+        x, z = math.cos(a) * 0.22, math.sin(a) * 0.22
+        lp.cylinder((x, 1.33, z), 0.025, 0.12 + (i % 3) * 0.05, '#f2efe6', sides=5)
+        lp.emissive = True
+        lp.cylinder((x, 1.45 + (i % 3) * 0.05, z), 0.018, 0.05, '#ffd06b', sides=4, top_radius=0)
+        lp.emissive = False
+
+
+def stained_window(lp):
+    stone = '#9c9a92'
+    lp.box((0, 1.5, 0), (1.0, 3.0, 0.5), stone, top='#8a8882')
+    lp.box((0, 1.7, 0.26), (0.62, 1.7, 0.03), '#3a3836')                    # lead frame
+    lp.emissive = True
+    colours = ['#c0392b', '#2e5fa8', '#d9a521', '#3a8a4a', '#7a3a9a']
+    for i in range(4):
+        for j in range(3):
+            lp.box((-0.2 + j * 0.2, 1.05 + i * 0.36, 0.28), (0.17, 0.32, 0.01), colours[(i + j * 2) % 5])
+    lp.box((0, 2.62, 0.28), (0.36, 0.2, 0.01), '#d9a521')
+    lp.emissive = False
+
+
+def bell_tower(lp):
+    stone, roof = '#a5a39c', '#4a4a4c'
+    lp.box((0, 2.5, 0), (2.8, 5.0, 2.8), stone, top='#8a8882')
+    for x, z in ((-1.2, -1.2), (1.2, -1.2), (-1.2, 1.2), (1.2, 1.2)):        # belfry pillars
+        lp.box((x, 6.0, z), (0.4, 2.0, 0.4), stone)
+    lp.box((0, 7.1, 0), (3.0, 0.2, 3.0), '#8a8882')
+    lp.cylinder((0, 7.2, 0), 2.1, 2.6, roof, sides=4, top_radius=0)
+    lp.box((0, 10.0, 0), (0.08, 0.6, 0.08), '#c9a227')
+    lp.box((0, 10.1, 0), (0.32, 0.08, 0.08), '#c9a227')
+    lp.cylinder((0, 5.4, 0), 0.5, 0.9, '#b8862b', sides=10, top_radius=0.25)   # the bell
+    lp.box((0, 6.35, 0), (1.6, 0.12, 0.12), '#4e3220')
+    lp.box((0, 1.1, 1.41), (1.0, 2.2, 0.03), '#3a2618')                       # door
+    lp.box((0, 3.6, 1.41), (0.5, 0.8, 0.02), '#2b3a4a')
+
+
+def church_gate(lp):
+    stone, iron = '#a5a39c', '#26282d'
+    for x in (-1.3, 1.3):
+        lp.box((x, 1.0, 0), (0.5, 2.0, 0.5), stone, top='#8a8882')
+        lp.cylinder((x, 2.0, 0), 0.2, 0.25, stone, sides=6, top_radius=0.05)
+    for i in range(9):                                                       # iron bars, arched
+        x = -0.9 + i * 0.225
+        h = 1.6 + 0.35 * (1 - (x / 0.95) ** 2)
+        lp.beam((x, 0.05, 0), (x, h, 0), 0.018, iron, sides=4)
+        lp.cylinder((x, h, 0), 0.035, 0.08, iron, sides=4, top_radius=0)
+    for y in (0.3, 1.2):
+        lp.box((0, y, 0), (1.9, 0.05, 0.04), iron)
+
+
+def confessional(lp):
+    wood = '#5e3b1f'
+    lp.box((0, 1.2, 0), (2.0, 2.4, 1.0), wood, top='#4e3220')
+    for x in (-0.5, 0.5):
+        lp.box((x, 1.05, 0.51), (0.75, 1.9, 0.02), '#3a2618')
+        lp.box((x, 1.6, 0.53), (0.5, 0.5, 0.01), '#2a1d12')
+    lp.box((0, 2.5, 0.0), (2.2, 0.2, 1.15), '#4e3220')
+    lp.box((0, 2.75, 0.0), (0.06, 0.4, 0.06), '#c9a227')
+
+
+# ── fences, yards and parking ────────────────────────────────────────────────
+def privacy_fence(lp):
+    for i in range(6):
+        x = -0.42 + i * 0.168
+        h = 1.85 + (lp.rnd.random() - 0.5) * 0.08
+        lp.box((x, h / 2, 0), (0.16, h, 0.04), lp.rnd.choice(['#9c6b3f', '#8a6038', '#a87848']))
+    for y in (0.4, 1.5):
+        lp.box((0, y, -0.05), (1.0, 0.1, 0.05), '#6b4528')
+    lp.box((0.5, 1.0, -0.04), (0.1, 2.0, 0.1), '#5e3b1f')
+
+
+def broken_fence(lp):
+    for i in range(6):
+        x = -0.42 + i * 0.168
+        if i in (2, 3) and lp.rnd.random() < 0.8:
+            lp.box((x, 0.25, 0), (0.16, 0.5, 0.04), '#8a6038')               # snapped off
+            continue
+        h = 1.4 + lp.rnd.random() * 0.5
+        lp.box((x, h / 2, 0), (0.16, h, 0.04), lp.rnd.choice(['#7a5a3a', '#6b4a2b', '#8a6038']), yaw=(lp.rnd.random() - 0.5) * 8)
+    lp.box((0, 0.4, -0.05), (1.0, 0.1, 0.05), '#5e3b1f')
+    lp.box((0.25, 0.02, 0.35), (0.16, 0.03, 0.9), '#7a5a3a', yaw=30)         # a plank on the ground
+
+
+def _mesh_panel(lp, a, b, y0, y1, metal='#8a8f96', wire='#a8adb3'):
+    """A framed chain-link panel from a to b (x, z on the ground), y0..y1 high."""
+    (ax, az), (bx, bz) = a, b
+    for y in (y0, y1):
+        lp.beam((ax, y, az), (bx, y, bz), 0.02, metal, sides=4)
+    for x, z in (a, b):
+        lp.beam((x, y0, z), (x, y1, z), 0.02, metal, sides=4)
+    n = 4
+    for i in range(n):
+        t0, t1 = i / n, (i + 1) / n
+        p0 = (ax + (bx - ax) * t0, az + (bz - az) * t0)
+        p1 = (ax + (bx - ax) * t1, az + (bz - az) * t1)
+        lp.beam((p0[0], y0, p0[1]), (p1[0], y1, p1[1]), 0.006, wire, sides=3)
+        lp.beam((p1[0], y0, p1[1]), (p0[0], y1, p0[1]), 0.006, wire, sides=3)
+
+
+def chainlink_gate(lp):
+    metal = '#8a8f96'
+    for x in (-0.95, 0.95):
+        lp.beam((x, 0, 0), (x, 2.1, 0), 0.05, metal, sides=6)
+        lp.cylinder((x, 2.1, 0), 0.065, 0.04, metal, sides=6)
+    _mesh_panel(lp, (0.9, 0), (0.02, 0), 0.08, 1.95)                          # right leaf shut
+    _mesh_panel(lp, (-0.9, 0.02), (-0.28, 0.64), 0.08, 1.95)                  # left leaf swung open
+    for y in (0.4, 1.6):                                                      # hinges
+        lp.box((0.92, y, 0), (0.06, 0.08, 0.06), '#5b6067')
+        lp.box((-0.92, y, 0), (0.06, 0.08, 0.06), '#5b6067')
+    lp.box((0.06, 1.0, 0), (0.05, 0.12, 0.05), '#5b6067')                    # latch
+
+
+def garden_shed(lp):
+    wood = lp.rnd.choice(['#7a8a6a', '#8a6a4a', '#6a7a8a'])
+    lp.box((0, 1.0, -1), (3.0, 2.0, 1.0), wood)
+    lp.box((-1, 1.0, 0.5), (1.0, 2.0, 2.0), wood)
+    lp.box((1, 1.0, 0.5), (1.0, 2.0, 2.0), wood)
+    lp.box((0, 1.6, 1.0), (1.0, 0.8, 1.0), wood)
+    lp.prism((0, 2.0, 0), 3.4, 3.4, 0.8, '#4a4a4c', gable=wood)
+    lp.box((0, 0.6, 1.51), (0.8, 1.2, 0.02), '#3a2618')                      # door
+
+
+def swing_set(lp):
+    metal = '#c62f2a'
+    for x in (-1.2, 1.2):
+        lp.beam((x, 0, -0.6), (x, 2.2, 0), 0.05, metal, sides=5)
+        lp.beam((x, 0, 0.6), (x, 2.2, 0), 0.05, metal, sides=5)
+    lp.beam((-1.25, 2.2, 0), (1.25, 2.2, 0), 0.05, metal, sides=5)
+    for x in (-0.55, 0.55):
+        lp.beam((x - 0.2, 2.18, 0), (x - 0.2, 0.55, 0), 0.008, '#5b6067', sides=3)
+        lp.beam((x + 0.2, 2.18, 0), (x + 0.2, 0.55, 0), 0.008, '#5b6067', sides=3)
+        lp.box((x, 0.53, 0), (0.48, 0.04, 0.2), '#2a2a30')
+
+
+def slide(lp):
+    lp.box((-0.9, 0.9, 0), (0.7, 0.06, 0.7), '#d9a521')
+    for x, z in ((-1.2, -0.3), (-0.6, -0.3), (-1.2, 0.3), (-0.6, 0.3)):
+        lp.beam((x, 0, z), (x, 0.9, z), 0.04, '#2f5d8a', sides=5)
+    for k in range(4):
+        lp.box((-1.35, 0.2 + k * 0.22, 0), (0.06, 0.04, 0.6), '#2f5d8a')
+    lp.beam((-0.55, 0.92, 0), (1.25, 0.12, 0), 0.25, '#c62f2a', sides=4)
+
+
+def trash_pile(lp):
+    for _ in range(9):
+        x, z = (lp.rnd.random() - 0.5) * 1.4, (lp.rnd.random() - 0.5) * 1.2
+        if lp.rnd.random() < 0.5:
+            lp.blob((x, 0.18, z), 0.2 + lp.rnd.random() * 0.1, lp.rnd.choice(['#1f1f22', '#2a2a30']), detail=0)
+        else:
+            sz = 0.2 + lp.rnd.random() * 0.25
+            lp.box((x, sz / 2, z), (sz, sz, sz * 1.2), lp.rnd.choice(['#a87848', '#8a8f96', '#c9c7c0']),
+                   yaw=lp.rnd.random() * 90)
+
+
+def parking_lot(lp):
+    """A patch of tarmac with painted bays (8 x 6 m)."""
+    lp.flat((0, 0, 0), (8.0, 6.0), '#3a3b3e', 0.025)
+    for i in range(5):                                                       # bay lines
+        x = -3.0 + i * 1.5
+        lp.flat((x, 0, -1.6), (0.08, 2.6), '#e8e6dc', 0.03)
+        lp.flat((x, 0, 1.6), (0.08, 2.6), '#e8e6dc', 0.03)
+    lp.flat((0, 0, -2.9), (6.1, 0.08), '#e8e6dc', 0.03)
+    lp.flat((0, 0, 2.9), (6.1, 0.08), '#e8e6dc', 0.03)
+    lp.flat((3.5, 0, 0), (0.6, 1.6), '#d9a521', 0.03)                        # arrow-ish marking
+    for _ in range(5):                                                       # cracks and stains
+        lp.flat(((lp.rnd.random() - 0.5) * 7, 0, (lp.rnd.random() - 0.5) * 5), (0.6, 0.2), '#2c2d30', 0.028,
+                yaw=lp.rnd.random() * 180)
+
+
+def parking_space(lp):
+    lp.flat((0, 0, 0), (2.6, 5.0), '#3a3b3e', 0.025)
+    for x in (-1.25, 1.25):
+        lp.flat((x, 0, 0), (0.08, 5.0), '#e8e6dc', 0.03)
+    lp.box((0, 0.07, -2.1), (1.6, 0.14, 0.25), '#b9b7b0')                    # wheel stop
+
+
+def wheel_stop(lp):
+    lp.box((0, 0.07, 0), (1.6, 0.14, 0.25), '#b9b7b0', top='#c9c7c0')
+    lp.box((-0.5, 0.145, 0), (0.3, 0.01, 0.25), '#d9a521')
+    lp.box((0.5, 0.145, 0), (0.3, 0.01, 0.25), '#d9a521')
+
+
+def parking_sign(lp):
+    lp.beam((0, 0, 0), (0, 2.3, 0), 0.04, '#8a8f96', sides=5)
+    lp.box((0, 2.05, 0.05), (0.55, 0.55, 0.03), '#1f5fa8')
+    lp.box((0.06, 2.05, 0.07), (0.07, 0.38, 0.01), '#f5f4f2')
+    lp.box((-0.05, 2.17, 0.07), (0.17, 0.07, 0.01), '#f5f4f2')
+    lp.box((-0.05, 2.03, 0.07), (0.17, 0.07, 0.01), '#f5f4f2')
+    lp.box((-0.12, 2.1, 0.07), (0.05, 0.16, 0.01), '#f5f4f2')
+
+
+# ── run-down buildings ───────────────────────────────────────────────────────
+def _boards(lp, x, y, z, w, h, facing_x=False):
+    """Planks nailed over a window."""
+    for k in range(3):
+        yy = y - h / 3 + k * h / 3
+        size = (0.06, 0.12, w * 1.15) if facing_x else (w * 1.15, 0.12, 0.06)
+        lp.box((x, yy, z), size, lp.rnd.choice(['#8a6038', '#7a5230', '#9c6b3f']), yaw=(lp.rnd.random() - 0.5) * 14)
+
+
+def abandoned_house(lp):
+    wall, roof = '#b5ab90', '#6e3a2f'
+    lp.flat((0, 0, 0), (7, 7), '#6a5a48', 0.03)
+    lp.box((0, 1.4, -3), (7, 2.8, 1), wall)
+    lp.box((-3, 1.4, 0), (1, 2.8, 5), wall)
+    lp.box((3, 1.4, 0), (1, 2.8, 5), wall)
+    lp.box((-2, 1.4, 3), (3, 2.8, 1), wall)
+    lp.box((2, 1.4, 3), (3, 2.8, 1), wall)
+    lp.box((0, 2.4, 3), (1, 0.8, 1), wall)
+    for x, z in ((-3, -3), (3, -3), (-3, 3), (3, 3)):
+        lp.box((x, 1.42, z), (1.06, 2.84, 1.06), '#5e4a38')
+    for x in (-3.53, 3.53):                                                   # boarded-up side windows
+        lp.box((x, 1.5, 0), (0.05, 0.9, 1.3), '#151a20')
+        _boards(lp, x * 1.005, 1.5, 0, 1.3, 0.9, facing_x=True)
+    lp.box((-2, 1.5, 3.53), (1.0, 0.8, 0.05), '#151a20')
+    _boards(lp, -2, 1.5, 3.56, 1.0, 0.8)
+    lp.prism((0, 2.8, 0), 8.2, 8.2, 2.0, roof, gable=wall)
+    lp.box((1.6, 3.3, -0.6), (1.6, 0.06, 1.8), '#151515', yaw=0)             # a hole in the roof
+    lp.box((-1.0, 0.04, 1.0), (1.2, 0.08, 0.8), '#6e3a2f', yaw=25)            # fallen roof tiles
+    for _ in range(4):                                                       # stains and weeds
+        lp.blade(((lp.rnd.random() - 0.5) * 6, 0, 3.6), 0.5, 0.1, 0.3, '#5e7a3a')
+
+
+def burnt_house(lp):
+    char, ash = '#2a2622', '#4a4440'
+    lp.flat((0, 0, 0), (7, 7), '#2a2622', 0.03)
+    for (x, z, w, d), h in (((0, -3, 7, 1), 2.2), ((-3, -0.5, 1, 4), 1.4), ((3, 0, 1, 5), 2.6), ((-2, 3, 3, 1), 0.9),
+                            ((2.2, 3, 2.6, 1), 1.8)):
+        lp.box((x, h / 2, z), (w, h, d), char, top=ash)
+    for x, z in ((-3, -3), (3, -3), (3, 3)):
+        lp.box((x, 1.4, z), (0.9, 2.8, 0.9), '#1c1a18')
+    for _ in range(6):                                                       # charred beams lying around
+        x, z = (lp.rnd.random() - 0.5) * 5, (lp.rnd.random() - 0.5) * 5
+        lp.beam((x - 1, 0.1, z), (x + 1, 0.3 + lp.rnd.random() * 0.8, z + (lp.rnd.random() - 0.5)), 0.12,
+                '#1a1612', sides=5)
+    lp.blob((0.5, 0.2, 0.2), 0.8, ash, squash=(1.3, 0.3, 1.1), detail=0)
+
+
+def boarded_shop(lp):
+    wall = '#a8a29a'
+    lp.flat((0, 0, 0), (5, 5), '#6a6862', 0.03)
+    lp.box((0, 1.5, -2), (5, 3.0, 1), wall)
+    lp.box((-2, 1.5, 0), (1, 3.0, 3), wall)
+    lp.box((2, 1.5, 0), (1, 3.0, 3), wall)
+    lp.box((-1.5, 1.5, 2), (2, 3.0, 1), wall)
+    lp.box((1.5, 1.5, 2), (2, 3.0, 1), wall)
+    lp.box((0, 2.5, 2), (1, 1.0, 1), wall)
+    for x in (-1.5, 1.5):
+        lp.box((x, 1.2, 2.52), (1.3, 1.2, 0.02), '#151a20')
+        _boards(lp, x, 1.2, 2.56, 1.3, 1.2)
+    lp.box((0, 3.05, 0), (5.2, 0.1, 5.2), '#5b5e63')
+    lp.box((0, 2.75, 2.56), (4.2, 0.5, 0.06), '#7a2a2a')                      # faded sign
+    lp.box((-0.8, 2.75, 2.6), (1.2, 0.16, 0.01), '#c9c7c0')
+    lp.box((1.2, 1.9, 2.53), (0.7, 0.4, 0.01), '#3a8a4a')                    # graffiti
+    lp.box((-1.4, 0.5, 2.53), (0.5, 0.3, 0.01), '#c62f2a')
+
+
+def collapsed_garage(lp):
+    wall = '#9a9890'
+    lp.flat((0, 0, 0), (5, 5), '#5a5a58', 0.03)
+    lp.box((0, 1.3, -2), (5, 2.6, 1), wall)
+    lp.box((-2, 1.3, 0), (1, 2.6, 3), wall)
+    lp.box((2, 0.6, 0.5), (1, 1.2, 4), wall)                                  # this side came down
+    lp.beam((-2.4, 2.6, -2.3), (2.4, 0.6, 1.8), 0.08, '#5b5e63', sides=4)    # the roof slab, fallen in
+    lp.box((0, 1.6, -0.3), (4.4, 0.12, 4.0), '#5b5e63', yaw=0)
+    _car(lp, '#8a3b2a', length=2.8)                                          # a car squashed underneath
+    for _ in range(8):
+        x, z = (lp.rnd.random() - 0.5) * 4, 1.5 + lp.rnd.random() * 1.2
+        sz = 0.15 + lp.rnd.random() * 0.3
+        lp.box((x, sz / 2, z), (sz, sz, sz), lp.rnd.choice(STONE), yaw=lp.rnd.random() * 90)
+
+
+# ── more vegetation ──────────────────────────────────────────────────────────
+def willow(lp):
+    import math
+    lp.cylinder((0, 0, 0), 0.3, 2.4, BROWN, sides=6, top_radius=0.2)
+    lp.blob((0, 3.0, 0), 1.6, '#6a9a3a', squash=(1.2, 0.6, 1.2), colours=['#6a9a3a', '#5e8a34', '#78a845'])
+    for i in range(16):                                                       # hanging strands
+        a = i / 16 * math.tau + lp.rnd.random() * 0.3
+        r = 1.2 + lp.rnd.random() * 0.5
+        x, z = math.cos(a) * r, math.sin(a) * r
+        lp.beam((x, 3.0, z), (x * 1.08, 0.8 + lp.rnd.random() * 0.6, z * 1.08), 0.08, '#78a845', sides=3,
+                end_radius=0.02)
+
+
+def tall_pine(lp):
+    lp.cylinder((0, 0, 0), 0.22, 2.4, BROWN, sides=6, top_radius=0.14)
+    for (y, r, h), c in zip(((1.6, 1.4, 1.7), (2.7, 1.15, 1.6), (3.8, 0.9, 1.5), (4.9, 0.6, 1.4)),
+                            PINE + [PINE[0]]):
+        lp.cylinder((0, y, 0), r, h, c, sides=7, top_radius=0)
+
+
+def sapling(lp):
+    lp.beam((0, 0, 0), (0.05, 1.1, 0), 0.04, BROWN, sides=4)
+    lp.box((0, 0.5, 0.05), (0.05, 1.0, 0.05), '#a87848')                     # stake
+    lp.blob((0.05, 1.25, 0), 0.35, LEAF[1], detail=0, colours=LEAF)
+
+
+def cattails(lp):
+    for _ in range(9):
+        x, z = (lp.rnd.random() - 0.5) * 0.7, (lp.rnd.random() - 0.5) * 0.7
+        h = 0.9 + lp.rnd.random() * 0.6
+        lp.beam((x, 0, z), (x, h, z), 0.012, '#6f8f3a', sides=3)
+        if lp.rnd.random() < 0.6:
+            lp.cylinder((x, h - 0.22, z), 0.035, 0.18, '#6b4528', sides=5)
+        lp.blade((x, 0, z), h * 0.8, 0.05, 0.3, '#7fa045', yaw=lp.rnd.random() * 360)
+
+
+def sunflowers(lp):
+    for _ in range(3 + lp.rnd.randrange(3)):
+        x, z = (lp.rnd.random() - 0.5) * 0.7, (lp.rnd.random() - 0.5) * 0.7
+        h = 1.3 + lp.rnd.random() * 0.6
+        lp.beam((x, 0, z), (x, h, z), 0.025, '#5e8a34', sides=4)
+        lp.blade((x, h * 0.4, z), 0.35, 0.12, 0.6, '#5e8a34', yaw=lp.rnd.random() * 360)
+        lp.beam((x, h, z - 0.02), (x, h, z + 0.04), 0.17, '#e8b820', sides=8)
+        lp.beam((x, h, z + 0.04), (x, h, z + 0.06), 0.08, '#4a2a12', sides=8)
+
+
+def wheat(lp):
+    for _ in range(26):
+        x, z = (lp.rnd.random() - 0.5) * 0.95, (lp.rnd.random() - 0.5) * 0.95
+        h = 0.7 + lp.rnd.random() * 0.25
+        lp.beam((x, 0, z), (x + (lp.rnd.random() - 0.5) * 0.1, h, z), 0.008, '#c9a84a', sides=3)
+        lp.cylinder((x, h, z), 0.025, 0.12, '#d9b85a', sides=4, top_radius=0.005)
+
+
+def berry_bush(lp):
+    lp.blob((0, 0.4, 0), 0.5, LEAF[2], squash=(1, 0.8, 1), colours=LEAF)
+    for _ in range(12):
+        import math
+        a, e = lp.rnd.random() * math.tau, lp.rnd.random() * 1.2
+        lp.blob((math.cos(a) * math.cos(e) * 0.48, 0.4 + math.sin(e) * 0.36, math.sin(a) * math.cos(e) * 0.48),
+                0.05, lp.rnd.choice(['#b8282a', '#7a2a9a']), detail=0, jitter=0)
+
+
+def rose_bush(lp):
+    lp.blob((0, 0.35, 0), 0.42, '#3f7d31', squash=(1, 0.85, 1), colours=LEAF)
+    for _ in range(9):
+        import math
+        a, e = lp.rnd.random() * math.tau, lp.rnd.random() * 1.1
+        lp.blob((math.cos(a) * math.cos(e) * 0.4, 0.35 + math.sin(e) * 0.32, math.sin(a) * math.cos(e) * 0.4),
+                0.07, lp.rnd.choice(['#d6334a', '#f2efe6', '#e88aa0']), detail=0, jitter=0.1)
+
+
+def dead_grass(lp):
+    for _ in range(14):
+        x, z = (lp.rnd.random() - 0.5) * 0.8, (lp.rnd.random() - 0.5) * 0.8
+        lp.blade((x, 0, z), 0.3 + lp.rnd.random() * 0.3, 0.07, 0.6, lp.rnd.choice(['#b8a066', '#a08a52', '#c9b27a']),
+                 yaw=lp.rnd.random() * 360)
+
+
+def ivy_wall(lp):
+    lp.box((0, 0.45, 0), (1.0, 0.9, 0.45), '#8a8a86', top='#7a7a76')
+    for _ in range(10):
+        x, y = (lp.rnd.random() - 0.5) * 0.95, 0.15 + lp.rnd.random() * 0.8
+        lp.blob((x, y, 0.23), 0.12, lp.rnd.choice(LEAF), squash=(1, 1, 0.4), detail=0)
+        lp.blob((x, y, -0.23), 0.1, lp.rnd.choice(LEAF), squash=(1, 1, 0.4), detail=0)
+
+
+def pond(lp):
+    import math
+    lp.cylinder((0, -0.01, 0), 1.9, 0.02, '#6a5a48', sides=14)
+    lp.cylinder((0, 0.0, 0), 1.7, 0.03, '#2e6a8a', sides=14, top_colour='#3a7fa0')
+    for _ in range(5):                                                       # lily pads
+        a, r = lp.rnd.random() * math.tau, lp.rnd.random() * 1.3
+        lp.cylinder((math.cos(a) * r, 0.035, math.sin(a) * r), 0.18, 0.01, '#4c8f3a', sides=7)
+    for i in range(10):                                                       # stones around the edge
+        a = i / 10 * math.tau
+        lp.blob((math.cos(a) * 1.85, 0.05, math.sin(a) * 1.85), 0.16, STONE[i % 3], detail=0, colours=STONE)
+
 def _ore_marker(kind):
     from .resources import draw_node
 
@@ -1311,6 +1728,36 @@ def ore_random(lp):
     lp.beam((0.05, 0.6, 0), (0.05, 1.9, 0), 0.03, '#f5f4f2', sides=4)
     for i, c in enumerate(('#c3cfdb', '#e0813a', '#c07bff')):
         lp.box((0.25, 1.78 - i * 0.12, 0), (0.4, 0.12, 0.02), c)
+
+
+def _animal_marker(kinds):
+    """A grassy patch with a little sign and the animal(s) standing on it."""
+    def build(lp):
+        from .animals import draw_whole
+        lp.cylinder((0, 0, 0), 1.0, 0.04, '#5f8f3a', sides=10)
+        lp.beam((-0.85, 0, -0.6), (-0.85, 1.1, -0.6), 0.03, '#6b4528', sides=4)
+        lp.box((-0.85, 1.0, -0.56), (0.42, 0.26, 0.03), '#e8dcc0')
+        lp.box((-0.85, 1.0, -0.54), (0.1, 0.1, 0.01), '#3a2a1a')
+        spots = [(0, 0)] if len(kinds) == 1 else [(-0.35, 0.25), (0.4, -0.1), (0.1, 0.55)]
+        for kind, (x, z) in zip(kinds, spots):
+            draw_whole(lp, kind, offset=(x, 0.04, z), scale=0.8 if kind == 'deer' else 1.0)
+    return build
+
+
+def _npc_marker(role):
+    """Stand-in for an NPC (the editor shows the real look once placed)."""
+    def build(lp):
+        from .npcs import PRESETS
+        d = PRESETS[role]
+        for x in (-0.13, 0.13):
+            lp.box((x, 0.375, 0), (0.24, 0.75, 0.24), d['pants'])
+        lp.box((0, 1.11, 0), (0.5, 0.72, 0.28), d['shirt'])
+        for x in (-0.36, 0.36):
+            lp.box((x, 1.08, 0), (0.2, 0.72, 0.2), d['skin'])
+        lp.box((0, 1.72, 0), (0.5, 0.5, 0.5), d['skin'])
+        lp.box((0, 1.94, 0), (0.52, 0.08, 0.52), d['hair'] or d['skin'])
+        lp.cylinder((0, 0, 0), 0.5, 0.03, '#ffd84a' if role == 'quest' else '#3ddc97', sides=10)
+    return build
 
 
 def _perimeter(half, door=None, height=3):
@@ -1472,6 +1919,50 @@ ASSETS = {
                        light=dict(colour=(1.0, 0.65, 0.3), radius=5, strength=0.9, at=(0.3, 1.1, 0), flicker=0.15)),
     'church': A('Old church', 'graveyard', church, [(dx, dz, 4) for dx in range(-3, 4) for dz in range(-4, 5)
                                                      if (abs(dx) == 3 or abs(dz) == 4) and (dx, dz) != (0, 4)]),
+    # church
+    'pew': A('Pew', 'church', pew, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)]),
+    'altar': A('Altar', 'church', altar, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)],
+               light=dict(colour=(1.0, 0.8, 0.5), radius=5, strength=0.8, at=(0, 1.5, 0), flicker=0.12)),
+    'lectern': A('Lectern', 'church', lectern, [(0, 0, 1)]),
+    'candle_stand': A('Candle stand', 'church', candle_stand,
+                      light=dict(colour=(1.0, 0.75, 0.4), radius=6, strength=1.0, at=(0, 1.5, 0), flicker=0.18)),
+    'stained_window': A('Stained glass wall', 'church', stained_window, [(0, 0, 3)]),
+    'bell_tower': A('Bell tower', 'church', bell_tower, [(dx, dz, 4) for dx in (-1, 0, 1) for dz in (-1, 0, 1)]),
+    'church_gate': A('Church gate', 'church', church_gate, [(-1, 0, 2), (1, 0, 2)]),
+    'confessional': A('Confessional', 'church', confessional, [(-1, 0, 3), (0, 0, 3), (1, 0, 3)]),
+    # fences, yards and parking
+    'privacy_fence': A('Plank privacy fence', 'town', privacy_fence, [(0, 0, 2)], variants=3),
+    'broken_fence': A('Broken plank fence', 'town', broken_fence, [(0, 0, 1)], variants=3),
+    'chainlink_gate': A('Chain-link gate', 'town', chainlink_gate),
+    'garden_shed': A('Garden shed', 'town', garden_shed, _perimeter(1, door=(0, 1), height=2), variants=3),
+    'swing_set': A('Swing set', 'town', swing_set),
+    'slide': A('Playground slide', 'town', slide),
+    'trash_pile': A('Trash pile', 'town', trash_pile, nature=True, variants=3),
+    'parking_lot': A('Parking lot (8 x 6)', 'town', parking_lot, variants=2),
+    'parking_space': A('Parking space', 'town', parking_space),
+    'wheel_stop': A('Wheel stop', 'town', wheel_stop),
+    'parking_sign': A('Parking sign', 'town', parking_sign),
+    # run-down buildings
+    'abandoned_house': A('Abandoned house', 'buildings', abandoned_house, _perimeter(3, door=(0, 3)), variants=2),
+    'burnt_house': A('Burnt-out house', 'buildings', burnt_house,
+                     [(dx, -3, 2) for dx in range(-3, 4)] + [(3, dz, 2) for dz in range(-2, 3)] +
+                     [(-3, dz, 1) for dz in range(-2, 2)] + [(1, 3, 2), (2, 3, 2), (-2, 3, 1), (-3, 3, 1)], variants=2),
+    'boarded_shop': A('Boarded-up shop', 'buildings', boarded_shop, _perimeter(2, door=(0, 2)), variants=2),
+    'collapsed_garage': A('Collapsed garage', 'buildings', collapsed_garage,
+                          [(dx, -2, 2) for dx in range(-2, 3)] + [(-2, dz, 2) for dz in (-1, 0, 1)] +
+                          [(2, dz, 1) for dz in (-1, 0, 1, 2)] + [(0, 0, 2), (-1, 0, 2), (1, 0, 2)]),
+    # more vegetation
+    'willow': A('Willow tree', 'trees', willow, [(0, 0, 3)], nature=True, variants=2),
+    'tall_pine': A('Tall pine', 'trees', tall_pine, [(0, 0, 3)], nature=True, variants=3),
+    'sapling': A('Young tree', 'trees', sapling, nature=True, variants=2),
+    'cattails': A('Cattails', 'shrubs', cattails, nature=True, variants=3),
+    'sunflowers': A('Sunflowers', 'shrubs', sunflowers, nature=True, variants=3),
+    'wheat': A('Wheat', 'shrubs', wheat, nature=True, variants=3),
+    'berry_bush': A('Berry bush', 'shrubs', berry_bush, nature=True, variants=3),
+    'rose_bush': A('Rose bush', 'shrubs', rose_bush, nature=True, variants=3),
+    'dead_grass': A('Dry grass', 'shrubs', dead_grass, nature=True, variants=3),
+    'ivy_wall': A('Ivy-covered wall', 'shrubs', ivy_wall, [(0, 0, 1)], variants=3),
+    'pond': A('Pond', 'shrubs', pond, variants=2),
     # special
     'zombie_grave': A('Zombie grave (spawn)', 'special', zombie_grave, spawn='zombie'),
     'player_spawn': A('Player start', 'special', player_spawn, editor_only=True, spawn='player'),
@@ -1485,11 +1976,22 @@ ASSETS = {
     'ore_crystal': A('Crystal node spawn', 'mining', _ore_marker('crystal'), editor_only=True, ore='crystal'),
     'ore_coal': A('Coal node spawn', 'mining', _ore_marker('coal'), editor_only=True, ore='coal'),
     'ore_logs': A('Log pile spawn (wood)', 'mining', _ore_marker('logs'), editor_only=True, ore='logs'),
+    # animals and NPCs
+    'spawn_deer': A('Deer spawner', 'life', _animal_marker(['deer']), editor_only=True, animal='deer'),
+    'spawn_pig': A('Pig spawner', 'life', _animal_marker(['pig']), editor_only=True, animal='pig'),
+    'spawn_chicken': A('Chicken spawner', 'life', _animal_marker(['chicken']), editor_only=True,
+                       animal='chicken'),
+    'spawn_animals': A('Animal spawner (random)', 'life', _animal_marker(['pig', 'chicken', 'chicken']),
+                       editor_only=True, animal='random'),
+    'npc_trader': A('NPC: trader', 'life', _npc_marker('trader'), [(0, 0, 2)], editor_only=True, npc='trader'),
+    'npc_quest': A('NPC: quest giver', 'life', _npc_marker('quest'), [(0, 0, 2)], editor_only=True, npc='quest'),
+    'npc_talker': A('NPC: talker', 'life', _npc_marker('talker'), [(0, 0, 2)], editor_only=True, npc='talker'),
     'loot_crate': A('Loot crate (breakable)', 'mining', _ore_marker('crate'), editor_only=True, ore='crate'),
 }
 
 ASSET_CATEGORIES = [('trees', 'Trees'), ('shrubs', 'Shrubs'), ('buildings', 'Buildings'), ('props', 'Props'),
                     ('town', 'Town'), ('military', 'Military'), ('farm', 'Farm'), ('graveyard', 'Graveyard'),
+                    ('church', 'Church'), ('life', 'Animals & NPCs'),
                     ('special', 'Special'), ('mining', 'Mining'), ('caves', 'Caves'), ('paths', 'Paths'),
                     ('blocks', 'Blocks')]
 

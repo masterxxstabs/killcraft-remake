@@ -645,6 +645,10 @@ class Weapons:
         if targets:
             g.sounds.play('thud')
             g.ui.hitmarker(False)
+        elif getattr(g, 'animals', None) is not None and g.animals.find(eye, fwd, reach) is not None:
+            g.animals.hurt(g.animals.find(eye, fwd, reach), d['damage'] * dm, self.owner)   # hunting with a blade
+            g.sounds.play('thud')
+            g.ui.hitmarker(False)
         elif getattr(g, 'mining', None) is not None:      # nothing to hit: mine the ore node in front of you
             n = g.mining.find(eye, fwd, reach)
             if n is not None:
@@ -697,7 +701,9 @@ class Weapons:
             first = None
             pierce = d.get('pierce')
             can_hit = math.inf if pierce is True else (pierce or 1)
-            for dist, e, head in g.enemies.raycast(eye, direction, wall):
+            animal = g.animals.raycast(eye, direction, wall) if getattr(g, 'animals', None) else None
+            reach = animal[0] if animal else wall          # an animal in the way stops the bullet there
+            for dist, e, head in g.enemies.raycast(eye, direction, reach):
                 mult = d.get('headshot', 2) if head else 1
                 flat = Vec3(direction.x, 0, direction.z)
                 e.hurt(d['damage'] * dm * mult, head, flat * d['knockback'])
@@ -709,6 +715,10 @@ class Weapons:
                     end = eye + direction * dist
                     stopped = True
                     break
+            if not stopped and animal is not None:
+                end = eye + direction * animal[0]
+                g.animals.hurt(animal[1], d['damage'] * dm, self.owner, direction)
+                any_hit = stopped = True
             if not stopped and wall < rng:
                 g.effects.burst(end, '#8a8a8a', 3, speed=2, size=0.08, life=0.4)
                 crate = g.mining.at_point(eye + direction * (wall + 0.05)) if getattr(g, 'mining', None) else None

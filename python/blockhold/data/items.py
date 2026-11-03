@@ -10,8 +10,10 @@
 #    colour     the item's tile colour (and its little icon)
 #    kind       'resource'  mined / chopped / smelted, spent at workbenches
 #               'armor'     worn in the HEAD or BODY slot (see ARMOR below)
+#               'food'      right-click it in the backpack to eat it: gives back `heal` health
+#               'trade'     only good for trading with NPCs
 #    icon       how the tile is drawn: 'ore', 'ingot', 'log', 'coal', 'stone', 'crystal',
-#               'helmet', 'vest'
+#               'helmet', 'vest', 'meat', 'feather', 'gem', 'coin', 'note'
 # ─────────────────────────────────────────────────────────────────────────────
 
 ITEMS = {
@@ -26,6 +28,15 @@ ITEMS = {
     'iron_ingot': dict(name='Iron ingot', size=(2, 1), stack=30, colour='#d7dee6', kind='resource', icon='ingot'),
     'copper_ingot': dict(name='Copper ingot', size=(2, 1), stack=30, colour='#e8955a', kind='resource',
                          icon='ingot'),
+    # food: hunt animals for raw meat, cook it in a furnace, right-click it in the backpack to eat
+    'raw_meat': dict(name='Raw meat', size=(1, 1), stack=20, colour='#d9606a', kind='food', icon='meat', heal=5),
+    'cooked_meat': dict(name='Cooked meat', size=(1, 1), stack=20, colour='#9a5a32', kind='food', icon='meat',
+                        heal=35),
+    # trade goods (animals and loot; NPC traders want them)
+    'feather': dict(name='Feathers', size=(1, 1), stack=50, colour='#f2efe6', kind='trade', icon='feather'),
+    'hide': dict(name='Deer hide', size=(2, 2), stack=10, colour='#9a6a3f', kind='trade', icon='hide'),
+    'gold_coin': dict(name='Old gold coin', size=(1, 1), stack=50, colour='#e8c040', kind='trade', icon='coin'),
+    'letter': dict(name='Sealed letter', size=(1, 1), stack=5, colour='#e8dcc0', kind='trade', icon='note'),
     # armor (crafted at a workbench, worn from the backpack screen)
     'cap_helmet': dict(name='Scrap helmet', size=(2, 2), stack=1, colour='#7a6a52', kind='armor', icon='helmet'),
     'combat_helmet': dict(name='Combat helmet', size=(2, 2), stack=1, colour='#4f5a35', kind='armor',
@@ -82,5 +93,6 @@ _weapon_items()
 # Put ore in the top slot and fuel in the bottom one. Burning fuel smelts one ore into one
 # ingot every SMELT seconds; each piece of fuel burns for FUEL seconds (coal = 8 ingots).
 # It only smelts while it has fuel burning and room in the output slot.
-SMELT = {'iron': ('iron_ingot', 4.0), 'copper': ('copper_ingot', 4.0)}      # ore: (ingot, seconds)
+SMELT = {'iron': ('iron_ingot', 4.0), 'copper': ('copper_ingot', 4.0),         # ore: (ingot, seconds)
+         'raw_meat': ('cooked_meat', 5.0)}                                  # and it cooks food
 FUEL = {'coal': 32.0, 'wood': 6.0}                                          # fuel: seconds it burns

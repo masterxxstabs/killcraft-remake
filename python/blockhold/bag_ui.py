@@ -59,6 +59,23 @@ def draw_icon(parent, icon, cx, cy, s, colour):
         quad(parent, cx, cy - s * 0.05, s * 0.66, s * 0.8, colour)
         quad(parent, cx, cy + s * 0.38, s * 0.26, s * 0.14, '#000000', z=-0.021, alpha=0.35)
         quad(parent, cx, cy - s * 0.05, s * 0.4, s * 0.3, U.contrast(colour), z=-0.021, alpha=0.18)
+    elif icon == 'meat':
+        quad(parent, cx + s * 0.22, cy - s * 0.2, s * 0.32, s * 0.08, '#f2ead8', rot=40, z=-0.019)    # bone
+        quad(parent, cx - s * 0.04, cy + s * 0.04, s * 0.52, s * 0.42, colour, rot=40)
+        quad(parent, cx - s * 0.08, cy + s * 0.08, s * 0.26, s * 0.14, '#ffffff', rot=40, z=-0.021, alpha=0.25)
+    elif icon == 'feather':
+        quad(parent, cx, cy, s * 0.2, s * 0.75, colour, rot=-30)
+        quad(parent, cx, cy, s * 0.03, s * 0.8, '#8a8580', rot=-30, z=-0.021)
+    elif icon == 'hide':
+        quad(parent, cx, cy, s * 0.7, s * 0.55, colour, rot=8)
+        for dx, dy in ((-0.35, 0.25), (0.35, 0.25), (-0.35, -0.25), (0.35, -0.25)):
+            quad(parent, cx + dx * s, cy + dy * s, s * 0.16, s * 0.16, colour, rot=45)
+    elif icon == 'coin':
+        U.box(parent, cx - s * 0.28, cy + s * 0.28, s * 0.56, s * 0.56, colour, z=-0.02, radius=s * 0.28)
+        quad(parent, cx, cy, s * 0.2, s * 0.2, U.contrast(colour), z=-0.021, alpha=0.3)
+    elif icon == 'note':
+        quad(parent, cx, cy, s * 0.72, s * 0.48, colour)
+        quad(parent, cx, cy, s * 0.12, s * 0.12, '#b0302a', z=-0.021)
 
 
 def draw_weapon(parent, it, x, y, w, h):
@@ -296,7 +313,7 @@ class BagScreen:
             self.tile(t, it, self.gx + it['x'] * CELL + 0.002, self.gy - it['y'] * CELL - 0.002,
                       w * CELL - 0.004, h * CELL - 0.004)
         U.text(t, 'Drag to move, R turns it.  Drop on a slot to wear / hold / smelt it, outside the window '
-                  'to drop it.  Right-click: quick move.', self.gx, self.gy - BACKPACK[1] * CELL - 0.02, 0.6, U.MUTED,
+                  'to drop it.  Right-click: quick move / eat.', self.gx, self.gy - BACKPACK[1] * CELL - 0.02, 0.6, U.MUTED,
                wordwrap=96)
         if self.furnace is not None:          # at a furnace: its slots take the place of your gear
             U.FlatButton(t, 'CLOSE  (E)', self.win.left, self.win.btn_y, 0.26, U.BTN_H, self.game.close_shop)
@@ -344,7 +361,7 @@ class BagScreen:
         x, y = self.sx, self.sy - 0.43
         fuel = ', '.join(f"{ITEMS[k]['name'].lower()} smelts {v / 4:g}" for k, v in FUEL.items())
         ores = ', '.join(ITEMS[k]['name'].lower() for k in SMELT)
-        U.text(f, f'Ore: {ores}.\nFuel: {fuel} (one piece burns at a time).\n'
+        U.text(f, f'Smelts / cooks: {ores}.\nFuel: {fuel} (one piece burns at a time).\n'
                   'It keeps smelting while you\'re away.', x, y, 0.66, U.MUTED)
 
     # ── input ────────────────────────────────────────────────────────────────
@@ -394,6 +411,8 @@ class BagScreen:
             home = (it['x'], it['y'], it['rot'])
             target = next((k for k in self.boxes() if self.accepts(k, it)), None)
             if target is None:
+                if ITEMS[it['id']]['kind'] == 'food':          # food: eat one
+                    self.eat(it)
                 return
             inv.lift(it)
             back = self.slot_put(target, it)
@@ -422,6 +441,17 @@ class BagScreen:
                             self.slot_restore(s, dict(taken, n=left))
             self.game.sounds.play('equip', volume=0.7)
             self.refresh()
+
+    def eat(self, it):
+        p, d = self.player, ITEMS[it['id']]
+        if p.health >= p.max_health:
+            self.ui.banner('NOT HUNGRY', '#d9912b', 1.0, 'You already have full health')
+            return
+        self.inv.remove(it['id'], 1)
+        p.health = min(p.max_health, p.health + d.get('heal', 10))
+        self.game.sounds.play('heal')
+        self.game.events.emit('ate', player=p, item=it['id'])
+        self.refresh()
 
     # ── dragging ─────────────────────────────────────────────────────────────
     def start_drag(self, it, src, grab):
