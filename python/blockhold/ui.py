@@ -6,7 +6,7 @@ Change the colours in the PALETTE section to restyle everything at once.
 """
 import math
 import time as pytime
-from ursina import Button, Entity, Text, Texture, camera, color as ucolor, held_keys, mouse, window
+from ursina import Button, Entity, Mesh, Text, Texture, Vec2, Vec3, camera, color as ucolor, held_keys, mouse, window
 from . import maps
 from .data.attachments import ATTACHMENTS, SLOT_NAMES
 from .data.gun_models import MODELS as GUN_MODELS
@@ -32,7 +32,8 @@ MUTED = '#6b7189'       # secondary text
 RED = '#d64541'
 AMBER = '#d9912b'
 GREEN = '#2e9e6a'
-EDGE = 0.008            # thickness of the outlines
+EDGE = 0.008            # thickness of the outlines (set by the style)
+STYLE = dict(radius=0.0, segments=0, pill=False, edge=0.008, glass=1.0, font='OpenSans-Regular.ttf')
 
 # window layout (screen height = 1)
 WIN_W, WIN_H, WIN_TOP = 1.36, 0.78, 0.33
@@ -73,20 +74,57 @@ def readable(fg, bg):
     return abs(_lum(fg) - _lum(bg)) > 0.32
 
 
-def box(parent, x, y, w, h, color, z=0.0, **kw):
-    return Entity(parent=parent, model='quad', color=C(color), origin=(-0.5, 0.5),
+_corners = {}
+
+
+def round_rect(w, h, r, segments):
+    """A w x h rectangle mesh (-0.5..0.5 like a quad, scaled to w, h) with corners of radius r.
+    segments = 1 cuts the corners off straight; more makes them round."""
+    r = max(0.0, min(r, w / 2 - 1e-4, h / 2 - 1e-4))
+    rx, ry = r / w, r / h
+    key = (round(rx, 4), round(ry, 4), segments)
+    verts = _corners.get(key)
+    if verts is None:
+        pts = []
+        for cx, cy, a0 in ((0.5 - rx, 0.5 - ry, 0), (-0.5 + rx, 0.5 - ry, 90), (-0.5 + rx, -0.5 + ry, 180),
+                           (0.5 - rx, -0.5 + ry, 270)):
+            for k in range(segments + 1):
+                a = math.radians(a0 + 90 * k / segments)
+                pts.append((cx + math.cos(a) * rx, cy + math.sin(a) * ry))
+        verts = _corners[key] = pts
+    vs = [Vec3(0, 0, 0)] + [Vec3(px, py, 0) for px, py in verts]
+    n = len(verts)
+    tris = []
+    for i in range(n):
+        tris += [0, 1 + i, 1 + (i + 1) % n]          # counter-clockwise, like Ursina's quad (faces the camera)
+    return Mesh(vertices=vs, triangles=tris, uvs=[Vec2(v.x + 0.5, v.y + 0.5) for v in vs])
+
+
+def box(parent, x, y, w, h, color, z=0.0, round=True, radius=None, **kw):
+    """A filled rectangle, top-left corner at (x, y). Corners follow the style (round=False keeps it square)."""
+    r = STYLE['radius'] if radius is None else radius
+    model = 'quad'
+    if round and r > 0 and STYLE['segments'] > 0 and min(w, h) > 0.006:
+        model = round_rect(w, h, r, STYLE['segments'])
+    return Entity(parent=parent, model=model, color=C(color), origin=(-0.5, 0.5),
                   position=(x, y, z), scale=(w, h), **kw)
 
 
-def frame(parent, x, y, w, h, fill='PAPER', edge='INK', t=EDGE, z=0.0):
-    """A filled box with a thick outline. Returns the inner fill."""
-    box(parent, x, y, w, h, edge, z=z + 0.002)
-    return box(parent, x + t, y - t, w - 2 * t, h - 2 * t, fill, z=z + 0.001)
+def frame(parent, x, y, w, h, fill='PAPER', edge='INK', t=None, z=0.0):
+    """A filled box with an outline (thickness and corners from the style). Returns the inner fill."""
+    t = EDGE if t is None else t
+    if t > 0 and STYLE['glass'] >= 1:
+        box(parent, x, y, w, h, edge, z=z + 0.002)
+    glass = STYLE['glass'] if fill == 'PAPER' or fill == PAPER else 1.0
+    return box(parent, x + t, y - t, w - 2 * t, h - 2 * t, C(fill, glass), z=z + 0.001,
+               radius=max(0.0, STYLE['radius'] - t * 0.6))
 
 
 def text(parent, s, x, y, size=1.0, color='INK', origin=(-0.5, 0.5), z=-0.01, **kw):
     if 'wordwrap' in kw and not s:
         s = ' '        # Ursina can't word-wrap an empty string
+    if 'Mono' in STYLE.get('font', ''):
+        size *= 0.86   # the typewriter font is wider: keep text inside its boxes
     return Text(s, parent=parent, position=(x, y, z), scale=size, color=C(color), origin=origin, **kw)
 
 
@@ -111,9 +149,13 @@ class FlatButton:
         t = EDGE * 0.8
         if fg == 'AUTO' or not readable(fg, fill):       # text that would vanish on this fill: use black or white
             fg = contrast(fill)
-        self.parts = [box(parent, x, y, w, h, edge, z=z + 0.002)]
+        r = h / 2 if STYLE['pill'] else min(STYLE['radius'], h * 0.35)
+        self.parts = [box(parent, x, y, w, h, edge, z=z + 0.002, radius=r)] if t > 0 else []
         f = C(fill)
-        self.button = Button(parent=parent, model='quad', text='', color=f, position=(x + w / 2, y - h / 2, z),
+        face = 'quad'
+        if r > 0 and STYLE['segments'] > 0:
+            face = round_rect(w - 2 * t, h - 2 * t, max(0.0, r - t * 0.6), STYLE['segments'])
+        self.button = Button(parent=parent, model=face, text='', color=f, position=(x + w / 2, y - h / 2, z),
                              scale=(w - 2 * t, h - 2 * t), highlight_color=f.tint(hover), pressed_color=f.tint(-0.1),
                              on_click=on_click)
         self.parts.append(self.button)
@@ -208,9 +250,13 @@ class Window:
     def __init__(self, parent, title='', right='', w=WIN_W, h=WIN_H, top=WIN_TOP):
         self.x, self.y, self.w, self.h = -w / 2, top, w, h
         self.root = Entity(parent=parent)
-        box(self.root, self.x, self.y, w, h, INK, z=0.01)
-        box(self.root, self.x + EDGE * 1.5, self.y - EDGE * 1.5, w - EDGE * 3, h - EDGE * 3, PAPER, z=0.009)
-        box(self.root, self.x, self.y - HEADER_H, w, EDGE * 1.5, INK, z=0.008)
+        solid = STYLE['glass'] >= 1 and EDGE > 0
+        if solid:                                        # (see-through styles skip the outline)
+            box(self.root, self.x, self.y, w, h, INK, z=0.01)
+        box(self.root, self.x + EDGE * 1.5, self.y - EDGE * 1.5, w - EDGE * 3, h - EDGE * 3, C(PAPER, STYLE['glass']),
+            z=0.009, radius=max(0.0, STYLE['radius'] * 1.6 - EDGE))
+        box(self.root, self.x + 0.03, self.y - HEADER_H, w - 0.06, max(0.003, EDGE * 1.5), INK if solid else LINE,
+            z=0.008)
         self.title = text(self.root, title, self.x + 0.04, self.y - 0.047, 2.6, INK, origin=(-0.5, 0))
         self.right = text(self.root, right, self.x + w - 0.045, self.y - 0.047, 1.5, INK, origin=(0.5, 0))
         self.tabs = Entity(parent=self.root)
@@ -262,6 +308,27 @@ def milestones(save):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+def set_style_temp(st):
+    """Draw the next thing in another style (style picker buttons show their own shape)."""
+    import sys
+    me = sys.modules[__name__]
+    me.STYLE = dict(st)
+    me.EDGE = st['edge']
+
+
+def apply_style(sid):
+    """Switch the UI's shape: corners, outlines, see-through panels and font."""
+    import sys
+    from .data.themes import STYLES
+    st = STYLES.get(sid) or STYLES['flat']
+    me = sys.modules[__name__]
+    me.STYLE = dict(st)
+    for mod in (me, sys.modules.get('blockhold.editor')):
+        if mod is not None and hasattr(mod, 'EDGE'):
+            mod.EDGE = st['edge']
+    Text.default_font = st['font']
+
+
 def apply_theme(tid):
     """Switch the palette (every screen reads these when it is built)."""
     import sys
@@ -359,7 +426,7 @@ class UI:
             'feed': (R - 0.33, T - 0.135, 0.3, 0.1), 'health': (L + 0.03, B + 0.1, 0.46, 0.07),
             'powers': (L + 0.03, B + 0.152 + 3 * 0.047, 0.3, 0.18), 'ability': (-0.07, B + 0.175, 0.14, 0.145),
             'weapon': (R - 0.33, B + 0.105, 0.3, 0.075), 'resources': (R - 0.33, B + 0.142, 0.3, 0.032),
-            'hint': (-0.25, B + 0.205, 0.5, 0.045), 'banner': (-0.46, 0.27, 0.92, 0.13),
+            'hint': (-0.27, B + 0.205, 0.54, 0.045), 'banner': (-0.46, 0.27, 0.92, 0.13),
             'boss': (-0.36, T - 0.14, 0.72, 0.075)}
         el = self.parts
         self.scope = Entity(parent=h, enabled=False)
@@ -380,7 +447,7 @@ class UI:
         for r in (45, -45):
             Entity(parent=self.hit, model='quad', color=C(k['cross']), scale=(0.042, 0.004), rotation_z=r)
         self.reload_back = box(cross, -0.04, -0.04, 0.08, 0.008, P, z=0.001)
-        self.reload_fill = box(cross, -0.04, -0.04, 0.08, 0.008, AC)
+        self.reload_fill = box(cross, -0.04, -0.04, 0.08, 0.008, AC, round=False)
 
         # top left: wave
         w_ = el['wave']
@@ -417,7 +484,7 @@ class UI:
         box(self.boss, -0.36, T - 0.14, 0.72, 0.075, P, z=0.003)
         self.boss_name = text(self.boss, '', 0, T - 0.158, 1.0, FG, origin=(0, 0))
         box(self.boss, -0.345, T - 0.178, 0.69, 0.024, NAVY, z=0.001)
-        self.boss_fill = box(self.boss, -0.345, T - 0.178, 0.69, 0.024, RED)
+        self.boss_fill = box(self.boss, -0.345, T - 0.178, 0.69, 0.024, RED, round=False)
 
         # interaction prompt (revive etc.)
         self.prompt = Entity(parent=h, enabled=False)
@@ -427,15 +494,15 @@ class UI:
 
         # between-wave hint
         self.hint = Entity(parent=el['hint'])
-        box(self.hint, -0.25, B + 0.205, 0.5, 0.045, P, z=0.003)
-        text(self.hint, 'B  =  shop      N  =  start the next wave', 0, B + 0.1825, 0.95, FG, origin=(0, 0))
+        box(self.hint, -0.27, B + 0.205, 0.54, 0.045, P, z=0.003)
+        text(self.hint, 'B = shop     N = start the next wave', 0, B + 0.1825, 0.95, FG, origin=(0, 0))
 
         # bottom left: health
         hp = el['health']
         box(hp, L + 0.03, B + 0.1, 0.46, 0.07, P, z=0.003)
         glyph(hp, 'heart', L + 0.065, B + 0.065, 0.032, k['health'])
         box(hp, L + 0.1, B + 0.088, 0.375, 0.046, NAVY, z=0.001)
-        self.hp_fill = box(hp, L + 0.1, B + 0.088, 0.375, 0.046, k['health'])
+        self.hp_fill = box(hp, L + 0.1, B + 0.088, 0.375, 0.046, k['health'], round=False)
         self.hp_text = text(hp, '', L + 0.465, B + 0.065, 1.05, contrast(k['health']), origin=(0.5, 0), z=-0.02)
         # scoreboard (hold Tab): every player, then every ally
         self.scoreboard = Entity(parent=h, enabled=False, z=-0.05)
@@ -863,8 +930,9 @@ class UI:
                        edge=INK, size=0.95)
             y -= 0.07
         hline(b, x, y + 0.01, 0.54)
+        self.style_picker(b, x, y - 0.025, g)
         text(b, 'Settings and records are saved in the .blockhold folder in your home folder.',
-             x, y - 0.02, 0.8, MUTED, wordwrap=62)
+             x, y - 0.17, 0.75, MUTED, wordwrap=66)
         win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
         win.bottom_right('PLAY', g.start_game)
 
@@ -897,6 +965,19 @@ class UI:
                        fg=t['INK'], size=0.6, hover=-0.08)
             if on:
                 box(parent, x + (i % 4) * 0.105, y - 0.035 - (i // 4) * 0.047 - 0.04, 0.1, 0.006, t['TEAL'], z=-0.03)
+
+    def style_picker(self, parent, x, y, g):
+        """STYLE: the shape of the UI. Each button is drawn in its own style."""
+        from .data.themes import STYLES
+        text(parent, 'STYLE', x, y, 0.85, MUTED)
+        text(parent, 'corners, outlines and font', x + 0.09, y, 0.75, MUTED)
+        mine = STYLE
+        for i, (sid, st) in enumerate(STYLES.items()):
+            on = g.style_id == sid
+            set_style_temp(st)
+            FlatButton(parent, st['name'], x + (i % 4) * 0.137, y - 0.035 - (i // 4) * 0.056, 0.128, 0.046,
+                       lambda k=sid: g.set_style(k), fill=TEAL if on else NAVY, edge=INK, size=0.8)
+            set_style_temp(mine)
 
     def refresh_settings_screen(self):
         if self.game.state == 'paused':

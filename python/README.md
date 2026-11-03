@@ -60,9 +60,25 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 Your best wave, best score and total kills are saved in a `.blockhold` folder in your
 home folder.
 
-### Themes and HUD
+### Styles, themes and HUD
 
-Under **Settings** pick a **theme** for every screen (menus, shop, workbench, pause screen, HUD and
+Under **Settings** pick a **style**: the shape of every screen.
+
+| Style | Look |
+| --- | --- |
+| Flat | square corners and thick outlines (the original look) |
+| Rounded | rounded corners and thinner outlines |
+| Soft | big rounded panels and pill-shaped buttons |
+| Tactical | cut-off corners, thin outlines and a typewriter font |
+| Glass | see-through panels with rounded corners and no outlines |
+| Minimal | square and flat, no outlines at all |
+| Chunky | extra-thick outlines and small cut corners |
+
+Styles and themes mix freely (Soft + Sunset, Tactical + Military, Glass + Midnight...). Styles
+are in `blockhold/data/themes.py` too: corner size, corner shape, outline thickness, how
+see-through panels are, and the font.
+
+Then pick a **theme** (colours) for every screen (menus, shop, workbench, pause screen, HUD and
 map editor): Classic, Midnight, Military, Neon, Blood Moon, Arctic, Terminal or Sunset. Each theme
 button is drawn in its own colours so you can see what you're picking. Themes live in
 `blockhold/data/themes.py`; copy one and change the colours to make your own.

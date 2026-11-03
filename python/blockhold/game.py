@@ -27,8 +27,8 @@ from .projectiles import Projectiles
 from .render import col, hex_rgb, node, set_fog
 from .sounds import Sounds
 from .updater import Updater, restart
-from .ui import UI, apply_theme
-from .data.themes import DEFAULT_THEME, THEMES, default_hud
+from .ui import UI, apply_style, apply_theme
+from .data.themes import DEFAULT_STYLE, DEFAULT_THEME, STYLES, THEMES, default_hud
 from .weapons import Weapons
 from .world import MAX_SIZE, MIN_SIZE, World
 from . import maps
@@ -76,13 +76,15 @@ class Game(Entity):
         st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
                                            fov=90, auto_update=True, muted=False, map=None,
                                            atmosphere=DEFAULT_ATMOSPHERE, arena_size=34, theme=DEFAULT_THEME,
-                                           hud=None))
+                                           style=DEFAULT_STYLE, hud=None))
         self.atmosphere_id = st['atmosphere'] if st['atmosphere'] in ATMOSPHERES else DEFAULT_ATMOSPHERE
         self.atmosphere_override = None      # the map editor uses its own bright look
         self.arena_size = max(MIN_SIZE, min(MAX_SIZE, int(st['arena_size'])))   # random arena size (half width)
         self.theme_id = st['theme'] if st['theme'] in THEMES else DEFAULT_THEME
         self.hud_settings = merge_hud(st['hud'])
+        self.style_id = st['style'] if st['style'] in STYLES else DEFAULT_STYLE
         apply_theme(self.theme_id)
+        apply_style(self.style_id)
         self.sensitivity = st['sensitivity']
         self.fov = st['fov']
         self.auto_update = st['auto_update']
@@ -156,7 +158,7 @@ class Game(Entity):
         write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id,
                                        fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted,
                                        map=self.map_stem, atmosphere=self.atmosphere_id, arena_size=self.arena_size,
-                                       theme=self.theme_id, hud=self.hud_settings))
+                                       theme=self.theme_id, style=self.style_id, hud=self.hud_settings))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
@@ -199,6 +201,13 @@ class Game(Entity):
         """Recolour every screen with another UI theme."""
         self.theme_id = tid
         apply_theme(tid)
+        self.save_settings()
+        self.ui.rebuild()
+
+    def set_style(self, sid):
+        """Reshape every screen: corners, outlines, see-through panels and font."""
+        self.style_id = sid
+        apply_style(sid)
         self.save_settings()
         self.ui.rebuild()
 

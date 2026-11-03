@@ -3,6 +3,11 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.14.0
+- UI styles that reshape every screen: Flat, Rounded, Soft (pill buttons), Tactical (cut corners and a typewriter font), Glass (see-through panels), Minimal (no outlines) and Chunky
+- Pick a style under Settings; it mixes with any colour theme
+- Each style button is drawn in its own shape so you can see what you're picking
+
 ## 1.13.0
 - UI themes: Classic, Midnight, Military, Neon, Blood Moon, Arctic, Terminal and Sunset recolour every screen (Settings)
 - Customize the HUD (Settings or the pause screen): drag any part anywhere on the screen, or switch it off

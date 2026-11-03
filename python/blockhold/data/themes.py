@@ -42,6 +42,32 @@ THEMES = {
 }
 DEFAULT_THEME = 'classic'
 
+# ── STYLES ───────────────────────────────────────────────────────────────────
+# The shape of the UI, separate from its colours (any style works with any theme):
+#    radius     how round panel and button corners are (screen height = 1; 0 = square)
+#    segments   how the corners are drawn: 6+ = round, 1 = cut off at 45° (chamfered)
+#    pill       buttons are fully round at the ends
+#    edge       outline thickness (0 = no outlines)
+#    glass      how solid the panels are (1 = solid, lower = see-through)
+#    font       OpenSans-Regular.ttf or VeraMono.ttf (a typewriter-style font)
+STYLES = {
+    'flat': dict(name='Flat', radius=0.0, segments=0, pill=False, edge=0.008, glass=1.0,
+                 font='OpenSans-Regular.ttf'),
+    'rounded': dict(name='Rounded', radius=0.016, segments=6, pill=False, edge=0.005, glass=1.0,
+                    font='OpenSans-Regular.ttf'),
+    'soft': dict(name='Soft', radius=0.03, segments=8, pill=True, edge=0.003, glass=1.0,
+                 font='OpenSans-Regular.ttf'),
+    'tactical': dict(name='Tactical', radius=0.016, segments=1, pill=False, edge=0.004, glass=0.94,
+                     font='VeraMono.ttf'),
+    'glass': dict(name='Glass', radius=0.014, segments=6, pill=False, edge=0.0025, glass=0.78,
+                  font='OpenSans-Regular.ttf'),
+    'minimal': dict(name='Minimal', radius=0.0, segments=0, pill=False, edge=0.0, glass=0.94,
+                    font='OpenSans-Regular.ttf'),
+    'chunky': dict(name='Chunky', radius=0.008, segments=1, pill=False, edge=0.014, glass=1.0,
+                   font='OpenSans-Regular.ttf'),
+}
+DEFAULT_STYLE = 'flat'
+
 # ── HUD ──────────────────────────────────────────────────────────────────────
 # The parts of the HUD you can move and switch off (Settings → CUSTOMIZE HUD).
 # Each one has a box (x, y, w, h: top-left corner and size, screen height = 1;
