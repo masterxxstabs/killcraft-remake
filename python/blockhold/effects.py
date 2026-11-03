@@ -26,7 +26,8 @@ class Effects:
         self.particles = []
         for _ in range(220):
             e = block(self.root, color=ucolor.white, enabled=False)
-            self.particles.append(dict(e=e, v=Vec3(0, 0, 0), life=0, max=1, g=0, s=0.1))
+            self.particles.append(dict(e=e, v=[0.0, 0.0, 0.0], p=[0.0, 0.0, 0.0], life=0, max=1, g=0, s=0.1))
+        self.live = []                    # the particles flying right now (only these are updated)
         self.tracers = []
         for _ in range(80):
             e = block(self.root, size=(1, 1, 1), center=(0, 0, 0.5), color=ucolor.white, enabled=False)
@@ -49,15 +50,10 @@ class Effects:
         for _ in range(count):
             p = self.particles[self._p]
             self._p = (self._p + 1) % len(self.particles)
-            v = Vec3(random.random() - 0.5, random.random() * 0.8 + 0.2, random.random() - 0.5).normalized()
-            p.update(v=v * speed * (0.4 + random.random()), life=life, max=life, g=gravity,
-                     s=size * (0.6 + random.random() * 0.8))
-            e = p['e']
-            e.enabled = True
-            e.position = pos
-            e.color = c
-            e.scale = p['s']
-            e.rotation = (random.random() * 90, random.random() * 90, 0)
+            vx, vy, vz = random.random() - 0.5, random.random() * 0.8 + 0.2, random.random() - 0.5
+            k = speed * (0.4 + random.random()) / (math.sqrt(vx * vx + vy * vy + vz * vz) or 1)
+            self._launch(p, pos, (vx * k, vy * k, vz * k), life, life, gravity, size * (0.6 + random.random() * 0.8), c)
+            p['e'].setHpr(random.random() * 90, random.random() * 90, 0)
 
     def spray(self, pos, direction, colors, count=3, speed=14, spread=0.2, life=0.5, size=0.18, gravity=-4):
         """Particles shot forward in a cone (flamethrower)."""
@@ -67,13 +63,22 @@ class Effects:
             d = Vec3(direction) + Vec3((random.random() - 0.5) * 2 * spread, (random.random() - 0.5) * 2 * spread,
                                        (random.random() - 0.5) * 2 * spread)
             d = d.normalized()
-            p.update(v=d * speed * (0.7 + random.random() * 0.5), life=life * (0.7 + random.random() * 0.5),
-                     max=life, g=gravity, s=size * (0.6 + random.random() * 0.8))
-            e = p['e']
+            k = speed * (0.7 + random.random() * 0.5)
+            self._launch(p, pos, (d.x * k, d.y * k, d.z * k), life * (0.7 + random.random() * 0.5), life, gravity,
+                         size * (0.6 + random.random() * 0.8), col(random.choice(colors)))
+
+    def _launch(self, p, pos, v, life, max_life, gravity, size, colour):
+        if p['life'] <= 0:
+            self.live.append(p)
+        p['v'][:] = v
+        p['p'][:] = (pos[0], pos[1], pos[2])
+        p.update(life=life, max=max_life, g=gravity, s=size)
+        e = p['e']
+        if not e.enabled:
             e.enabled = True
-            e.position = pos
-            e.color = col(random.choice(colors))
-            e.scale = p['s']
+        e.setPos(pos[0], pos[1], pos[2])
+        e.color = colour
+        e.setScale(size)
 
     def lightning(self, start, end, color='#c07bff', segments=5, life=0.12):
         """A jagged bolt made of short tracers."""
@@ -127,6 +132,7 @@ class Effects:
         for p in self.particles:
             p['life'] = 0
             p['e'].enabled = False
+        self.live = []
         for t in self.tracers:
             t['life'] = 0
             t['e'].enabled = False
@@ -147,21 +153,28 @@ class Effects:
         return Vec3(p2.x * window.aspect_ratio / 2, p2.y / 2, 0)
 
     def update(self, dt):
-        for p in self.particles:
-            if p['life'] <= 0:
-                continue
+        still = []
+        for p in self.live:
             p['life'] -= dt
             e = p['e']
             if p['life'] <= 0:
                 e.enabled = False
                 continue
-            p['v'].y -= p['g'] * dt
-            e.position += p['v'] * dt
-            if e.y < p['s'] / 2:
-                e.y = p['s'] / 2
-                p['v'] *= 0.5
-                p['v'].y *= -0.3
-            e.scale = p['s'] * max(0.01, p['life'] / p['max'])
+            still.append(p)
+            v, q = p['v'], p['p']
+            v[1] -= p['g'] * dt
+            q[0] += v[0] * dt
+            q[1] += v[1] * dt
+            q[2] += v[2] * dt
+            floor = p['s'] / 2
+            if q[1] < floor:                  # bounce off the ground
+                q[1] = floor
+                v[0] *= 0.5
+                v[1] *= -0.15
+                v[2] *= 0.5
+            e.setPos(q[0], q[1], q[2])
+            e.setScale(p['s'] * max(0.01, p['life'] / p['max']))
+        self.live = still
         for t in self.tracers:
             if t['life'] <= 0:
                 continue

@@ -14,7 +14,6 @@ from .data.animals import ANIMALS, ANIMAL_KINDS, RANDOM_HERDS, SPREAD, ZOMBIE_SC
 from .data.items import ITEMS
 from .lowpoly import LowPoly
 from .net import new_id
-from .render import node, destroy
 
 _meshes = {}
 VARIANTS = 3
@@ -58,19 +57,24 @@ class Animal:
 
     def build(self):
         d, v = self.d, random.randrange(VARIANTS)
-        self.root = node(self.game.world_root, position=self.position, rotation_y=self.yaw)
-        self.model = node(self.root)
+        # plain Panda3D nodes (much cheaper than Ursina entities to move every frame)
+        self.root = self.game.world_root.attachNewNode('animal')
+        self.root.setPos(self.position)
+        self.root.setH(-self.yaw)
+        self.model = self.root.attachNewNode('model')
         part_mesh(self.kind, 'body', v).copyTo(self.model)
-        self.head = node(self.model, position=d['head_at'])
+        self.head = self.model.attachNewNode('head')
+        self.head.setPos(*d['head_at'])
         part_mesh(self.kind, 'head', v).copyTo(self.head)
         self.legs = []
         for hip in d['hips']:
-            leg = node(self.model, position=hip)
+            leg = self.model.attachNewNode('leg')
+            leg.setPos(*hip)
             part_mesh(self.kind, 'leg', v).copyTo(leg)
             self.legs.append(leg)
 
     def destroy(self):
-        destroy(self.root)
+        self.root.removeNode()
 
     def centre(self):
         return Vec3(self.position.x, self.d['height'], self.position.z)
@@ -161,16 +165,16 @@ class Animal:
         self.walk += dt * self.speed * (9 if self.kind == 'chicken' else 4.5)
         swing = math.sin(self.walk) * min(40, self.speed * 14) if self.speed > 0.1 else 0
         for i, leg in enumerate(self.legs):
-            leg.rotation_x = swing if i in (0, 3) else -swing
+            leg.setP(-swing if i in (0, 3) else swing)          # (Ursina's rotation_x = -P)
         tilt = 0.0
         if self.state == 'graze':
             tilt = dict(deer=85, pig=40).get(self.kind) or 50 + 25 * max(0.0, math.sin(self.game.time * 9))  # peck
         self.head_tilt += (tilt - self.head_tilt) * min(1, dt * 5)
-        self.head.rotation_x = self.head_tilt
+        self.head.setP(-self.head_tilt)
         bob = abs(math.sin(self.walk)) * 0.04 * min(1, self.speed / 3) if self.speed > 0.1 else 0
-        self.model.y = bob
-        self.root.position = self.position
-        self.root.rotation_y = self.yaw
+        self.model.setY(bob)
+        self.root.setPos(self.position)
+        self.root.setH(-self.yaw)
         if self.flash > 0:
             self.root.setColorScale(2.2, 1.0, 1.0, 1)
         else:

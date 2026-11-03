@@ -11,7 +11,20 @@ into the ground and is removed.
 """
 import math
 from panda3d.core import Mat4, Point3
-from .render import block, node, destroy
+from .render import box_mesh
+
+_halves = {}
+
+
+def half_limb(e, kind):
+    """Half an arm or leg in this zombie's skin (made once per zombie type, then copied)."""
+    key = (e.kind, kind)
+    if key not in _halves:
+        w, h, uv = (0.2, 0.72, e.arm_uv) if kind == 'arm' else (0.24, 0.75, e.leg_uv)
+        m = box_mesh((w, h / 2, w), (0, -h / 4, 0), uv)
+        m.setTexture(e.tex, 1)
+        _halves[key] = m
+    return _halves[key]
 
 GRAVITY = 20.0
 ITERATIONS = 4           # constraint passes per step (more = stiffer bones)
@@ -145,32 +158,30 @@ class Ragdoll:
 
     # ── the model hung on the skeleton ───────────────────────────────────────
     def build_parts(self):
+        """Hang the zombie's own parts on the skeleton (plain Panda3D nodes, like the zombie itself)."""
         e, s = self.e, self.s
-        root = self.game.world_root
-        self.root = node(root)
+        self.root = self.game.world_root.attachNewNode('ragdoll')
         # the torso (with any extras: shoulder pads, cape, crown...) rides on the pelvis-neck bone
-        self.torso = node(self.root)
-        inner = node(self.torso, position=(0, -0.75 * s, 0), scale=s)
-        for child in list(e.body.children):
-            if child in (e.head, e.arm_l, e.arm_r, e.leg_l, e.leg_r):
-                continue
-            child.parent = inner
-        self.head = node(self.root)
-        hin = node(self.head, position=(0, -1.47 * s, 0), scale=s)
-        e.head.parent = hin
+        self.torso = self.root.attachNewNode('torso')
+        inner = self.torso.attachNewNode('inner')
+        inner.setPos(0, -0.75 * s, 0)
+        inner.setScale(s)
+        e.body.find('static').reparentTo(inner)
+        self.head = self.root.attachNewNode('head')
+        hin = self.head.attachNewNode('inner')
+        hin.setPos(0, -1.47 * s, 0)
+        hin.setScale(s)
+        e.head.reparentTo(hin)
         # limbs in two halves so they bend at elbows and knees
         self.segs = []
-        for a, b, uv, w, h in (('sh_l', 'el_l', e.arm_uv, 0.2, 0.72), ('el_l', 'ha_l', e.arm_uv, 0.2, 0.72),
-                               ('sh_r', 'el_r', e.arm_uv, 0.2, 0.72), ('el_r', 'ha_r', e.arm_uv, 0.2, 0.72),
-                               ('hip_l', 'kn_l', e.leg_uv, 0.24, 0.75), ('kn_l', 'ft_l', e.leg_uv, 0.24, 0.75),
-                               ('hip_r', 'kn_r', e.leg_uv, 0.24, 0.75), ('kn_r', 'ft_r', e.leg_uv, 0.24, 0.75)):
-            seg = node(self.root)
-            part = node(seg, scale=s)
-            block(part, size=(w, h / 2, w), center=(0, -h / 4, 0), texture=e.tex, uv_rects=uv)
+        for a, b, kind in (('sh_l', 'el_l', 'arm'), ('el_l', 'ha_l', 'arm'), ('sh_r', 'el_r', 'arm'),
+                           ('el_r', 'ha_r', 'arm'), ('hip_l', 'kn_l', 'leg'), ('kn_l', 'ft_l', 'leg'),
+                           ('hip_r', 'kn_r', 'leg'), ('kn_r', 'ft_r', 'leg')):
+            seg = self.root.attachNewNode('seg')
+            part = half_limb(e, kind).copyTo(seg)
+            part.setScale(s)
             self.segs.append((seg, I[a], I[b]))
-        for limb in (e.arm_l, e.arm_r, e.leg_l, e.leg_r):
-            limb.enabled = False
-        e.body.enabled = False
+        e.body.hide()                       # (the walking legs and arms; the torso and head moved over)
         e.ragdoll_root = self.root
 
     def _place(self, np, origin, up, right):
@@ -264,10 +275,10 @@ class Ragdoll:
             self.asleep = True
 
     def sink(self, amount):
-        self.root.y -= amount
+        self.root.setY(self.root.getY() - amount)
 
     def destroy(self):
-        destroy(self.root)
+        self.root.removeNode()
         self.e.ragdoll_root = None
 
 

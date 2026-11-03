@@ -11,7 +11,7 @@ from .data.items import HAND_SLOTS, hand_slot
 from .data.gun_models import MODELS
 from .data.weapons import PRICE_GROWTH, WEAPON_UPGRADES, WEAPONS, weapon_upgrade_price
 from .gunsmith import Smith
-from .render import block, col, node, set_fog, init_light_inputs, set_glow, destroy
+from .render import block, col, node, set_fog, init_light_inputs, set_glow, destroy, box_mesh
 from .textures import weapon_atlas
 
 UPGRADES_BY_ID = {u['id']: u for u in WEAPON_UPGRADES}
@@ -337,6 +337,9 @@ class Weapons:
         self.cooldown = max(self.cooldown, 0.25)
         if self.model:
             destroy(self.model)
+        if getattr(self, 'arms_node', None) is not None:      # melee arms aren't inside the model
+            destroy(self.arms_node)
+            self.arms_node = None
         self.model = self.build_model(self.held)
         self.switch_anim = 0.25
         self.game.sounds.play('equip', volume=0.8)
@@ -403,11 +406,15 @@ class Weapons:
     def ground_model(self, d, parent):
         """The gun as an object in the world (a dropped gun): same model, real size."""
         if d['id'] in MODELS:
-            node(parent, model=self.gun_smith(d).build())
+            self.gun_smith(d).build().reparentTo(parent)
             return
         atlas = weapon_atlas()
+        gun = parent.attachNewNode('gun')               # plain nodes merged into one mesh: one draw call
         for part in d.get('model') or [('dark', (0.08, 0.1, d.get('length', 0.4)), (0, 0, d.get('length', 0.4) / 2))]:
-            block(parent, size=part[1], center=part[2], texture=atlas.texture, uv_rects=atlas.all_faces(part[0]))
+            m = box_mesh(part[1], part[2], atlas.all_faces(part[0]))
+            m.reparentTo(gun)
+            m.setTexture(atlas.texture._texture, 1)
+        gun.flattenStrong()
 
     # ── dropping and picking up ──────────────────────────────────────────────
     def take_out(self, d):
@@ -457,6 +464,7 @@ class Weapons:
 
         melee = d.get('melee')
         arms = node(self.holder if melee else g)
+        self.arms_node = arms if melee else None    # melee arms hang off the holder: equip() removes them itself
         skin, sleeve = arm_texture('skin'), arm_texture('sleeve')
         if melee:
             gy, gz = -0.01, 0.02

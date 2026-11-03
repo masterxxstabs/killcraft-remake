@@ -120,6 +120,8 @@ class Game(Entity):
         self.sky_dome = Sky()
 
         self.world = World()
+        from . import fastloop
+        fastloop.install(application.base)        # Ursina's frame loop without the per-entity overhead
         self.world_root = node()
         self.player = Player(self)           # the local player
         self.players = [self.player]         # everyone in the game (more once multiplayer exists)
@@ -203,6 +205,10 @@ class Game(Entity):
     def show_cursor(self, on):
         mouse.locked = not on
         mouse.visible = on
+        # Ursina raycasts for whatever is under the cursor every frame (and loops over every entity when it
+        # misses). Nothing needs that while you're aiming with a locked mouse, so it only runs with a cursor.
+        mouse.update_step = 1 if on else 10 ** 9
+        mouse._i = 0
 
     def quit(self):
         application.quit()

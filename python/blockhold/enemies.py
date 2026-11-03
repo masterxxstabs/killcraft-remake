@@ -3,15 +3,16 @@ import heapq
 import math
 from collections import deque
 import random
-from panda3d.core import Point3, Vec3 as PVec3
+from panda3d.core import NodePath, Point3, Vec3 as PVec3
 from ursina import Vec3, application
 from .data.enemies import ENEMIES
-from .render import block, col, node, destroy
+from .render import box_mesh
 from .textures import zombie_skin
 from .net import new_id
 
 # Hitboxes in the enemy's own (unscaled) space: (min, max)
 RAGDOLLS = [True]          # dead zombies go limp (Settings → Ragdolls switches it off on slow PCs)
+SEP_CELL = 2.2             # grid size for keeping zombies apart (at least the widest gap two bosses keep)
 CORPSE_TIME = 7.0          # seconds a body lies there before it sinks away
 
 HEAD_BOX = ((-0.27, 1.45, -0.27), (0.27, 1.99, 0.27))
@@ -35,6 +36,63 @@ def _ray_box(o, d, lo, hi):
     if t1 < 0:
         return None
     return max(t0, 0)
+
+
+_protos = {}
+
+
+def zombie_proto(kind, d):
+    """Build a zombie type's model once; every zombie of that type is a light copy (the meshes are shared)."""
+    if kind in _protos:
+        return _protos[kind]
+    skin = zombie_skin(kind, d['colors'], d.get('look', {}))
+    tex = skin.texture._texture
+
+    def faces(front, side, back=None, top=None, bottom=None):
+        r = skin.rect
+        return {'north': r(front), 'south': r(back or front), 'east': r(side), 'west': r(side),
+                'top': r(top or side), 'bottom': r(bottom or side)}
+
+    def part(parent, size, center, uv):
+        m = box_mesh(size, center, uv)
+        m.reparentTo(parent)
+        m.setTexture(tex, 1)
+        return m
+
+    root = NodePath('zombie_' + kind)
+    body = root.attachNewNode('body')
+    body.setScale(d['scale'])
+    static = body.attachNewNode('static')             # the parts that never move on their own: one mesh
+    part(static, (0.5, 0.72, 0.28), (0, 1.11, 0), faces('torso_front', 'torso_side', 'torso_back', 'torso_top',
+                                                        'torso_bottom'))
+    head = body.attachNewNode('head')
+    part(head, (0.5, 0.5, 0.5), (0, 1.72, 0), faces('head_front', 'head_side', 'head_back', 'head_top', 'head_bottom'))
+    leg = faces('leg_side', 'leg_side', 'leg_side', 'leg_top', 'leg_bottom')
+    arm = faces('arm_side', 'arm_side', 'arm_side', 'arm_top', 'arm_bottom')
+    for name, w, h, x, y, uv in (('leg_l', 0.24, 0.75, -0.13, 0.75, leg), ('leg_r', 0.24, 0.75, 0.13, 0.75, leg),
+                                 ('arm_l', 0.2, 0.72, -0.36, 1.44, arm), ('arm_r', 0.2, 0.72, 0.36, 1.44, arm)):
+        pivot = body.attachNewNode(name)
+        pivot.setPos(x, y, 0)
+        part(pivot, (w, h, w), (0, -h / 2, 0), uv)
+    extras = d.get('look', {}).get('extras', [])
+    if 'shoulder_pads' in extras:
+        pad = faces('pad', 'pad')
+        part(static, (0.3, 0.12, 0.34), (-0.37, 1.52, 0), pad)
+        part(static, (0.3, 0.12, 0.34), (0.37, 1.52, 0), pad)
+    if 'belly' in extras:
+        part(static, (0.42, 0.34, 0.14), (0, 0.98, 0.18), faces('belly', 'belly'))
+    if 'mohawk' in extras:
+        part(static, (0.1, 0.14, 0.44), (0, 2.03, -0.02), faces('hair', 'hair'))
+    if 'cape' in extras:
+        part(static, (0.6, 1.25, 0.04), (0, 0.95, -0.17), faces('cape', 'cape'))
+    if 'crown' in extras:
+        crown = faces('crown', 'crown')
+        part(static, (0.56, 0.12, 0.56), (0, 2.03, 0), crown)
+        for x, z in ((-0.22, -0.22), (0.22, -0.22), (-0.22, 0.22), (0.22, 0.22), (0, 0.22)):
+            part(static, (0.09, 0.16, 0.09), (x, 2.15, z), crown)
+    static.flattenStrong()
+    _protos[kind] = dict(np=root, tex=tex, leg=leg, arm=arm)
+    return _protos[kind]
 
 
 class Enemy:
@@ -88,60 +146,22 @@ class Enemy:
 
     # ── model ──────────────────────────────────────────────────────────────
     def build(self):
-        skin = zombie_skin(self.kind, self.d['colors'], self.d.get('look', {}))
-        tex = skin.texture
-
-        def faces(front, side, back=None, top=None, bottom=None):
-            r = skin.rect
-            return {'north': r(front), 'south': r(back or front), 'east': r(side), 'west': r(side),
-                    'top': r(top or side), 'bottom': r(bottom or side)}
-
-        def part(parent, size, center, uv):
-            return block(parent, size=size, center=center, texture=tex, uv_rects=uv)
-
-        self.root = node(self.game.world_root)
-        self.body = node(self.root, scale=self.scale)
-        part(self.body, (0.5, 0.72, 0.28), (0, 1.11, 0),
-             faces('torso_front', 'torso_side', 'torso_back', 'torso_top', 'torso_bottom'))
-        self.head = part(self.body, (0.5, 0.5, 0.5), (0, 1.72, 0),
-                         faces('head_front', 'head_side', 'head_back', 'head_top', 'head_bottom'))
-        leg = faces('leg_side', 'leg_side', 'leg_side', 'leg_top', 'leg_bottom')
-        arm = faces('arm_side', 'arm_side', 'arm_side', 'arm_top', 'arm_bottom')
-        self.tex, self.leg_uv, self.arm_uv = tex, leg, arm          # (the ragdoll rebuilds the limbs from these)
-        self.leg_l = self._limb(0.24, 0.75, -0.13, 0.75, leg, part)
-        self.leg_r = self._limb(0.24, 0.75, 0.13, 0.75, leg, part)
-        self.arm_l = self._limb(0.2, 0.72, -0.36, 1.44, arm, part)
-        self.arm_r = self._limb(0.2, 0.72, 0.36, 1.44, arm, part)
-
-        extras = self.d.get('look', {}).get('extras', [])
-        if 'shoulder_pads' in extras:
-            pad = faces('pad', 'pad')
-            part(self.body, (0.3, 0.12, 0.34), (-0.37, 1.52, 0), pad)
-            part(self.body, (0.3, 0.12, 0.34), (0.37, 1.52, 0), pad)
-        if 'belly' in extras:
-            part(self.body, (0.42, 0.34, 0.14), (0, 0.98, 0.18), faces('belly', 'belly'))
-        if 'mohawk' in extras:
-            part(self.body, (0.1, 0.14, 0.44), (0, 2.03, -0.02), faces('hair', 'hair'))
-        if 'cape' in extras:
-            part(self.body, (0.6, 1.25, 0.04), (0, 0.95, -0.17), faces('cape', 'cape'))
-        if 'crown' in extras:
-            crown = faces('crown', 'crown')
-            part(self.body, (0.56, 0.12, 0.56), (0, 2.03, 0), crown)
-            for x, z in ((-0.22, -0.22), (0.22, -0.22), (-0.22, 0.22), (0.22, 0.22), (0, 0.22)):
-                part(self.body, (0.09, 0.16, 0.09), (x, 2.15, z), crown)
-        self.root.position = self.position
-
-    def _limb(self, w, h, x, y, uv, part):
-        pivot = node(self.body, position=(x, y, 0))
-        part(pivot, (w, h, w), (0, -h / 2, 0), uv)
-        return pivot
+        """A copy of this zombie type's model (plain Panda3D nodes: fast to make, move and draw)."""
+        pr = zombie_proto(self.kind, self.d)
+        self.root = pr['np'].copyTo(self.game.world_root)
+        self.body = self.root.find('body')
+        self.head = self.body.find('head')
+        self.leg_l, self.leg_r = self.body.find('leg_l'), self.body.find('leg_r')
+        self.arm_l, self.arm_r = self.body.find('arm_l'), self.body.find('arm_r')
+        self.tex, self.leg_uv, self.arm_uv = pr['tex'], pr['leg'], pr['arm']   # (the ragdoll needs these)
+        self.root.setPos(self.position)
 
     def destroy(self):
         if self.ragdoll is not None:
             self.game.ragdolls.remove(self.ragdoll)
             self.ragdoll.destroy()
             self.ragdoll = None
-        destroy(self.root)
+        self.root.removeNode()
 
     # ── helpers ──────────────────────────────────────────────────────────────
     def head_pos(self):
@@ -274,12 +294,12 @@ class Enemy:
                 if self.death_t > CORPSE_TIME:
                     self.ragdoll.sink(dt * 0.5)                # into the ground
                 return self.death_t < CORPSE_TIME + 2.5
-            self.root.rotation_x = -min(90, self.death_t * 290)   # (ragdolls off: the old fall-over)
+            self.root.setP(min(90, self.death_t * 290))   # (ragdolls off: the old fall-over)
             self.position += self.kb * dt
             self.kb *= max(0, 1 - dt * 6)
             if self.death_t > 1.2:
                 self.position.y -= dt * 1.5
-            self.root.position = self.position
+            self.root.setPos(self.position)
             return self.death_t < 2.4
 
         self.retarget_t -= dt
@@ -287,7 +307,7 @@ class Enemy:
             self.target = g.nearest_target(self.position)
             self.retarget_t = 0.5 + random.random() * 0.5
         if self.target is None:
-            self.root.position = self.position
+            self.root.setPos(self.position)
             return True
         p = self.target.position
         if self.rise > 0:
@@ -298,7 +318,7 @@ class Enemy:
             if self.rise <= 0:
                 self.position.y = 0
             self.face(p)
-            self.root.position = self.position
+            self.root.setPos(self.position)
             return True
 
         tx, tz = p.x - self.position.x, p.z - self.position.z
@@ -360,16 +380,22 @@ class Enemy:
             s = self.detour_side
             mx, mz = -tz * s + tx * 0.3, tx * s + tz * 0.3
 
-        for o in g.enemies.list:      # don't stand inside each other
-            if o is self or o.dead or o.rise > 0:
-                continue
-            dx, dz = self.position.x - o.position.x, self.position.z - o.position.z
-            mn = self.radius + o.radius + 0.25
-            d2 = dx * dx + dz * dz
-            if 1e-6 < d2 < mn * mn:
-                d = math.sqrt(d2)
-                mx += dx / d * (mn - d) * 3
-                mz += dz / d * (mn - d) * 3
+        # don't stand inside each other (only zombies in the grid cells around this one are checked)
+        ex, ez = self.position.x, self.position.z
+        grid = g.enemies.grid
+        cx, cz = int(ex // SEP_CELL), int(ez // SEP_CELL)
+        for gx in (cx - 1, cx, cx + 1):
+            for gz in (cz - 1, cz, cz + 1):
+                for o, ox, oz, orad in grid.get((gx, gz), ()):
+                    if o is self:
+                        continue
+                    dx, dz = ex - ox, ez - oz
+                    mn = self.radius + orad + 0.25
+                    d2 = dx * dx + dz * dz
+                    if 1e-6 < d2 < mn * mn:
+                        d = math.sqrt(d2)
+                        mx += dx / d * (mn - d) * 3
+                        mz += dz / d * (mn - d) * 3
 
         reach = self.d['reach'] + self.target.radius
         if dist < reach * 0.8:
@@ -431,7 +457,7 @@ class Enemy:
 
         self.face(Vec3(self.smashing[1], 0, self.smashing[2]) if self.smashing is not None else p)
         self.animate(dt, speed)
-        self.root.position = self.position
+        self.root.setPos(self.position)
         return True
 
     def resurface(self):
@@ -445,20 +471,20 @@ class Enemy:
         self.best_d = math.inf
         self.no_progress = 0
         self.kb = Vec3(0, 0, 0)
-        self.root.position = self.position
+        self.root.setPos(self.position)
         g.events.emit('enemy_resurfaced', enemy=self)
 
     def face(self, target):
         want = math.degrees(math.atan2(target.x - self.position.x, target.z - self.position.z))
         diff = (want - self.yaw + 180) % 360 - 180
         self.yaw += diff * 0.2
-        self.root.rotation_y = self.yaw
+        self.root.setH(-self.yaw)
 
     def animate(self, dt, speed):
         self.walk += dt * (2 + speed * 2.2)
         swing = math.sin(self.walk) * 40 if speed > 0 else 0
-        self.leg_l.rotation_x = swing
-        self.leg_r.rotation_x = -swing
+        self.leg_l.setP(-swing)                  # (Ursina's rotation_x = -P)
+        self.leg_r.setP(swing)
         pose = self.d['pose']
         arm = -85 if pose == 'reach' else 0
         arm_swing = swing * 1.3 if pose == 'run' else swing * 0.5 if pose == 'heavy' else math.sin(self.walk * 0.5) * 5
@@ -466,8 +492,8 @@ class Enemy:
             self.attack_anim -= dt
             arm = -90 - math.sin(max(0, self.attack_anim) / 0.3 * math.pi) * 50
             arm_swing = 0
-        self.arm_l.rotation_x = arm + arm_swing
-        self.arm_r.rotation_x = arm - arm_swing
+        self.arm_l.setP(-(arm + arm_swing))
+        self.arm_r.setP(-(arm - arm_swing))
 
 
 class FlowField:
@@ -610,6 +636,7 @@ class EnemyManager:
         self.list = []
         self.flow = FlowField(game.world)
         self.flow_t = 0.0
+        self.grid = {}
 
     def spawn(self, kind, wave, pos):
         e = Enemy(self.game, kind, wave, pos)
@@ -632,6 +659,12 @@ class EnemyManager:
             self.flow_t = 0.4
             bar = getattr(g, 'barricades', None)
             self.flow.rebuild(g.targets(), bar.cells if bar is not None else None)
+        grid = self.grid = {}                     # where everyone is, for keeping zombies apart
+        for e in self.list:
+            if e.dead or e.rise > 0:
+                continue
+            x, z = e.position.x, e.position.z
+            grid.setdefault((int(x // SEP_CELL), int(z // SEP_CELL)), []).append((e, x, z, e.radius))
         for e in list(self.list):
             if not e.update(dt):
                 e.destroy()

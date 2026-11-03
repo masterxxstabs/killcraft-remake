@@ -608,6 +608,7 @@ are drawn in code in `blockhold/textures.py`. Change the colours there, or add a
 | `blockhold/animals.py` | passive animals: wandering, fleeing, hunting |
 | `blockhold/ragdoll.py` | ragdoll physics for dead zombies |
 | `blockhold/healing.py` | using bandages, medkits and food (it takes time) |
+| `blockhold/fastloop.py` | a faster version of Ursina's per-frame loop (only visits things that need updating) |
 | `blockhold/maps.py` | saving, loading and previewing maps |
 | `blockhold/lowpoly.py` | builds the flat-shaded low-poly models |
 | `blockhold/data/assets.py` | every placeable asset (trees, buildings, props...) |

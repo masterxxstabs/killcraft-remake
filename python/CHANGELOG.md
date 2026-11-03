@@ -3,6 +3,12 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.19.1
+- Big performance update: with 40 zombies on screen the game does about a third of the work it used to each frame, and with 80 about a quarter
+- Zombies, animals and ragdolls are drawn with plain engine nodes instead of heavy game objects, and spawn much faster
+- Fixed a leak: switching to or from a melee weapon left a copy of your arms behind every time, slowing the game down the longer you played
+- Particles, dropped guns and zombie crowding are cheaper; mouse picking is off while you aim
+
 ## 1.19.0
 - Ragdolls: dead zombies go limp and crumple to the ground, folding at the knees and elbows, slumping over things
 - The killing hit throws them: headshots snap the head back, shotguns and explosions send them flying
