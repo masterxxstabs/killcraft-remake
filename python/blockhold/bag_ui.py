@@ -1,18 +1,27 @@
 """The backpack screen (I) and the furnace screen (E at a furnace).
 
-Left: the armor you're wearing (HEAD and BODY) and, at a furnace, its controls.
-Right: the backpack grid. Drag items to move them, press R while dragging to turn them,
-drop armor on HEAD / BODY to wear it, drop anything outside the window to put it on the
-ground. Right-click wears armor or takes it off.
+Left: what you're wearing (HEAD, BODY) and the 3 weapons in your hands (TOOL, HANDGUN,
+RIFLE: keys 1, 2, 3), or at a furnace its three slots (ORE, FUEL, INGOTS) like Minecraft.
+Right: the backpack grid.
+
+Drag items to move them (R turns them while you drag), drop them on a slot to wear /
+hold / smelt them, or outside the window to put them on the ground. Right-click is a
+shortcut: wear, hold, load into the furnace, or put back in the backpack.
 """
 import math
 from ursina import Entity, camera, mouse
 from . import ui as U
-from .data.items import ARMOR, BACKPACK, ITEMS, SLOTS, SMELTING
+from .data.items import ARMOR, BACKPACK, FUEL, HAND_SLOTS, ITEMS, SLOTS, SMELT, hand_slot
+from .net import new_id
 from .render import destroy
 
 CELL = 0.062
-SLOT_BOX = {'head': (0.0, 0.0, 0.17, 0.17), 'body': (0.2, 0.0, 0.19, 0.26)}    # relative to the slot area
+# slot boxes (dx, dy, w, h) from the top-left of the left-hand area
+GEAR_BOXES = {'head': (0.0, 0.0, 0.17, 0.17), 'body': (0.2, 0.0, 0.19, 0.26),
+              'tool': (0.0, 0.32, 0.1, 0.15), 'handgun': (0.12, 0.32, 0.16, 0.1), 'primary': (0.3, 0.32, 0.26, 0.1)}
+FURNACE_BOXES = {'inp': (0.08, 0.04, 0.12, 0.12), 'fuel': (0.08, 0.28, 0.12, 0.12), 'out': (0.36, 0.13, 0.15, 0.15)}
+SLOT_LABELS = dict(SLOTS + [(s, f'{i + 1}  {n}') for i, (s, n) in enumerate(HAND_SLOTS)] +
+                   [('inp', 'ORE'), ('fuel', 'FUEL'), ('out', 'INGOTS')])
 
 
 def quad(parent, cx, cy, w, h, colour, rot=0, z=-0.02, alpha=1.0):
@@ -52,6 +61,25 @@ def draw_icon(parent, icon, cx, cy, s, colour):
         quad(parent, cx, cy - s * 0.05, s * 0.4, s * 0.3, U.contrast(colour), z=-0.021, alpha=0.18)
 
 
+def draw_weapon(parent, it, x, y, w, h):
+    """A weapon's silhouette, lying along the long side of its tile."""
+    d = ITEMS[it['id']]
+    cx, cy = x + w / 2, y - h / 2
+    along = max(w, h) * 0.8
+    turned = h > w
+    piv = Entity(parent=parent, position=(cx, cy, -0.02), rotation_z=90 if turned else 0)
+    if d['icon'] == 'melee':           # a handle with a head on the end, drawn lying down
+        quad(piv, 0, 0, along, along * 0.08, '#8a6038', z=0)
+        quad(piv, along * 0.42, 0, along * 0.16, along * 0.3, '#9aa0a8', z=-0.001)
+        return
+    thick = min(w, h) * 0.22
+    quad(piv, 0.0, thick * 0.3, along * 0.62, thick, '#26282d', z=0)                 # body
+    quad(piv, along * 0.36, thick * 0.45, along * 0.3, thick * 0.35, '#3a3d42', z=0)  # barrel
+    quad(piv, -along * 0.06, -thick * 0.55, thick * 0.55, thick * 1.2, '#26282d', z=0, rot=-12)   # grip
+    if along > 0.2:
+        quad(piv, -along * 0.38, thick * 0.1, along * 0.2, thick * 0.9, '#5e3b1f', z=0)    # stock
+
+
 class BagScreen:
     def __init__(self, ui):
         self.ui, self.game = ui, ui.game
@@ -60,14 +88,22 @@ class BagScreen:
         self.win = U.Window(self.root, 'BACKPACK')
         self.active = False
         self.furnace = None
-        self.drag = None           # dict(it, src, home, grab, ghost)
+        self.drag = None           # dict(it, src, grab, ghost, outline)
         self.tiles = None
         self.fur_panel = None
         self.fur_t = 0.0
         self.updater = Entity(parent=self.root, update=self.update)
         w = self.win
         self.gx, self.gy = w.x + 0.64, w.top - 0.035              # top-left of the grid
-        self.sx, self.sy = w.left, w.top - 0.04                   # top-left of the armor slots
+        self.sx, self.sy = w.left, w.top - 0.04                   # top-left of the slots area
+
+    @property
+    def player(self):
+        return self.game.player
+
+    @property
+    def inv(self):
+        return self.game.player.inventory
 
     # ── open / close ─────────────────────────────────────────────────────────
     def open(self, furnace=None):
@@ -89,28 +125,137 @@ class BagScreen:
             self.fur_panel = None
 
     # ── geometry ─────────────────────────────────────────────────────────────
+    def boxes(self):
+        return FURNACE_BOXES if self.furnace is not None else GEAR_BOXES
+
     def cell_at(self, x, y):
         cx, cy = math.floor((x - self.gx) / CELL), math.floor((self.gy - y) / CELL)
         return (cx, cy) if 0 <= cx < BACKPACK[0] and 0 <= cy < BACKPACK[1] else None
 
     def slot_at(self, x, y):
-        for slot, (dx, dy, w, h) in SLOT_BOX.items():
+        for key, (dx, dy, w, h) in self.boxes().items():
             sx, sy = self.sx + dx, self.sy - dy
             if sx <= x <= sx + w and sy - h <= y <= sy:
-                return slot
+                return key
         return None
 
     def inside_window(self, x, y):
         w = self.win
         return w.x <= x <= w.x + w.w and w.y - w.h <= y <= w.y
 
+    # ── slots: armor, weapons in hand, furnace ───────────────────────────────
+    @staticmethod
+    def pile(item_id, n=1):
+        return dict(uid=new_id(), id=item_id, n=n, x=0, y=0, rot=False)
+
+    def slot_item(self, key):
+        if key in ('head', 'body'):
+            return self.inv.equipped.get(key)
+        if key in ('tool', 'handgun', 'primary'):
+            d = self.game.weapons.slots.get(key)
+            return self.pile('w_' + d['id']) if d else None
+        return self.furnace[key] if self.furnace else None
+
+    def accepts(self, key, it):
+        d = ITEMS[it['id']]
+        if key in ('head', 'body'):
+            return ARMOR.get(it['id'], {}).get('slot') == key
+        if key in ('tool', 'handgun', 'primary'):
+            return d['kind'] == 'weapon' and hand_slot(self.game.weapons.get_def(d['weapon'])) == key
+        return self.game.barricades.furnace_accepts(key, it['id'])
+
+    def slot_take(self, key):
+        """Lift the item out of a slot. Returns it (a pile dict) or None."""
+        if key in ('head', 'body'):
+            return self.inv.unequip(key)
+        if key in ('tool', 'handgun', 'primary'):
+            d = self.game.weapons.unslot(key)
+            if d is None and self.game.weapons.slots.get(key) is not None:
+                self.ui.banner('KEEP ONE', '#d9912b', 1.2, "You can't empty your hands completely")
+            return self.pile('w_' + d['id']) if d else None
+        it = self.furnace[key]
+        self.furnace[key] = None
+        if it is not None:
+            it = dict(it, uid=new_id(), x=0, y=0, rot=False)
+        return it
+
+    def slot_put(self, key, it):
+        """Put a pile in a slot. Returns whatever comes back out (what was there, or what didn't fit)."""
+        if key in ('head', 'body'):
+            old = self.inv.equipped.get(key)
+            self.inv.equipped[key] = it
+            self.inv.changed()
+            return old
+        if key in ('tool', 'handgun', 'primary'):
+            w = self.game.weapons
+            d = w.get_def(ITEMS[it['id']]['weapon'])
+            old = w.slots.get(key)
+            if old is not None:
+                w.slots[key] = None
+                if w.held is old:
+                    w.held = None
+            w.slot_in(d, key)
+            return self.pile('w_' + old['id']) if old else None
+        b = self.furnace
+        cur, stack = b[key], ITEMS[it['id']]['stack']
+        if cur is None:
+            k = min(it['n'], stack)
+            b[key] = dict(id=it['id'], n=k)
+            return dict(it, n=it['n'] - k) if it['n'] > k else None
+        if cur['id'] == it['id']:
+            k = min(it['n'], stack - cur['n'])
+            cur['n'] += k
+            return dict(it, n=it['n'] - k) if it['n'] > k else None
+        b[key] = dict(id=it['id'], n=it['n'])
+        return dict(cur, uid=new_id(), x=0, y=0, rot=False)
+
+    def slot_restore(self, key, it):
+        if key in ('head', 'body'):
+            self.inv.equipped[key] = it
+            self.inv.changed()
+        elif key in ('tool', 'handgun', 'primary'):
+            self.game.weapons.slot_in(self.game.weapons.get_def(ITEMS[it['id']]['weapon']), key)
+        elif self.furnace is not None:
+            left = self.slot_put(key, it)
+            if left:
+                self.to_bag(left)
+
+    def to_bag(self, it, near=None):
+        """Put a pile in the backpack (at `near` = (x, y, rot) if there's room there); the ground if it's full."""
+        if near is not None and self.inv.place(dict(it, x=near[0], y=near[1], rot=near[2]), *near):
+            return
+        if ITEMS[it['id']]['kind'] == 'weapon' or 'dur' in it:
+            if self.inv.put_back(it):
+                return
+        else:
+            it = dict(it, n=self.inv.add(it['id'], it['n']))
+            if it['n'] <= 0:
+                return
+        self.to_ground(it)
+
+    def to_ground(self, it):
+        if ITEMS[it['id']]['kind'] == 'weapon':           # weapons keep their upgrades on the ground
+            w = self.game.weapons
+            pack = w.take_out(w.get_def(ITEMS[it['id']]['weapon']))
+            p = self.player
+            fwd = p.forward()
+            self.game.drops.spawn(pack, p.position + U.Vec3(fwd.x, 0, fwd.z) * 1.1, p.yaw + 70, p)
+        else:
+            self.game.drops.drop_item(self.player, it)
+
     # ── drawing ──────────────────────────────────────────────────────────────
     def tile(self, parent, it, x, y, w, h, z=-0.01):
         d = ITEMS[it['id']]
         broken = 'dur' in it and it['dur'] <= 0
-        U.box(parent, x, y, w, h, U.INK, z=z + 0.002)
+        held = d['kind'] == 'weapon' and self.game.weapons.held is not None and \
+            self.game.weapons.held['id'] == d['weapon'] and self.game.weapons.in_hands(d['weapon'])
+        U.box(parent, x, y, w, h, U.TEAL if held else U.INK, z=z + 0.002)
         U.box(parent, x + 0.003, y - 0.003, w - 0.006, h - 0.006, U.C(d['colour'], 0.55 if broken else 0.9), z=z + 0.001)
-        draw_icon(parent, d['icon'], x + w / 2, y - h / 2 + 0.004, min(w, h) * 0.78, d['colour'] if not broken else '#555555')
+        if d['kind'] == 'weapon':
+            draw_weapon(parent, it, x, y, w, h)
+        else:
+            draw_icon(parent, d['icon'], x + w / 2, y - h / 2 + 0.004, min(w, h) * 0.78,
+                      d['colour'] if not broken else '#555555')
         fg = U.contrast(d['colour'])
         U.text(parent, d['name'] if w > 0.1 else d['name'].split()[0], x + 0.006, y - 0.004, 0.5, fg, z=z - 0.02)
         if it['n'] > 1:
@@ -121,11 +266,20 @@ class BagScreen:
             U.box(parent, x + 0.006, y - h + 0.012, (w - 0.012) * k, 0.006, U.GREEN if k > 0.3 else U.RED,
                   z=z - 0.021, round=False)
 
+    def slot_box(self, parent, key):
+        dx, dy, w, h = self.boxes()[key]
+        x, y = self.sx + dx, self.sy - dy
+        U.frame(parent, x, y, w, h, U.NAVY, U.INK)
+        it = self.slot_item(key)
+        if it is None:
+            U.text(parent, SLOT_LABELS[key], x + w / 2, y - h / 2, 0.66, U.contrast(U.NAVY), origin=(0, 0), z=-0.02)
+        else:
+            self.tile(parent, it, x + 0.008, y - 0.008, w - 0.016, h - 0.016, z=-0.02)
+
     def refresh(self):
         if not self.active:
             return
-        p = self.game.player
-        inv = p.inventory
+        inv = self.inv
         if self.tiles is not None:
             destroy(self.tiles)
         t = self.tiles = Entity(parent=self.win.body)
@@ -141,29 +295,23 @@ class BagScreen:
             w, h = inv.size(it['id'], it['rot'])
             self.tile(t, it, self.gx + it['x'] * CELL + 0.002, self.gy - it['y'] * CELL - 0.002,
                       w * CELL - 0.004, h * CELL - 0.004)
-        if self.furnace is not None:          # at a furnace: its controls take the place of the armor
-            self.refresh_furnace()
+        U.text(t, 'Drag to move, R turns it.  Drop on a slot to wear / hold / smelt it, outside the window '
+                  'to drop it.  Right-click: quick move.', self.gx, self.gy - BACKPACK[1] * CELL - 0.02, 0.6, U.MUTED,
+               wordwrap=96)
+        if self.furnace is not None:          # at a furnace: its slots take the place of your gear
             U.FlatButton(t, 'CLOSE  (E)', self.win.left, self.win.btn_y, 0.26, U.BTN_H, self.game.close_shop)
+            self.refresh_furnace()
             return
-        # armor slots
+        # what you're wearing and holding
         U.text(t, 'WEARING', self.sx, self.sy + 0.035, 0.85, U.MUTED)
-        for slot, label in SLOTS:
-            dx, dy, w, h = SLOT_BOX[slot]
-            x, y = self.sx + dx, self.sy - dy
-            U.frame(t, x, y, w, h, U.NAVY, U.INK)
-            it = inv.equipped[slot]
-            if it is None:
-                U.text(t, label, x + w / 2, y - h / 2, 0.8, U.contrast(U.NAVY), origin=(0, 0), z=-0.02)
-            else:
-                self.tile(t, it, x + 0.008, y - 0.008, w - 0.016, h - 0.016, z=-0.02)
-        y = self.sy - 0.29
-        base, gear = p.base_armor, inv.protection()
-        U.text(t, f'Damage taken  -{round(p.armor * 100)}%', self.sx, y, 1.0, U.INK)
-        U.text(t, f'armor {round(gear * 100)}%  +  Plating upgrades {round(base * 100)}%', self.sx, y - 0.035,
-               0.72, U.MUTED)
-        U.text(t, 'Drag to move.  R turns it while you drag.\nDrop armor on HEAD or BODY to wear it '
-                  '(or right-click it).\nDrop something outside this window to put it on the ground.',
-               self.sx, y - 0.08, 0.72, U.MUTED)
+        for key in ('head', 'body', 'tool', 'handgun', 'primary'):
+            self.slot_box(t, key)
+        p = self.player
+        U.text(t, 'DAMAGE\nTAKEN', self.sx + 0.42, self.sy - 0.01, 0.72, U.MUTED)
+        U.text(t, f'-{round(p.armor * 100)}%', self.sx + 0.42, self.sy - 0.075, 1.6, U.INK)
+        U.text(t, f'armor {round(inv.protection() * 100)}%\nplating {round(p.base_armor * 100)}%',
+               self.sx + 0.42, self.sy - 0.14, 0.62, U.MUTED)
+        U.text(t, 'IN YOUR HANDS   (1  2  3)', self.sx, self.sy - 0.285, 0.85, U.MUTED)
         U.FlatButton(t, 'CLOSE  (I)', self.win.left, self.win.btn_y, 0.26, U.BTN_H, self.game.close_shop)
 
     def refresh_furnace(self):
@@ -173,74 +321,52 @@ class BagScreen:
         b = self.furnace
         if not self.active or b is None:
             return
-        bars = self.game.barricades
-        if b not in bars.list:                          # it got smashed
+        if b not in self.game.barricades.list:          # it got smashed
             self.furnace = None
+            self.refresh()
             return
         f = self.fur_panel = Entity(parent=self.win.body)
-        p = self.game.player
-        x, y = self.sx, self.sy + 0.035
-        coal = p.inventory.count('coal')
-        U.text(f, f'SMELT   (you have {coal} coal)', x, y, 0.85, U.MUTED)
-        y -= 0.04
-        for ore, ingot, need_ore, need_coal, secs in SMELTING:
-            have = p.inventory.count(ore)
-            most = min(have // need_ore, coal // need_coal)
-            U.text(f, f"{ITEMS[ingot]['name']}", x, y - 0.004, 0.85, U.INK)
-            U.text(f, f'{need_ore} ore + {need_coal} coal  ({have} ore)', x, y - 0.03, 0.62, U.MUTED)
-            for i, (label, n) in enumerate((('1', 1), ('5', 5), ('ALL', 999))):
-                ok = most >= (1 if n == 999 else n)
-                U.FlatButton(f, label, x + 0.23 + i * 0.075, y, 0.068, 0.04,
-                             lambda o=ore, n=n: self.smelt(o, n), fill=U.TEAL if ok else U.NAVY, edge=U.INK,
-                             size=0.75)
-            y -= 0.058
-        ingot, k = bars.furnace_progress(b)
-        queued = sum(j[1] for j in b['jobs'])
-        if ingot:
-            U.text(f, f"Smelting {ITEMS[ingot]['name'].lower()}...  {queued} to go", x, y, 0.72, U.INK)
-            U.bar(f, x, y - 0.03, 0.45, 0.012, k)
-        else:
-            U.text(f, 'Idle. Load some ore.', x, y, 0.72, U.MUTED)
-        ready = sum(b['out'].values())
-        if ready:
-            txt = ', '.join(f"{n} {ITEMS[i]['name'].lower()}" for i, n in b['out'].items())
-            U.text(f, f'Ready: {txt}', x, y - 0.075, 0.8, U.INK)
-            U.FlatButton(f, 'TAKE INGOTS', x, y - 0.1, 0.26, 0.055, self.take, fill=U.GREEN, edge=U.INK, size=0.9)
-        U.text(f, 'The furnace keeps smelting while you\'re away.\nCome back and take the ingots.', x, y - 0.19,
-               0.7, U.MUTED)
+        for key in ('inp', 'fuel', 'out'):
+            self.slot_box(f, key)
+        burn, cook = self.game.barricades.furnace_status(b)
+        # the flame between ore and fuel (how long the fuel keeps burning)
+        fx, fy = self.sx + 0.11, self.sy - 0.18
+        U.box(f, fx, fy, 0.06, 0.08, U.NAVY, z=-0.01)
+        if burn > 0:
+            U.box(f, fx, fy - 0.08 * (1 - burn), 0.06, 0.08 * burn, '#ff8c2a', z=-0.012, round=False)
+            U.box(f, fx + 0.015, fy - 0.08 * (1 - burn * 0.6), 0.03, 0.08 * burn * 0.6, '#ffd84a', z=-0.013,
+                  round=False)
+        # the arrow towards the ingots (how far the current ore has smelted)
+        ax, ay = self.sx + 0.22, self.sy - 0.19
+        U.box(f, ax, ay, 0.12, 0.03, U.NAVY, z=-0.01, round=False)
+        U.box(f, ax, ay, 0.12 * cook, 0.03, U.TEAL, z=-0.012, round=False)
+        U.box(f, ax + 0.12, ay + 0.012, 0.025, 0.054, U.NAVY, z=-0.01, round=False)
+        x, y = self.sx, self.sy - 0.43
+        fuel = ', '.join(f"{ITEMS[k]['name'].lower()} smelts {v / 4:g}" for k, v in FUEL.items())
+        ores = ', '.join(ITEMS[k]['name'].lower() for k in SMELT)
+        U.text(f, f'Ore: {ores}.\nFuel: {fuel} (one piece burns at a time).\n'
+                  'It keeps smelting while you\'re away.', x, y, 0.66, U.MUTED)
 
-    # ── furnace buttons ──────────────────────────────────────────────────────
-    def smelt(self, ore, n):
-        if self.furnace is None:
-            return
-        made = self.game.barricades.smelt(self.furnace, self.game.player, ore, n)
-        self.game.sounds.play('craft' if made else 'deny', volume=0.6)
-        self.refresh()
-
-    def take(self):
-        if self.furnace is None:
-            return
-        got = self.game.barricades.collect(self.furnace, self.game.player)
-        self.game.sounds.play('coin' if got else 'deny')
-        self.refresh()
-
-    # ── dragging ─────────────────────────────────────────────────────────────
+    # ── input ────────────────────────────────────────────────────────────────
     def input(self, key):
         """Returns True if the key was used here."""
         if not self.active:
             return False
-        inv = self.game.player.inventory
+        inv = self.inv
         mx, my = mouse.x, mouse.y
         if key == 'left mouse down' and self.drag is None:
             c = self.cell_at(mx, my)
             if c is not None:
                 it = inv.item_at(*c)
                 if it is not None:
-                    self.start_drag(inv.lift(it), ('grid', (it['x'], it['y'], it['rot'])), (c[0] - it['x'], c[1] - it['y']))
+                    home = (it['x'], it['y'], it['rot'])
+                    self.start_drag(inv.lift(it), ('grid', home), (c[0] - it['x'], c[1] - it['y']))
                     return True
             s = self.slot_at(mx, my)
-            if s is not None and inv.equipped[s] is not None:
-                self.start_drag(inv.unequip(s), ('slot', s), (0, 0))
+            if s is not None and self.slot_item(s) is not None:
+                it = self.slot_take(s)
+                if it is not None:
+                    self.start_drag(it, ('slot', s), (0, 0))
                 return True
         elif key == 'left mouse up' and self.drag is not None:
             self.finish_drag(mx, my)
@@ -255,36 +381,60 @@ class BagScreen:
                 self.build_ghost()
             return True
         elif key == 'right mouse down' and self.drag is None:
-            c = self.cell_at(mx, my)
-            it = inv.item_at(*c) if c else None
-            if it is not None and it['id'] in ARMOR:
-                home = (it['x'], it['y'], it['rot'])
-                inv.lift(it)
-                if not inv.equip(it):
-                    it.update(x=home[0], y=home[1], rot=home[2])
-                    inv.put_back(it)
-                self.game.sounds.play('equip', volume=0.7)
-                return True
-            s = self.slot_at(mx, my)
-            if s is not None and inv.equipped[s] is not None:
-                it = inv.unequip(s)
-                if not inv.put_back(it):
-                    inv.equipped[s] = it
-                    self.game.ui.banner('BACKPACK FULL', '#d9912b', 1.2, 'No room to take it off')
-                self.refresh()
-                return True
+            self.quick_move(mx, my)
+            return True
         return False
 
+    def quick_move(self, mx, my):
+        """Right-click: grid item -> its slot (wear / hold / load); slot -> backpack."""
+        inv = self.inv
+        c = self.cell_at(mx, my)
+        it = inv.item_at(*c) if c else None
+        if it is not None:
+            home = (it['x'], it['y'], it['rot'])
+            target = next((k for k in self.boxes() if self.accepts(k, it)), None)
+            if target is None:
+                return
+            inv.lift(it)
+            back = self.slot_put(target, it)
+            if back:
+                self.to_bag(back, near=home)
+            self.game.sounds.play('equip', volume=0.7)
+            self.refresh()
+            return
+        s = self.slot_at(mx, my)
+        if s is not None and self.slot_item(s) is not None:
+            if s == 'out':                       # ingots: as many as fit
+                out = self.furnace['out']
+                out['n'] = inv.add(out['id'], out['n'])
+                if out['n'] <= 0:
+                    self.furnace['out'] = None
+            else:
+                taken = self.slot_take(s)
+                if taken is not None:
+                    if ITEMS[taken['id']]['kind'] == 'weapon' or 'dur' in taken:
+                        if not inv.put_back(taken):
+                            self.slot_restore(s, taken)
+                            self.ui.banner('BACKPACK FULL', '#d9912b', 1.2, 'No room for it')
+                    else:
+                        left = inv.add(taken['id'], taken['n'])
+                        if left:
+                            self.slot_restore(s, dict(taken, n=left))
+            self.game.sounds.play('equip', volume=0.7)
+            self.refresh()
+
+    # ── dragging ─────────────────────────────────────────────────────────────
     def start_drag(self, it, src, grab):
         self.drag = dict(it=it, src=src, grab=grab, ghost=None)
         self.build_ghost()
         self.game.sounds.play('equip', volume=0.4, pitch=1.3)
+        self.refresh()
 
     def build_ghost(self):
         if self.drag['ghost'] is not None:
             destroy(self.drag['ghost'])
         it = self.drag['it']
-        w, h = self.game.player.inventory.size(it['id'], it['rot'])
+        w, h = self.inv.size(it['id'], it['rot'])
         g = self.drag['ghost'] = Entity(parent=self.win.body, z=-0.3)
         self.tile(g, it, 0, 0, w * CELL - 0.004, h * CELL - 0.004, z=-0.3)
         self.drag['outline'] = U.box(g, -0.004, 0.004, w * CELL + 0.004, h * CELL + 0.004, U.TEAL, z=-0.29)
@@ -294,18 +444,17 @@ class BagScreen:
             return
         self.fur_t -= 1 / 30
         if self.furnace is not None and self.drag is None and self.fur_t <= 0:
-            self.fur_t = 0.3
+            self.fur_t = 0.25
             self.refresh_furnace()
         if self.drag is None:
             return
         gx, gy = self.drag['grab']
         g = self.drag['ghost']
         g.position = (mouse.x - (gx + 0.5) * CELL, mouse.y + (gy + 0.5) * CELL, -0.3)
-        ok = self.drop_ok(mouse.x, mouse.y)
-        self.drag['outline'].color = U.C(U.GREEN if ok else U.RED, 0.85)
+        self.drag['outline'].color = U.C(U.GREEN if self.drop_ok(mouse.x, mouse.y) else U.RED, 0.85)
 
     def target(self, mx, my):
-        """Where the dragged item would go: ('grid', x, y) / ('slot', s) / ('ground',) / None."""
+        """Where the dragged item would go: ('grid', x, y) / ('slot', key) / ('ground',) / None."""
         s = self.slot_at(mx, my)
         if s is not None:
             return ('slot', s)
@@ -319,11 +468,11 @@ class BagScreen:
 
     def drop_ok(self, mx, my):
         t = self.target(mx, my)
-        it, inv = self.drag['it'], self.game.player.inventory
+        it, inv = self.drag['it'], self.inv
         if t is None:
             return False
         if t[0] == 'slot':
-            return ARMOR.get(it['id'], {}).get('slot') == t[1]
+            return t[1] != 'out' and self.accepts(t[1], it)
         if t[0] == 'grid':
             other = inv.item_at(t[1], t[2])
             if other is not None and other['id'] == it['id'] and ITEMS[it['id']]['stack'] > 1:
@@ -332,36 +481,38 @@ class BagScreen:
         return True
 
     def finish_drag(self, mx, my):
-        d, inv = self.drag, self.game.player.inventory
+        d, inv = self.drag, self.inv
         it = d['it']
         t = self.target(mx, my) if self.drop_ok(mx, my) else None
-        done = False
-        if t is not None and t[0] == 'grid':
-            done = inv.place(it, t[1], t[2], it['rot'])
-            if not done and it['n'] > 0:                 # merged part of a pile: the rest goes back
-                done = inv.put_back(it)
-        elif t is not None and t[0] == 'slot':
-            done = inv.equip(it)
-        elif t is not None and t[0] == 'ground':
-            self.game.drops.drop_item(self.game.player, it)
-            done = True
         destroy(d['ghost'])
         self.drag = None
-        if not done:
+        home = d['src'][1] if d['src'][0] == 'grid' else None
+        if t is None:
             self.return_home(d)
+        elif t[0] == 'grid':
+            if not inv.place(it, t[1], t[2], it['rot']) and it['n'] > 0:
+                self.to_bag(it, near=home)             # merged part of a pile: the rest goes back
+        elif t[0] == 'slot':
+            back = self.slot_put(t[1], it)
+            if back:
+                if d['src'][0] == 'slot' and self.accepts(d['src'][1], back) and self.slot_item(d['src'][1]) is None:
+                    self.slot_put(d['src'][1], back)     # swapped between two slots
+                else:
+                    self.to_bag(back, near=home)
+        elif t[0] == 'ground':
+            self.to_ground(it)
         self.game.sounds.play('equip', volume=0.4)
         self.refresh()
 
     def return_home(self, d):
-        inv, it = self.game.player.inventory, d['it']
+        it = d['it']
         if d['src'][0] == 'slot':
-            inv.equipped[d['src'][1]] = it
-            inv.changed()
+            self.slot_restore(d['src'][1], it)
             return
         x, y, rot = d['src'][1]
         it.update(x=x, y=y, rot=rot)
-        if not inv.place(it, x, y, rot) and not inv.put_back(it):
-            self.game.drops.drop_item(self.game.player, it)
+        if not self.inv.place(it, x, y, rot):
+            self.to_bag(it)
 
     def cancel_drag(self):
         if self.drag is not None:

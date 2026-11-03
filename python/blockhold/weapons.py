@@ -7,6 +7,7 @@ from panda3d.core import AmbientLight, Camera as PandaCamera, DirectionalLight, 
 from ursina import Vec3, application, camera, invoke, window
 from . import custom_models
 from .data.attachments import ATTACHMENTS
+from .data.items import HAND_SLOTS, hand_slot
 from .data.gun_models import MODELS
 from .data.weapons import PRICE_GROWTH, WEAPON_UPGRADES, WEAPONS, weapon_upgrade_price
 from .gunsmith import Smith
@@ -97,18 +98,20 @@ class Weapons:
     def set_visible(self, on):
         self.region.setActive(on)
 
+    @property
+    def owned(self):
+        """The weapons in your hands (tool, handgun, rifle), in that order. The rest are in the backpack."""
+        return [self.slots[s] for s, _ in HAND_SLOTS if self.slots.get(s) is not None]
+
     def reset(self):
-        self.owned = []
-        self.state = {}
+        self.slots = {s: None for s, _ in HAND_SLOTS}
+        self.state = {}             # weapon id -> ammo etc. (every weapon you own, in hand or in the backpack)
         self.levels = {}            # weapon id -> {upgrade id: level}
         self.attach = {}            # weapon id -> {slot: attachment id}
         self.owned_att = {}         # weapon id -> set of attachment ids bought for it
         self.camo = {}              # weapon id -> camo id
         self.owned_camos = {'factory'}
         self.held = None
-        for d in self.defs:
-            if d['price'] == 0 and not d.get('hidden'):
-                self.give(d['id'], equip=False)
         self.cooldown = 0
         self.reloading = 0
         self.reload_total = 1
@@ -120,27 +123,98 @@ class Weapons:
         self.spin_angle = 0
         self.trigger_down = False
         self.trigger_pressed = False
+        for d in self.defs:                              # the free starting weapons
+            if d['price'] == 0 and not d.get('hidden'):
+                self.give(d['id'], equip=False)
         self.equip(min(1, len(self.owned) - 1))
 
     # ── owning, upgrading ────────────────────────────────────────────────────
     def owns(self, wid):
+        """In your hands or in your backpack."""
+        return wid in self.state
+
+    def in_hands(self, wid):
         return any(d['id'] == wid for d in self.owned)
+
+    @property
+    def bag(self):
+        return self.owner.inventory
 
     def get_def(self, wid):
         return next((w for w in self.defs if w['id'] == wid), None)
 
     def give(self, wid, equip=True):
+        """A new weapon: into its hand slot if that's free, otherwise into the backpack
+        (and if that's full too, it's left on the ground at your feet)."""
         d = self.get_def(wid)
         if not d or self.owns(wid):
             return
-        self.owned.append(d)
-        self.owned.sort(key=self.defs.index)
         self.levels.setdefault(wid, {})
         self.state[wid] = dict(ammo=self.stat(d, 'mag'))
-        if equip:
+        slot = hand_slot(d)
+        if self.slots[slot] is None:
+            self.slots[slot] = d
+            if equip or self.held is None:
+                self.equip(self.owned.index(d))
+            else:
+                self.game.ui.update_weapon()
+            return
+        if self.bag.add('w_' + wid) == 0:
+            if self.owner.is_local:
+                self.game.ui.kill_feed(f"{d['name']} went in your backpack (I)")
+            return
+        pack = self.take_out(d)                       # no room anywhere: on the ground it goes
+        self.game.drops.spawn(pack, Vec3(self.owner.position.x, 0, self.owner.position.z), 0, self.owner)
+        if self.owner.is_local:
+            self.game.ui.banner('BACKPACK FULL', '#d9912b', 1.6, f"{d['name']} is on the ground at your feet")
+
+    # ── hands and backpack ───────────────────────────────────────────────────
+    def unslot(self, slot):
+        """Take the weapon out of a hand slot (to drag it somewhere). Never leaves your hands empty."""
+        d = self.slots.get(slot)
+        if d is None or len(self.owned) <= 1:
+            return None
+        self.slots[slot] = None
+        if self.held is d:
+            self.held = None
+            self.equip(0)
+        self.game.ui.update_weapon()
+        return d
+
+    def slot_in(self, d, slot=None):
+        """Put weapon d in its hand slot (which must be empty)."""
+        slot = slot or hand_slot(d)
+        self.slots[slot] = d
+        if self.held is None:
             self.equip(self.owned.index(d))
-        else:
-            self.game.ui.update_weapon()
+        self.game.ui.update_weapon()
+
+    def ready(self, d):
+        """Hold weapon d, taking it out of the backpack if needed (what was in its slot goes in instead)."""
+        if d in self.owned:
+            self.equip(self.owned.index(d))
+            return True
+        bag, slot = self.bag, hand_slot(d)
+        it = next((i for i in bag.items if i['id'] == 'w_' + d['id']), None)
+        if it is None:
+            return False
+        bag.lift(it)
+        old = self.slots[slot]
+        if old is not None:
+            back = dict(id='w_' + old['id'], n=1, x=it['x'], y=it['y'], rot=it['rot'], uid=it['uid'])
+            if not bag.put_back(back):
+                bag.put_back(it)
+                return False
+            if self.held is old:
+                self.held = None
+        self.slots[slot] = d
+        self.equip(self.owned.index(d), force=True)
+        return True
+
+    def equip_slot(self, slot):
+        d = self.slots.get(slot)
+        if d is not None:
+            self.equip(self.owned.index(d))
 
     def upgrades_for(self, d):
         key = 'for_melee' if d.get('melee') else 'for_guns'
@@ -270,6 +344,8 @@ class Weapons:
 
     def cycle(self, direction):
         n = len(self.owned)
+        if n == 0:
+            return
         self.equip((self.current + direction) % n)
 
     def build_model(self, d):
@@ -341,12 +417,17 @@ class Weapons:
                     attach=dict(self.attach.get(wid, {})), owned_att=set(self.owned_att.get(wid, set())),
                     camo=self.camo.get(wid, 'factory'))
         was = self.current
-        self.owned.remove(d)
+        for slot, w in self.slots.items():
+            if w is d:
+                self.slots[slot] = None
+        for it in [i for i in self.bag.items if i['id'] == 'w_' + wid]:
+            self.bag.lift(it)
         for table in (self.state, self.levels, self.attach, self.owned_att, self.camo):
             table.pop(wid, None)
         if self.held is d:
             self.held = None
             self.equip(min(was, len(self.owned) - 1))
+        self.game.ui.update_weapon()
         return pack
 
     def put_back(self, pack, equip=True):
@@ -358,7 +439,7 @@ class Weapons:
         self.attach[wid] = dict(pack['attach'])
         self.owned_att[wid] = set(pack['owned_att'])
         self.camo[wid] = pack['camo']
-        if equip:
+        if equip and self.in_hands(wid):
             self.equip(self.owned.index(self.get_def(wid)), force=True)
 
     # ── the arms holding the gun ─────────────────────────────────────────────

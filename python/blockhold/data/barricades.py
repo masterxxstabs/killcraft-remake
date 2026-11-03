@@ -10,7 +10,7 @@
 #    thorns       hurts zombies that push against it or attack it
 #    turret       shoots zombies by itself (refill its ammo by holding E next to it)
 #    mine         explodes when a zombie steps on it
-#    furnace      smelts ore into ingots (press E next to it; see SMELTING in items.py)
+#    furnace      smelts ore into ingots, like Minecraft (press E next to it; see SMELT and FUEL in items.py)
 #    build        draws it (see blockhold/lowpoly.py); turrets also have build_head (the part that aims)
 # ─────────────────────────────────────────────────────────────────────────────
 import math
@@ -180,7 +180,7 @@ BARRICADES = {
     'furnace': dict(
         name='Furnace', build=furnace, cells=[(0, 0)], height=2, hp=600,
         cost={'stone': 30, 'coal': 10},
-        desc='Smelts ore into ingots (2 ore + 1 coal each). Press E next to it. Workbenches need ingots.',
+        desc='Smelts ore into ingots, burning coal or wood. Press E next to it. Workbenches need ingots.',
         furnace=True),
     'landmine': dict(
         name='Landmine', build=landmine, cells=[(0, 0)], height=0, hp=1,

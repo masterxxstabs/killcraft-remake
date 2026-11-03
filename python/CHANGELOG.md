@@ -3,6 +3,12 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.16.0
+- You now hold 3 weapons: a tool, a handgun and a rifle (keys 1, 2, 3). Every other weapon goes in your backpack
+- Swap weapons by dragging them between the backpack and your hands (or right-click); they keep their upgrades and ammo
+- The furnace works like Minecraft: ore and fuel slots, a flame for how long the fuel burns and an arrow for progress
+- 1 ore makes 1 ingot; coal smelts 8 and wood 1.5. It stops when the fuel runs out or the ingot slot is full
+
 ## 1.15.0
 - Backpack (press I): a grid inventory where every item takes up space. Drag to move, R to turn, drop outside to leave it on the ground
 - Ore, coal, stone, wood, crystal and ingots are now items in your backpack (the resource counter is gone)

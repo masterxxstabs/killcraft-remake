@@ -52,5 +52,35 @@ MAX_PROTECTION = 0.75        # armor from gear + the shop's Plating upgrade neve
 
 BACKPACK = (10, 7)           # backpack size in cells (columns, rows)
 
-# smelting in a furnace: (ore, ingot it makes, ore needed, coal needed, seconds per ingot)
-SMELTING = [('iron', 'iron_ingot', 2, 1, 3.0), ('copper', 'copper_ingot', 2, 1, 3.0)]
+# ── weapons ──────────────────────────────────────────────────────────────────
+# You hold 3 weapons: a TOOL (melee), a HANDGUN and a RIFLE (any long gun). The rest go in
+# the backpack as items this size (by shop category):
+WEAPON_SIZES = {'melee': (1, 3), 'pistol': (2, 1), 'smg': (3, 2), 'rifle': (4, 2), 'shotgun': (4, 2),
+                'sniper': (5, 2), 'heavy': (5, 2), 'special': (3, 2)}
+HAND_SLOTS = [('tool', 'TOOL'), ('handgun', 'HANDGUN'), ('primary', 'RIFLE')]     # keys 1, 2, 3
+
+
+def hand_slot(d):
+    """Which hand slot a weapon goes in."""
+    if d.get('melee'):
+        return 'tool'
+    return 'handgun' if d.get('category') == 'pistol' else 'primary'
+
+
+def _weapon_items():
+    from .weapons import WEAPONS
+    for d in WEAPONS:
+        cat = 'melee' if d.get('melee') else d.get('category', 'special')
+        ITEMS['w_' + d['id']] = dict(name=d['name'], size=WEAPON_SIZES.get(cat, (3, 2)), stack=1,
+                                     colour='#6b4a2b' if d.get('melee') else '#3a3d42', kind='weapon',
+                                     icon='melee' if d.get('melee') else 'gun', weapon=d['id'])
+
+
+_weapon_items()
+
+# ── furnace (works like Minecraft) ───────────────────────────────────────────
+# Put ore in the top slot and fuel in the bottom one. Burning fuel smelts one ore into one
+# ingot every SMELT seconds; each piece of fuel burns for FUEL seconds (coal = 8 ingots).
+# It only smelts while it has fuel burning and room in the output slot.
+SMELT = {'iron': ('iron_ingot', 4.0), 'copper': ('copper_ingot', 4.0)}      # ore: (ingot, seconds)
+FUEL = {'coal': 32.0, 'wood': 6.0}                                          # fuel: seconds it burns

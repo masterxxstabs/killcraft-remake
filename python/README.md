@@ -45,9 +45,9 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | C or Ctrl | crouch; press it while sprinting to slide |
 | E | use a workbench (crafting) or pick up a dropped gun; hold it to revive a downed ally, repair a barricade or refill a turret |
 | X | drop the gun you're holding (it keeps its ammo, upgrades and attachments) |
-| I | backpack: your items and the armor you're wearing |
+| I | backpack: your items, the armor you're wearing and the weapons in your hands |
 | G | build mode: place the barricades you crafted (R turns them, the wheel switches, right click stops) |
-| 1–9 or mouse wheel | switch weapon |
+| 1, 2, 3 or mouse wheel | tool, handgun, rifle (other weapons wait in your backpack) |
 | R | reload |
 | Q | use your ability |
 | B | shop (between waves) |
@@ -291,10 +291,18 @@ helmets 2 x 2 and vests 2 x 3 or 3 x 3.
   pick it up again.
 - When the backpack is full, what you mine is lost, so tidy up or drop things you don't need.
 
+**Weapons go in the backpack too.** You hold three: a **tool** (melee), a **handgun** and a
+**rifle** (any long gun), on keys **1**, **2** and **3**. New weapons go in their hand slot if
+it's free, otherwise in the backpack (a rifle takes 4 x 2 cells, a sniper 5 x 2, a pistol 2 x 1).
+Drag a weapon from the backpack onto a hand slot to swap it in (or right-click it). Weapons keep
+their upgrades, attachments and ammo wherever they are.
+
 **Workbenches use ingots, not ore.** Craft a **Furnace** (30 stone + 10 coal, in the workbench's
-**Build** tab), place it with **G**, then press **E** next to it. Load ore and coal (2 ore + 1 coal
-makes 1 ingot, about 3 seconds each). The furnace keeps going while you fight; come back and press
-**TAKE INGOTS**. Coal comes from the dark coal rocks.
+**Build** tab), place it with **G**, then press **E** next to it. It works like Minecraft: drag ore
+into the top slot and fuel into the bottom one (or right-click them). The flame shows how long the
+fuel keeps burning, the arrow how far the current ore has got, and ingots pile up on the right
+(1 ore = 1 ingot, 4 seconds each). One coal smelts 8 ores, one wood 1.5. It only works while it has
+fuel and room for more ingots, and it keeps going while you fight. Coal comes from the dark coal rocks.
 
 **Armor** is crafted at the workbench (**Armor** tab) and goes in your backpack. Open the backpack and
 drag it onto **HEAD** or **BODY** (or right-click it) to wear it.

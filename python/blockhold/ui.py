@@ -620,7 +620,12 @@ class UI:
             self.set_text(self.ammo, label)
             self.ammo.scale = 1.5 if len(label) <= 5 else (1.28 if len(label) == 6 else 1.1)
             self.ammo.color = C(RED) if st['ammo'] <= math.ceil(mag * 0.25) else C(INK)
-        self.set_text(self.slots, '  '.join(f'[{i + 1}]' if o is w.held else f'{i + 1}' for i, o in enumerate(w.owned[:9])))
+        from .data.items import HAND_SLOTS
+        marks = []
+        for i, (slot, _) in enumerate(HAND_SLOTS):        # 1 tool  2 handgun  3 rifle
+            o = w.slots.get(slot)
+            marks.append(f'[{i + 1}]' if o is not None and o is w.held else (str(i + 1) if o is not None else '-'))
+        self.set_text(self.slots, '  '.join(marks))
 
     def build_scoreboard(self):
         g = self.game
@@ -892,7 +897,7 @@ class UI:
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
          ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
          ('Reload', 'R'), ('Ability', 'Q')],
-        [('Switch weapon', '1-9 / wheel'), ('Craft / pick up', 'E'), ('Backpack / drop gun', 'I / X'), ('Build (R turns)', 'G'),
+        [('Tool / handgun / rifle', '1 2 3 / wheel'), ('Craft / pick up', 'E'), ('Backpack / drop gun', 'I / X'), ('Build (R turns)', 'G'),
          ('Revive / repair', 'Hold E'), ('Shop', 'B'), ('Scoreboard', 'Hold Tab'),
          ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute / fullscreen', 'M / F11')],
     ]
@@ -1315,7 +1320,7 @@ class UI:
             win.bottom_right(f"BUY  {d['price']}", lambda: g.buy_weapon(d['id']), 'play', g.shop_start_wave,
                              fill=GREEN if ok else NAVY, w=0.3)
         elif w.held is not d:
-            win.bottom_right('EQUIP', lambda: (w.equip(w.owned.index(d)), self.refresh_shop()), 'play',
+            win.bottom_right('EQUIP', lambda: (w.ready(d), self.refresh_shop()), 'play',
                              g.shop_start_wave, fill=SLATE, w=0.3)
         else:
             win.bottom_right('START WAVE', g.shop_start_wave, fill=TEAL, w=0.3)

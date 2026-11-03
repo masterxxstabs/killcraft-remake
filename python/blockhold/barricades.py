@@ -12,7 +12,7 @@ import random
 from panda3d.core import NodePath, TransparencyAttrib
 from ursina import Vec3
 from .data.barricades import BARRICADES, MAX_PLACED, REPAIR_COST, REPAIR_RATE
-from .data.items import ITEMS, SMELTING
+from .data.items import FUEL, ITEMS, SMELT
 from .lowpoly import LowPoly
 from .net import new_id
 from .render import destroy, node, set_glow
@@ -100,8 +100,8 @@ class Barricades:
                      pitch=0.0, shots=0, reload=0.0)
         if d.get('mine'):
             b.update(arm=d['mine']['arm'])
-        if d.get('furnace'):
-            b.update(jobs=[], out={}, t=0.0)          # jobs: [ingot id, how many still to make]
+        if d.get('furnace'):                          # like a Minecraft furnace: ore, fuel and output slots
+            b.update(inp=None, fuel=None, out=None, burn=0.0, burn_max=1.0, cook=0.0)
         for c in cells:
             self.taken.add(c)
             if d['height'] > 0:
@@ -209,11 +209,10 @@ class Barricades:
             return f"Turret ammo {turret['ammo']}/{t['ammo']}: hold E to reload ({price})", None
         fur, _ = self.nearest(player.position, 2.2, kinds=('furnace',))
         if fur is not None and fur['hp'] >= fur['max_hp']:
-            ingot, k = self.furnace_progress(fur)
-            done = sum(fur['out'].values())
-            extra = f'  ({done} ready)' if done else ''
-            if ingot:
-                return f"Press E to use the furnace: smelting {ITEMS[ingot]['name']}{extra}", k
+            out = fur['out']
+            extra = f"  ({out['n']} {ITEMS[out['id']]['name'].lower()} ready)" if out else ''
+            if fur['burn'] > 0 and self.can_smelt(fur):
+                return 'Press E to use the furnace: smelting' + extra, self.furnace_status(fur)[1]
             return 'Press E to use the furnace' + extra, None
         b, _ = self.nearest(player.position, 1.9)
         if b is None or b['hp'] >= b['max_hp'] or b['d'].get('mine'):
@@ -258,73 +257,56 @@ class Barricades:
         """Turrets and spikes hit harder in later waves (5% per wave), so they stay useful."""
         return 1 + 0.05 * max(0, self.game.wave_number - 1)
 
-    # ── furnaces ─────────────────────────────────────────────────────────────
-    def smelt(self, b, player, ore_id, count):
-        """Load count ingots' worth of ore (and coal) from player's backpack into furnace b."""
-        rec = next((r for r in SMELTING if r[0] == ore_id), None)
-        if rec is None or b not in self.list:
-            return 0
-        ore, ingot, need_ore, need_coal, _ = rec
-        inv = player.inventory
-        n = min(count, inv.count(ore) // need_ore, inv.count('coal') // need_coal)
-        if n <= 0:
-            return 0
-        inv.remove(ore, n * need_ore)
-        inv.remove('coal', n * need_coal)
-        for job in b['jobs']:
-            if job[0] == ingot:
-                job[1] += n
-                break
-        else:
-            b['jobs'].append([ingot, n])
-        self.game.events.emit('furnace_loaded', id=b['id'], player=player, ingot=ingot, count=n)
-        return n
+    # ── furnaces (work like Minecraft) ───────────────────────────────────────
+    @staticmethod
+    def furnace_accepts(slot, item_id):
+        """Can item_id go in furnace slot 'inp' (ore) / 'fuel'? Nothing can be put in 'out'."""
+        return (slot == 'inp' and item_id in SMELT) or (slot == 'fuel' and item_id in FUEL)
 
-    def collect(self, b, player):
-        """Move finished ingots into player's backpack (whatever doesn't fit stays in the furnace)."""
-        got = {}
-        for ingot, n in list(b['out'].items()):
-            left = player.inventory.add(ingot, n)
-            if n - left:
-                got[ingot] = n - left
-            if left:
-                b['out'][ingot] = left
-            else:
-                del b['out'][ingot]
-        if got:
-            self.game.events.emit('furnace_collected', id=b['id'], player=player, got=got)
-        return got
+    def can_smelt(self, b):
+        inp, out = b['inp'], b['out']
+        if not inp or inp['n'] <= 0 or inp['id'] not in SMELT:
+            return False
+        ingot = SMELT[inp['id']][0]
+        return out is None or (out['id'] == ingot and out['n'] < ITEMS[ingot]['stack'])
 
     def update_furnace(self, b, dt):
-        if not b['jobs']:
-            b['t'] = 0.0
-            return
-        ingot, n = b['jobs'][0]
-        secs = next(r[4] for r in SMELTING if r[1] == ingot)
-        b['t'] += dt
-        if b['t'] >= secs:
-            b['t'] -= secs
-            b['out'][ingot] = b['out'].get(ingot, 0) + 1
-            b['jobs'][0][1] -= 1
-            if b['jobs'][0][1] <= 0:
-                b['jobs'].pop(0)
-                b['t'] = 0.0
+        if b['burn'] > 0:
+            b['burn'] = max(0.0, b['burn'] - dt)
+        if self.can_smelt(b):
+            if b['burn'] <= 0 and b['fuel'] and b['fuel']['n'] > 0:      # light the next piece of fuel
+                b['burn'] = b['burn_max'] = FUEL[b['fuel']['id']]
+                b['fuel']['n'] -= 1
+                if b['fuel']['n'] <= 0:
+                    b['fuel'] = None
+            if b['burn'] > 0:
+                ingot, secs = SMELT[b['inp']['id']]
+                b['cook'] += dt
+                if b['cook'] >= secs:
+                    b['cook'] = 0.0
+                    b['inp']['n'] -= 1
+                    if b['inp']['n'] <= 0:
+                        b['inp'] = None
+                    if b['out'] is None:
+                        b['out'] = dict(id=ingot, n=0)
+                    b['out']['n'] += 1
+                    self.game.events.emit('furnace_smelted', id=b['id'], ingot=ingot)
+            else:
+                b['cook'] = max(0.0, b['cook'] - dt * 2)      # out of fuel: the progress cools off
+        else:
+            b['cook'] = 0.0
 
-    def furnace_progress(self, b):
-        """(ingot being made, 0..1 progress) or (None, 0)."""
-        if not b.get('jobs'):
-            return None, 0.0
-        ingot = b['jobs'][0][0]
-        secs = next(r[4] for r in SMELTING if r[1] == ingot)
-        return ingot, b['t'] / secs
+    def furnace_status(self, b):
+        """(burning 0..1, cooking 0..1)"""
+        cook = 0.0
+        if b['inp'] and b['inp']['id'] in SMELT:
+            cook = b['cook'] / SMELT[b['inp']['id']][1]
+        return b['burn'] / max(0.01, b['burn_max']), cook
 
     def lights(self):
-        """Furnaces glow while they're smelting."""
-        out = []
-        for b in self.list:
-            if b['d'].get('furnace') and b['jobs']:
-                out.append((b['pos'] + Vec3(0, 0.6, 0), (1.0, 0.55, 0.22), 6, 1.2))
-        return out
+        """Furnaces glow while they're burning."""
+        return [(b['pos'] + Vec3(0, 0.6, 0), (1.0, 0.55, 0.22), 6, 1.2) for b in self.list
+                if b['d'].get('furnace') and b['burn'] > 0]
 
     def update_thorns(self, b, dt):
         b['tick'] -= dt

@@ -28,6 +28,7 @@ from .render import col, hex_rgb, node, set_fog
 from .sounds import Sounds
 from .updater import Updater, restart
 from .ui import UI, apply_style, apply_theme
+from .data.items import HAND_SLOTS
 from .data.themes import DEFAULT_STYLE, DEFAULT_THEME, STYLES, THEMES, default_hud
 from .weapons import Weapons
 from .world import MAX_SIZE, MIN_SIZE, World
@@ -903,8 +904,8 @@ class Game(Entity):
             self.aiming = True
         elif key == 'right mouse up':
             self.aiming = False
-        elif key in '123456789' and len(key) == 1:
-            self.weapons.equip(int(key) - 1)
+        elif key in ('1', '2', '3'):              # tool, handgun, rifle
+            self.weapons.equip_slot(HAND_SLOTS[int(key) - 1][0])
         elif key == 'scroll down':
             self.weapons.cycle(1)
         elif key == 'scroll up':
