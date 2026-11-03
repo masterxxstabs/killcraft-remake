@@ -3,6 +3,11 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.17.0
+- Map editor: turn things to any angle, and tilt or roll them, with the new ROTATION panel (or Z / X, T / G, Y / H)
+- Ctrl+click something you already placed to pick it, then turn it, or press Delete to remove it
+- Maps keep tilt and roll, and the game shows them
+
 ## 1.16.0
 - You now hold 3 weapons: a tool, a handgun and a rifle (keys 1, 2, 3). Every other weapon goes in your backpack
 - Swap weapons by dragging them between the backpack and your hands (or right-click); they keep their upgrades and ammo

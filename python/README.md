@@ -155,6 +155,10 @@ big maps stay playable (expect a somewhat lower frame rate than on small maps).
 | Right click | erase (whatever the selected tool places) |
 | ERASER button | erase everything under the brush |
 | R | turn buildings and props 90° |
+| Z / X | turn 15° either way (hold Shift: 1°) |
+| T / G | tilt forward / back 15° |
+| Y / H | roll left / right 15° |
+| Ctrl+click | pick something you already placed, to turn it (Delete removes it, Esc lets go) |
 | [ and ] | brush size 1, 3, 5, 9 or 15 cells across (paths, blocks, eraser) |
 | 1–4 | block height |
 | W A S D / arrows | move the camera |
@@ -168,6 +172,13 @@ whether it has walls, and whether to start from empty ground or a random arena y
 **SIZE** makes the current map bigger or smaller; everything stays centred and anything outside
 the new size is removed (Ctrl+Z brings it back). On big maps the camera zooms out further.
 Phone booths, vending machines, floodlights, radio masts and grave lanterns light up at night.
+
+**Turning things any way you like.** The **ROTATION** panel (top right) has sliders for **Turn**
+(any angle around the vertical axis), **Tilt** (lean forward or back) and **Roll** (lean
+sideways), plus -15° / +15° / 90° / RESET buttons. It sets how the next thing you place is turned;
+**Ctrl+click** something already on the map to turn that instead. The parts you can't walk through
+follow the turn to the nearest 90°; tilt and roll only change how it looks (a leaning wreck, a
+fallen sign...). Maps save tilt and roll only for things that use them.
 
 The preview turns red where something won't fit. Trees and shrubs get a random turn and size,
 so drag across the map to scatter a forest. **PLAY TEST** drops you into your map, and **Esc →

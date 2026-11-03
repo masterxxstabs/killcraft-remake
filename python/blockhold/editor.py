@@ -3,7 +3,9 @@
 Controls
   Left click / drag     place the selected thing (drag paints paths, draws fences, scatters trees)
   Right click / drag    erase
-  R                     turn buildings and props
+  R                     turn buildings and props 90°
+  Z / X                 turn 15° (hold Shift: 1°)      T / G  tilt      Y / H  roll
+  Ctrl+click            pick a placed thing to turn it (Delete removes it, Esc lets go)
   [  ]                  brush size (paths, blocks, eraser): 1, 3, 5, 9 or 15 cells
   1 - 4                 block height
   W A S D / arrows      move the camera     Q / E  turn it     mouse wheel  zoom
@@ -18,9 +20,9 @@ from ursina import Entity, InputField, Mesh, Vec3, application, camera, color as
 from . import maps
 from .data.assets import ASSETS, ASSET_CATEGORIES, BLOCKS, PATHS
 from .render import WORLD_SHADER, col, node, set_fog, destroy
-from .ui import (AMBER, BTN_H, EDGE, GREEN, INK, LINE, MUTED, NAVY, PAPER, RED, SLATE, TEAL, C, FlatButton, Window, box,
+from .ui import (AMBER, BTN_H, EDGE, GREEN, FlatSlider, INK, LINE, MUTED, NAVY, PAPER, RED, SLATE, TEAL, C, FlatButton, Window, box,
                  frame, glyph, text)
-from .world import MAX_SIZE, MIN_SIZE, World, prototype, rotate_cell
+from .world import MAX_SIZE, MIN_SIZE, World, prototype, rotate_cell, set_prop_turn
 
 SCATTER_SPACING = {'trees': 2.6, 'shrubs': 1.1, 'props': 1.2}
 UNDO_LIMIT = 40
@@ -44,7 +46,11 @@ class Editor:
         self.cave = dict(depth=30, width=3, height=4, branches=1, extras=True)
         self.category, self.asset = 'trees', 'pine'
         self.path_kind, self.block_kind = 'dirt', 'stone'
-        self.rot = 0
+        self.rot = 0           # how the next thing you place is turned (any angle), tilted and rolled
+        self.tilt = 0
+        self.roll = 0
+        self.selected = None   # a placed prop picked with Ctrl+click, to turn it after placing
+        self.rot_panel = None
         self.brush = 1
         self.block_h = 2
         self.eraser = False
@@ -78,6 +84,7 @@ class Editor:
         """Show a map (new, opened, undone or resized): rebuild the world, the grid and the view."""
         if self.world is not None:
             self.world.destroy()
+        self.selected = None
         self.world = World(map_data=data, editor=True)
         self.game.world = self.world
         self.build_grid()
@@ -85,6 +92,8 @@ class Editor:
         self.game.apply_sky(instant=True)          # the fog reaches further on big maps
         h = self.world.half
         self.pivot = Vec3(max(-h, min(h, self.pivot.x)), 0, max(-h, min(h, self.pivot.z)))
+        if getattr(self, 'ui', None) is not None:
+            self.refresh_rot_panel()
 
     def max_zoom(self):
         return max(80, self.world.half * 1.7)
@@ -172,7 +181,7 @@ class Editor:
         if ASSETS[self.asset].get('spawn') == 'player':       # only one player start
             for old in [q for q in self.world.props if ASSETS[q['id']].get('spawn') == 'player']:
                 self.world.remove_prop(old)
-        self.world.add_prop(self.asset, x, z, rot, scale)
+        self.world.add_prop(self.asset, x, z, rot, scale, self.tilt, self.roll)
         return True
 
     # ── actions ──────────────────────────────────────────────────────────────
@@ -403,7 +412,7 @@ class Editor:
         x, z, rot, scale, valid = self.placement(p)
         self.ghost_root.show()
         self.ghost_root.setPos(x, 0, z)
-        self.ghost_root.setH(-rot)
+        self.ghost_root.setHpr(-rot, self.tilt, self.roll)
         self.ghost_root.setColorScale(0.7, 1.3, 0.8, 0.6) if valid else self.ghost_root.setColorScale(1.6, 0.4, 0.4, 0.6)
 
     def input(self, key):
@@ -420,9 +429,15 @@ class Editor:
         if key in ('control+z', 'ctrl+z') or (key == 'z' and ctrl):
             self.undo()
             return
+        if key == 'left mouse down' and not self.over_ui() and ctrl:      # Ctrl+click: pick a placed thing
+            p = self.ground_point()
+            q = self.world.prop_at(p.x, p.z) if p is not None else None
+            self.select(q)
+            return
         if key == 'left mouse down' and not self.over_ui():
             p = self.ground_point()
             if p is not None:
+                self.select(None)
                 self.push_undo()
                 self.painting = True
                 self.last_cell = self.last_scatter = None
@@ -439,8 +454,20 @@ class Editor:
         elif key == 'right mouse up':
             self.erasing = False
         elif key == 'r':
-            self.rot = (self.rot + 90) % 360
-            self.refresh_options()
+            self.turn(90, 0, 0, snap=True)
+        elif key in ('z', 'x', 'shift+z', 'shift+x'):    # turn 15° (Shift: 1°)
+            step = 1 if key.startswith('shift') or held_keys['shift'] or held_keys['left shift'] else 15
+            self.turn(step if key.endswith('x') else -step, 0, 0)
+        elif key in ('t', 'g'):                          # tilt forward / back
+            self.turn(0, 15 if key == 't' else -15, 0)
+        elif key in ('y', 'h'):                          # roll left / right
+            self.turn(0, 0, 15 if key == 'y' else -15)
+        elif key == 'delete' and self.selected is not None:
+            self.push_undo()
+            self.world.remove_prop(self.selected)
+            self.selected = None
+            self.refresh_rot_panel()
+            self.toast('Deleted')
         elif key == 'scroll up':
             self.dist = max(6, self.dist * 0.88)
         elif key == 'scroll down':
@@ -453,7 +480,78 @@ class Editor:
             self.block_h = int(key)
             self.refresh_options()
         elif key == 'escape':
-            self.exit()
+            if self.selected is not None:
+                self.select(None)
+            else:
+                self.exit()
+
+    # ── turning (any angle, tilt and roll) ──────────────────────────────────
+    def turn_values(self):
+        q = self.selected
+        if q is not None:
+            return q['rot'], q.get('tilt', 0), q.get('roll', 0)
+        return self.rot, self.tilt, self.roll
+
+    def set_turn(self, rot, tilt, roll):
+        """Set the turn of the picked prop, or of the next thing you place."""
+        rot, tilt, roll = rot % 360, max(-90, min(90, tilt)), max(-180, min(180, roll))
+        if self.selected is not None:
+            set_prop_turn(self.selected, rot, tilt, roll, self.world)
+            self.dirty = True
+        else:
+            self.rot, self.tilt, self.roll = rot, tilt, roll
+
+    def turn(self, d_rot, d_tilt, d_roll, snap=False):
+        rot, tilt, roll = self.turn_values()
+        if snap:
+            rot = (round(rot / 90) * 90 + d_rot) % 360
+        else:
+            rot += d_rot
+        self.set_turn(rot, tilt + d_tilt, roll + d_roll)
+        self.refresh_rot_panel()
+
+    def select(self, q):
+        if self.selected is not None and self.selected.get('np') is not None:
+            self.selected['np'].clearColorScale()
+        self.selected = q
+        if q is not None:
+            self.push_undo()                  # Ctrl+Z puts it back the way it was
+            if q.get('np') is not None:
+                q['np'].setColorScale(1.25, 1.25, 0.7, 1)
+            self.toast(f"Picked {ASSETS[q['id']]['name']}: turn it with the panel, Delete removes it, Esc lets go")
+        self.refresh_rot_panel()
+
+    def refresh_rot_panel(self):
+        """The ROTATION panel on the right: for the picked prop, or for what you place next."""
+        if self.rot_panel is not None:
+            destroy(self.rot_panel)
+            self.rot_panel = None
+        placing = self.category not in TOOLS and not self.eraser
+        if self.selected is None and not placing:
+            return
+        a = window.aspect_ratio
+        x0, w, top = a / 2 - 0.38, 0.36, 0.415
+        p = self.rot_panel = Entity(parent=self.ui)
+        Entity(parent=p, model='quad', color=C(INK), position=(x0 + w / 2, top - 0.17, 0.02), scale=(w, 0.34),
+               collider='box')
+        box(p, x0 + EDGE, top - EDGE, w - 2 * EDGE, 0.34 - 2 * EDGE, PAPER, z=0.01)
+        name = ASSETS[self.selected['id']]['name'] if self.selected is not None else ASSETS[self.asset]['name']
+        text(p, 'ROTATION', x0 + 0.02, top - 0.02, 0.9, MUTED)
+        text(p, ('Picked: ' if self.selected is not None else 'Next: ') + name, x0 + 0.02, top - 0.05, 0.75,
+             TEAL if self.selected is not None else INK)
+        rot, tilt, roll = self.turn_values()
+        sw = 0.2
+        FlatSlider(p, x0 + 0.02, top - 0.085, sw, 'Turn', 0, 359, round(rot), lambda v: f'{v}°',
+                   lambda v: self.set_turn(v, *self.turn_values()[1:]))
+        FlatSlider(p, x0 + 0.02, top - 0.155, sw, 'Tilt', -90, 90, round(tilt), lambda v: f'{v}°',
+                   lambda v: self.set_turn(self.turn_values()[0], v, self.turn_values()[2]))
+        FlatSlider(p, x0 + 0.02, top - 0.225, sw, 'Roll', -180, 180, round(roll), lambda v: f'{v}°',
+                   lambda v: self.set_turn(*self.turn_values()[:2], v))
+        by = top - 0.29
+        for i, (label, fn) in enumerate((('-15°', lambda: self.turn(-15, 0, 0)), ('+15°', lambda: self.turn(15, 0, 0)),
+                                         ('90°', lambda: self.turn(90, 0, 0, snap=True)),
+                                         ('RESET', lambda: (self.set_turn(0, 0, 0), self.refresh_rot_panel())))):
+            FlatButton(p, label, x0 + 0.02 + i * 0.082, by, 0.076, 0.036, fn, fill=SLATE, edge=INK, size=0.72)
 
     # ── UI ───────────────────────────────────────────────────────────────────
     def toast(self, msg, colour=TEAL):
@@ -490,8 +588,8 @@ class Editor:
         self.palette = Entity(parent=u)
         # bottom bar
         Entity(parent=u, model='quad', color=C(INK), position=(0, -0.478, 0.02), scale=(a, 0.045), collider='box')
-        text(u, 'LMB place / drag   RMB erase   R turn   [ ] brush   1-4 block height   WASD move   Q E turn view   '
-                'wheel zoom   Ctrl+Z undo', L + 0.03, -0.478, 0.78, PAPER, origin=(-0.5, 0))
+        text(u, 'LMB place   RMB erase   R 90°  Z X turn  T G tilt  Y H roll   Ctrl+click pick   [ ] brush   1-4 height   '
+                'WASD Q E view   wheel zoom   Ctrl+Z undo', L + 0.03, -0.478, 0.72, PAPER, origin=(-0.5, 0))
         self.info_text = text(u, '', R - 0.03, -0.478, 0.78, MUTED, origin=(0.5, 0))
         self.toast_text = text(u, '', 0, 0.405, 1.1, TEAL, origin=(0, 0))
         self.refresh_palette()
@@ -640,9 +738,7 @@ class Editor:
             if a['nature']:
                 text(o, 'Hold and drag to scatter.\nEach one gets a random turn and size.', x0, y, 0.78, MUTED)
             else:
-                text(o, f'Turn: {self.rot}°   (press R)', x0, y, 0.85, MUTED)
-                FlatButton(o, '', x0 + w - 0.05, y + 0.012, 0.05, 0.04, lambda: self.input('r'), fill=SLATE,
-                           edge=INK, icon_name='arrow_up')
+                text(o, 'Turn it with the ROTATION panel\n(R = 90°, Z / X = 15°).', x0, y, 0.78, MUTED)
                 if len(a['solid']) <= 1:
                     text(o, 'Drag to draw a line.', x0, y - 0.035, 0.78, MUTED)
             if a.get('spawn') == 'zombie':
@@ -650,6 +746,7 @@ class Editor:
                      x0, y - 0.07, 0.75, TEAL)
             elif a.get('spawn') == 'player':
                 text(o, 'Where you start. Only one per map.', x0, y - 0.07, 0.75, TEAL)
+        self.refresh_rot_panel()
 
     def size_dialog(self, mode):
         """NEW: pick a size, walls and what to start with. SIZE: change the size of this map."""

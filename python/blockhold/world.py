@@ -227,17 +227,19 @@ class World:
                 self.dirty_paths.add(((gx + dx) // CHUNK, (gz + dz) // CHUNK))
 
     # ── props ────────────────────────────────────────────────────────────────
-    def add_prop(self, aid, x, z, rot=0.0, scale=1.0):
+    def add_prop(self, aid, x, z, rot=0.0, scale=1.0, tilt=0.0, roll=0.0):
+        """Place an asset. rot turns it any amount around the vertical axis; tilt leans it forward / back and
+        roll leans it sideways (looks only: what you can't walk through follows rot, to the nearest 90°)."""
         a = ASSETS.get(aid)
         if a is None:
             print('unknown asset in map:', aid)
             return None
-        p = dict(id=aid, x=x, z=z, rot=rot, scale=scale, np=None, cells=[])
+        p = dict(id=aid, x=x, z=z, rot=rot, scale=scale, tilt=tilt, roll=roll, np=None, cells=[])
         if self.editor or not a.get('editor_only'):
             variant = int(abs(x * 7.31 + z * 13.17)) % a.get('variants', 1)
             np = self.props_root.attachNewNode(aid)
             np.setPos(x, 0, z)
-            np.setH(-rot)
+            np.setHpr(-rot, tilt, roll)
             np.setScale(scale)
             prototype(aid, variant).copyTo(np)        # a light copy: the geometry itself is shared
             p['np'] = np
@@ -729,7 +731,9 @@ class World:
             aid, x, z = entry[0], entry[1], entry[2]
             rot = entry[3] if len(entry) > 3 else 0
             scale = entry[4] if len(entry) > 4 else 1
-            self.add_prop(aid, x, z, rot, scale)
+            tilt = entry[5] if len(entry) > 5 else 0
+            roll = entry[6] if len(entry) > 6 else 0
+            self.add_prop(aid, x, z, rot, scale, tilt, roll)
 
     def to_map(self, name=None):
         edge = 1 if self.walls else 0
@@ -743,8 +747,12 @@ class World:
                 entry.append(min(col))
             blocks.append(entry)
         paths = [[gx - self.half, gz - self.half, kind] for (gx, gz), kind in sorted(self.paths.items())]
-        props = [[p['id'], round(p['x'], 2), round(p['z'], 2), round(p['rot'], 1), round(p['scale'], 2)]
-                 for p in self.props]
+        props = []
+        for p in self.props:
+            entry = [p['id'], round(p['x'], 2), round(p['z'], 2), round(p['rot'], 1), round(p['scale'], 2)]
+            if p.get('tilt') or p.get('roll'):          # only maps that use it carry tilt and roll
+                entry += [round(p.get('tilt', 0), 1), round(p.get('roll', 0), 1)]
+            props.append(entry)
         return dict(format=1, name=name or self.name, size=self.half, walls=self.walls,
                     blocks=blocks, paths=paths, props=props)
 
@@ -890,3 +898,26 @@ class World:
                 continue
             return Vec3(x, 0, z)
         return Vec3(around[0] + 3, 0, around[2] + 3)
+
+
+def set_prop_turn(p, rot, tilt, roll, world):
+    """Turn a placed prop (editor): moves its model and its blocked cells."""
+    p['rot'], p['tilt'], p['roll'] = rot % 360, tilt, roll
+    if p['np'] is not None:
+        p['np'].setHpr(-p['rot'], tilt, roll)
+    a = ASSETS[p['id']]
+    for gx, gz, _ in p['cells']:                     # recompute the footprint for the new turn
+        i = world.gidx(gx, gz)
+        world.prop_h[i] = max([h for o in world.props if o is not p for (x, z, h) in o['cells'] if (x, z) == (gx, gz)]
+                              or [0])
+        world._refresh_height(gx, gz)
+    p['cells'] = []
+    gx0, gz0 = world.to_grid(p['x'], p['z'])
+    for dx, dz, h in a['solid']:
+        rx, rz = rotate_cell(dx, dz, p['rot'])
+        gx, gz = gx0 + rx, gz0 + rz
+        if world.inside(gx, gz):
+            p['cells'].append((gx, gz, h))
+            i = world.gidx(gx, gz)
+            world.prop_h[i] = max(world.prop_h[i], h)
+            world._refresh_height(gx, gz)
