@@ -3,6 +3,12 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.13.0
+- UI themes: Classic, Midnight, Military, Neon, Blood Moon, Arctic, Terminal and Sunset recolour every screen (Settings)
+- Customize the HUD (Settings or the pause screen): drag any part anywhere on the screen, or switch it off
+- Pick your own HUD colours: panels, accent, health bar and crosshair, plus panel see-through
+- Button text now always stays readable, whatever the colours
+
 ## 1.12.2
 - The walls around the edge of every map are now 8 m tall, so you can't climb out by stacking barricades or standing on buildings
 - Nobody can leave the map any more, even maps without walls: players and zombies always stay inside the edge

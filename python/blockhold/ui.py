@@ -16,7 +16,8 @@ from .data.upgrades import UPGRADES
 from .data.weapons import CATEGORIES, WEAPONS
 from .data.resources import RESOURCES
 from .data.atmosphere import ATMOSPHERES
-from .render import col, destroy
+from .render import col, destroy, hex_rgb
+from .data.themes import HUD_PARTS
 from .textures import icon, scope_texture, vignette_texture
 
 # ── PALETTE ──────────────────────────────────────────────────────────────────
@@ -39,36 +40,62 @@ HEADER_H = 0.095
 BTN_H = 0.065
 
 
+PALETTE_NAMES = ('PAPER', 'INK', 'SLATE', 'SLATE_EDGE', 'NAVY', 'TEAL', 'LINE', 'MUTED', 'RED', 'AMBER', 'GREEN')
+
+
 def C(c, a=1.0):
+    """A colour from '#rrggbb', a palette name like 'PAPER' (looked up now, so themes apply), or a Color."""
+    if isinstance(c, str) and c in PALETTE_NAMES:
+        c = globals()[c]
     return col(c, a) if isinstance(c, str) else c
 
 
 # ── building blocks ──────────────────────────────────────────────────────────
 #  Everything is placed by its TOP-LEFT corner, like in a drawing program.
 
+def contrast(c):
+    """Near-white or near-black: whichever reads better on colour c."""
+    if isinstance(c, str) and c in PALETTE_NAMES:
+        c = globals()[c]
+    r, g, b = hex_rgb(c) if isinstance(c, str) else (c[0], c[1], c[2])
+    return '#12121c' if 0.299 * r + 0.587 * g + 0.114 * b > 0.5 else '#f5f4f2'
+
+
+def _lum(c):
+    if isinstance(c, str) and c in PALETTE_NAMES:
+        c = globals()[c]
+    r, g, b = hex_rgb(c) if isinstance(c, str) else (c[0], c[1], c[2])
+    return 0.299 * r + 0.587 * g + 0.114 * b
+
+
+def readable(fg, bg):
+    """Is text in colour fg easy to read on bg?"""
+    return abs(_lum(fg) - _lum(bg)) > 0.32
+
+
 def box(parent, x, y, w, h, color, z=0.0, **kw):
     return Entity(parent=parent, model='quad', color=C(color), origin=(-0.5, 0.5),
                   position=(x, y, z), scale=(w, h), **kw)
 
 
-def frame(parent, x, y, w, h, fill=PAPER, edge=INK, t=EDGE, z=0.0):
+def frame(parent, x, y, w, h, fill='PAPER', edge='INK', t=EDGE, z=0.0):
     """A filled box with a thick outline. Returns the inner fill."""
     box(parent, x, y, w, h, edge, z=z + 0.002)
     return box(parent, x + t, y - t, w - 2 * t, h - 2 * t, fill, z=z + 0.001)
 
 
-def text(parent, s, x, y, size=1.0, color=INK, origin=(-0.5, 0.5), z=-0.01, **kw):
+def text(parent, s, x, y, size=1.0, color='INK', origin=(-0.5, 0.5), z=-0.01, **kw):
     if 'wordwrap' in kw and not s:
         s = ' '        # Ursina can't word-wrap an empty string
     return Text(s, parent=parent, position=(x, y, z), scale=size, color=C(color), origin=origin, **kw)
 
 
-def glyph(parent, name, x, y, size, color=PAPER, z=-0.012):
+def glyph(parent, name, x, y, size, color='PAPER', z=-0.012):
     """An icon centred on (x, y)."""
     return Entity(parent=parent, model='quad', texture=icon(name), color=C(color), position=(x, y, z), scale=size)
 
 
-def hline(parent, x, y, w, color=LINE, t=0.004):
+def hline(parent, x, y, w, color='LINE', t=0.004):
     return box(parent, x, y, w, t, color)
 
 
@@ -79,9 +106,11 @@ def clamp01(v):
 class FlatButton:
     """A solid button with an outline. (x, y) is the top-left corner."""
 
-    def __init__(self, parent, label, x, y, w, h, on_click, fill=SLATE, edge=SLATE_EDGE, fg=PAPER,
+    def __init__(self, parent, label, x, y, w, h, on_click, fill='SLATE', edge='SLATE_EDGE', fg='AUTO',
                  size=1.15, icon_name=None, align='center', right='', z=-0.02, hover=0.12):
         t = EDGE * 0.8
+        if fg == 'AUTO' or not readable(fg, fill):       # text that would vanish on this fill: use black or white
+            fg = contrast(fill)
         self.parts = [box(parent, x, y, w, h, edge, z=z + 0.002)]
         f = C(fill)
         self.button = Button(parent=parent, model='quad', text='', color=f, position=(x + w / 2, y - h / 2, z),
@@ -117,12 +146,12 @@ def tab_strip(parent, x, y, items, active, on_pick, w_each=0.2, h=0.05):
                    hover=0.15 if on else -0.06, z=-0.005)
 
 
-def bar(parent, x, y, w, h, frac, fill=TEAL, back=NAVY):
+def bar(parent, x, y, w, h, frac, fill='TEAL', back='NAVY'):
     box(parent, x, y, w, h, back, z=0.001)
     return box(parent, x, y, w * clamp01(frac), h, fill)
 
 
-def stat_row(parent, x, y, w, label, frac, value, fill=TEAL):
+def stat_row(parent, x, y, w, label, frac, value, fill='TEAL'):
     """Label on top, a bar underneath and the value to the right (the mock-up's right column)."""
     text(parent, label, x, y, 0.95, INK)
     bar(parent, x, y - 0.032, w, 0.02, frac, fill)
@@ -206,7 +235,7 @@ class Window:
         FlatButton(self.body, '', self.left + 0.272, self.btn_y, BTN_H * 1.2, BTN_H, on_icon, fill=NAVY,
                    edge=LINE, icon_name=icon_name)
 
-    def bottom_right(self, label, on_click, icon_name=None, on_icon=None, fill=SLATE, w=0.26):
+    def bottom_right(self, label, on_click, icon_name=None, on_icon=None, fill='SLATE', w=0.26):
         x = self.x + self.w - 0.06 - w
         FlatButton(self.body, label, x, self.btn_y, w, BTN_H, on_click, fill=fill)
         if icon_name:
@@ -233,6 +262,19 @@ def milestones(save):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+def apply_theme(tid):
+    """Switch the palette (every screen reads these when it is built)."""
+    import sys
+    from .data.themes import THEMES
+    pal = THEMES.get(tid) or THEMES['classic']
+    for mod in (sys.modules[__name__], sys.modules.get('blockhold.editor')):
+        if mod is None:
+            continue
+        for name in PALETTE_NAMES:
+            if hasattr(mod, name):
+                setattr(mod, name, pal[name])
+
+
 class UI:
     def __init__(self, game):
         self.game = game
@@ -246,12 +288,47 @@ class UI:
         self.shop_view = 'stats'
         self.shop_sel = None
         self._update_status = None
+        self.hud_editor = None
         self.build_hud()
         self.build_menu()
         self.build_pause()
         self.build_shop()
         self.build_craft()
         self.build_dead()
+
+    def rebuild_hud(self):
+        """Build the HUD again (new colours / layout), keeping whether it was showing."""
+        on = self.hud.enabled
+        effects = getattr(self.game, 'effects', None)
+        keep = [n['t'] for n in effects.numbers] if effects else []     # damage numbers live on the HUD
+        for t in keep:
+            t.parent = camera.ui
+        destroy(self.hud)
+        self._cache = {}
+        self.build_hud()
+        for t in keep:
+            t.parent = self.hud
+        self.hud.enabled = on
+        if getattr(self.game, 'weapons', None) is not None and self.game.weapons.held:
+            self.update_weapon()
+
+    def rebuild(self):
+        """Build every screen again with the current theme."""
+        shown = {n: getattr(self, n).enabled for n in ('menu', 'pause', 'shop', 'craft', 'dead')}
+        for n in ('menu', 'pause', 'shop', 'craft', 'dead'):
+            destroy(getattr(self, n))
+        self.rebuild_hud()
+        self.build_menu()
+        self.build_pause()
+        self.build_shop()
+        self.build_craft()
+        self.build_dead()
+        for n, on in shown.items():
+            getattr(self, n).enabled = on
+        if shown['menu']:
+            self.refresh_menu()
+        if shown['pause']:
+            self.show_pause()
 
     def set_text(self, t, value):
         """Only rebuild text when it changes (it's slow-ish)."""
@@ -260,10 +337,31 @@ class UI:
             t.text = value
 
     # ── HUD ──────────────────────────────────────────────────────────────────
+    def hud_colours(self):
+        """The HUD's colours: the theme's, unless changed in the HUD editor."""
+        hud = self.game.hud_settings
+        panel = hud.get('panel') or INK
+        return dict(panel=panel, fg=contrast(panel), op=hud.get('opacity', 1.0),
+                    accent=hud.get('accent') or TEAL, health=hud.get('health') or RED,
+                    cross=hud.get('crosshair') or PAPER)
+
     def build_hud(self):
         a = window.aspect_ratio
         L, R, T, B = -a / 2, a / 2, 0.5, -0.5
+        k = self.hud_colours()
+        P, FG, AC = C(k['panel'], k['op']), k['fg'], k['accent']
         h = self.hud = Entity(parent=camera.ui, enabled=False)
+        # every movable part of the HUD hangs off its own anchor (moved / hidden as one)
+        self.parts = {key: Entity(parent=h) for key, _ in HUD_PARTS}
+        self.part_rects = {
+            'crosshair': (-0.04, 0.04, 0.08, 0.08), 'wave': (L + 0.03, T - 0.03, 0.42, 0.095),
+            'quest': (L + 0.03, T - 0.135, 0.412, 0.042), 'money': (R - 0.33, T - 0.03, 0.3, 0.095),
+            'feed': (R - 0.33, T - 0.135, 0.3, 0.1), 'health': (L + 0.03, B + 0.1, 0.46, 0.07),
+            'powers': (L + 0.03, B + 0.152 + 3 * 0.047, 0.3, 0.18), 'ability': (-0.07, B + 0.175, 0.14, 0.145),
+            'weapon': (R - 0.33, B + 0.105, 0.3, 0.075), 'resources': (R - 0.33, B + 0.142, 0.3, 0.032),
+            'hint': (-0.25, B + 0.205, 0.5, 0.045), 'banner': (-0.46, 0.27, 0.92, 0.13),
+            'boss': (-0.36, T - 0.14, 0.72, 0.075)}
+        el = self.parts
         self.scope = Entity(parent=h, enabled=False)
         Entity(parent=self.scope, model='quad', texture=scope_texture(), scale=(1, 1), z=0.9)
         box(self.scope, -0.499 - a, 0.5, a, 1, '#000000', z=0.9)
@@ -272,116 +370,167 @@ class UI:
         self.adrenaline = Entity(parent=h, model='quad', texture=vignette_texture((255, 60, 110)), scale=(a, 1), z=1,
                                  color=ucolor.Color(1, 1, 1, 0))
 
-        # crosshair: white with a dark outline
+        # crosshair with an outline in the opposite shade
+        cross = el['crosshair']
         for sx, sy in ((0.026, 0.0065), (0.0065, 0.026)):
-            box(h, -sx / 2, sy / 2, sx, sy, INK, z=0.002)
+            box(cross, -sx / 2, sy / 2, sx, sy, contrast(k['cross']), z=0.002)
         for sx, sy in ((0.022, 0.0028), (0.0028, 0.022)):
-            box(h, -sx / 2, sy / 2, sx, sy, PAPER)
-        self.hit = Entity(parent=h, enabled=False)
+            box(cross, -sx / 2, sy / 2, sx, sy, k['cross'])
+        self.hit = Entity(parent=cross, enabled=False)
         for r in (45, -45):
-            Entity(parent=self.hit, model='quad', color=C(PAPER), scale=(0.042, 0.004), rotation_z=r)
-        self.reload_back = box(h, -0.04, -0.04, 0.08, 0.008, INK, z=0.001)
-        self.reload_fill = box(h, -0.04, -0.04, 0.08, 0.008, TEAL)
+            Entity(parent=self.hit, model='quad', color=C(k['cross']), scale=(0.042, 0.004), rotation_z=r)
+        self.reload_back = box(cross, -0.04, -0.04, 0.08, 0.008, P, z=0.001)
+        self.reload_fill = box(cross, -0.04, -0.04, 0.08, 0.008, AC)
 
         # top left: wave
-        box(h, L + 0.03, T - 0.03, 0.12, 0.095, INK, z=0.003)
-        text(h, 'WAVE', L + 0.09, T - 0.047, 0.85, PAPER, origin=(0, 0))
-        self.wave = text(h, '0', L + 0.09, T - 0.088, 2.6, PAPER, origin=(0, 0))
-        frame(h, L + 0.15 - EDGE, T - 0.03, 0.3, 0.095, PAPER, INK)
-        self.remaining = text(h, '', L + 0.17, T - 0.0775, 1.15, INK, origin=(-0.5, 0))
-        self.quest_box = Entity(parent=h, enabled=False)
-        box(self.quest_box, L + 0.03, T - 0.135, 0.412, 0.042, INK, z=0.003)
+        w_ = el['wave']
+        box(w_, L + 0.03, T - 0.03, 0.12, 0.095, P, z=0.003)
+        text(w_, 'WAVE', L + 0.09, T - 0.047, 0.85, FG, origin=(0, 0))
+        self.wave = text(w_, '0', L + 0.09, T - 0.088, 2.6, FG, origin=(0, 0))
+        frame(w_, L + 0.15 - EDGE, T - 0.03, 0.3, 0.095, PAPER, INK)
+        self.remaining = text(w_, '', L + 0.17, T - 0.0775, 1.15, INK, origin=(-0.5, 0))
+        self.quest_box = Entity(parent=el['quest'], enabled=False)
+        box(self.quest_box, L + 0.03, T - 0.135, 0.412, 0.042, P, z=0.003)
         glyph(self.quest_box, 'skull', L + 0.052, T - 0.156, 0.026, '#d6a3ff')
         self.quest_text = text(self.quest_box, '', L + 0.075, T - 0.156, 0.9, '#d6a3ff', origin=(-0.5, 0))
 
         # top right: coins, score, kill feed
-        frame(h, R - 0.33, T - 0.03, 0.3, 0.095, PAPER, INK)
-        glyph(h, 'coin', R - 0.29, T - 0.0775, 0.045, AMBER)
-        self.coins = text(h, '', R - 0.05, T - 0.066, 2.0, INK, origin=(0.5, 0))
-        self.score = text(h, '', R - 0.05, T - 0.103, 0.85, MUTED, origin=(0.5, 0))
-        self.feed_box = box(h, R - 0.33, T - 0.135, 0.3, 0.1, INK, z=0.003)
+        m = el['money']
+        frame(m, R - 0.33, T - 0.03, 0.3, 0.095, PAPER, INK)
+        glyph(m, 'coin', R - 0.29, T - 0.0775, 0.045, AMBER)
+        self.coins = text(m, '', R - 0.05, T - 0.066, 2.0, INK, origin=(0.5, 0))
+        self.score = text(m, '', R - 0.05, T - 0.103, 0.85, MUTED, origin=(0.5, 0))
+        self.feed_box = box(el['feed'], R - 0.33, T - 0.135, 0.3, 0.1, P, z=0.003)
         self.feed_right = R - 0.03
-        self.feed_text = text(h, '', R - 0.045, T - 0.145, 0.85, PAPER, origin=(0.5, 0.5))
+        self.feed_text = text(el['feed'], '', R - 0.045, T - 0.145, 0.85, FG, origin=(0.5, 0.5))
 
         # banner (wave messages)
-        self.banner_root = Entity(parent=h, enabled=False)
+        self.banner_root = Entity(parent=el['banner'], enabled=False)
         bw, bh, by = 0.92, 0.13, 0.27
         frame(self.banner_root, -bw / 2, by, bw, bh, PAPER, INK)
-        self.banner_accent = box(self.banner_root, -bw / 2, by, bw, 0.016, TEAL, z=-0.001)
+        self.banner_accent = box(self.banner_root, -bw / 2, by, bw, 0.016, AC, z=-0.001)
         self.banner_text = text(self.banner_root, '', 0, by - 0.058, 2.6, INK, origin=(0, 0))
         self.banner_sub = text(self.banner_root, '', 0, by - 0.101, 1.0, MUTED, origin=(0, 0))
 
         # boss health
-        self.boss = Entity(parent=h, enabled=False)
-        box(self.boss, -0.36, T - 0.14, 0.72, 0.075, INK, z=0.003)
-        self.boss_name = text(self.boss, '', 0, T - 0.158, 1.0, PAPER, origin=(0, 0))
+        self.boss = Entity(parent=el['boss'], enabled=False)
+        box(self.boss, -0.36, T - 0.14, 0.72, 0.075, P, z=0.003)
+        self.boss_name = text(self.boss, '', 0, T - 0.158, 1.0, FG, origin=(0, 0))
         box(self.boss, -0.345, T - 0.178, 0.69, 0.024, NAVY, z=0.001)
         self.boss_fill = box(self.boss, -0.345, T - 0.178, 0.69, 0.024, RED)
 
         # interaction prompt (revive etc.)
         self.prompt = Entity(parent=h, enabled=False)
-        self.prompt_box = box(self.prompt, -0.2, -0.13, 0.4, 0.06, INK, z=0.003)
-        self.prompt_text = text(self.prompt, '', 0, -0.152, 1.0, PAPER, origin=(0, 0))
-        self.prompt_bar = box(self.prompt, -0.19, -0.176, 0.38, 0.008, TEAL)
+        self.prompt_box = box(self.prompt, -0.2, -0.13, 0.4, 0.06, P, z=0.003)
+        self.prompt_text = text(self.prompt, '', 0, -0.152, 1.0, FG, origin=(0, 0))
+        self.prompt_bar = box(self.prompt, -0.19, -0.176, 0.38, 0.008, AC)
 
         # between-wave hint
-        self.hint = Entity(parent=h)
-        box(self.hint, -0.25, B + 0.205, 0.5, 0.045, INK, z=0.003)
-        text(self.hint, 'B  =  shop      N  =  start the next wave', 0, B + 0.1825, 0.95, PAPER, origin=(0, 0))
+        self.hint = Entity(parent=el['hint'])
+        box(self.hint, -0.25, B + 0.205, 0.5, 0.045, P, z=0.003)
+        text(self.hint, 'B  =  shop      N  =  start the next wave', 0, B + 0.1825, 0.95, FG, origin=(0, 0))
 
         # bottom left: health
-        box(h, L + 0.03, B + 0.1, 0.46, 0.07, INK, z=0.003)
-        glyph(h, 'heart', L + 0.065, B + 0.065, 0.032, RED)
-        box(h, L + 0.1, B + 0.088, 0.375, 0.046, NAVY, z=0.001)
-        self.hp_fill = box(h, L + 0.1, B + 0.088, 0.375, 0.046, RED)
+        hp = el['health']
+        box(hp, L + 0.03, B + 0.1, 0.46, 0.07, P, z=0.003)
+        glyph(hp, 'heart', L + 0.065, B + 0.065, 0.032, k['health'])
+        box(hp, L + 0.1, B + 0.088, 0.375, 0.046, NAVY, z=0.001)
+        self.hp_fill = box(hp, L + 0.1, B + 0.088, 0.375, 0.046, k['health'])
+        self.hp_text = text(hp, '', L + 0.465, B + 0.065, 1.05, contrast(k['health']), origin=(0.5, 0), z=-0.02)
         # scoreboard (hold Tab): every player, then every ally
         self.scoreboard = Entity(parent=h, enabled=False, z=-0.05)
         self.board_rows = Entity(parent=self.scoreboard)
         self.board_t = 0.0
         self.power_rows = []                    # active power-ups, stacked above the health bar
         for i in range(4):
-            row = Entity(parent=h, enabled=False)
+            row = Entity(parent=el['powers'], enabled=False)
             y = B + 0.152 + i * 0.047
-            box(row, L + 0.03, y, 0.3, 0.04, INK, z=0.003)
-            chip = box(row, L + 0.042, y - 0.008, 0.024, 0.024, PAPER, z=0.001)
-            name = text(row, '', L + 0.078, y - 0.02, 0.9, PAPER, origin=(-0.5, 0))
-            secs = text(row, '', L + 0.318, y - 0.02, 0.9, PAPER, origin=(0.5, 0))
+            box(row, L + 0.03, y, 0.3, 0.04, P, z=0.003)
+            chip = box(row, L + 0.042, y - 0.008, 0.024, 0.024, FG, z=0.001)
+            name = text(row, '', L + 0.078, y - 0.02, 0.9, FG, origin=(-0.5, 0))
+            secs = text(row, '', L + 0.318, y - 0.02, 0.9, FG, origin=(0.5, 0))
             self.power_rows.append((row, chip, name, secs))
-        self.hp_text = text(h, '', L + 0.465, B + 0.065, 1.05, PAPER, origin=(0.5, 0), z=-0.02)
 
         # bottom middle: ability
-        self.ability_name = text(h, '', 0, B + 0.142, 0.85, PAPER, origin=(0, 0), z=-0.02)
-        self.ability_name_box = box(h, -0.07, B + 0.158, 0.14, 0.033, INK, z=0.003)
-        box(h, -0.045, B + 0.12, 0.09, 0.09, INK, z=0.003)
-        box(h, -0.045 + EDGE, B + 0.12 - EDGE, 0.09 - 2 * EDGE, 0.09 - 2 * EDGE, NAVY, z=0.002)
-        self.ability_fill = Entity(parent=h, model='quad', origin=(0, -0.5), position=(0, B + 0.03 + EDGE, 0.001),
-                                   scale=(0.09 - 2 * EDGE, 0.09 - 2 * EDGE), color=C(TEAL))
-        self.ability_cd = text(h, 'Q', 0, B + 0.075, 1.7, PAPER, origin=(0, 0), z=-0.02)
+        ab = el['ability']
+        self.ability_name = text(ab, '', 0, B + 0.142, 0.85, FG, origin=(0, 0), z=-0.02)
+        self.ability_name_box = box(ab, -0.07, B + 0.158, 0.14, 0.033, P, z=0.003)
+        box(ab, -0.045, B + 0.12, 0.09, 0.09, P, z=0.003)
+        box(ab, -0.045 + EDGE, B + 0.12 - EDGE, 0.09 - 2 * EDGE, 0.09 - 2 * EDGE, NAVY, z=0.002)
+        self.ability_fill = Entity(parent=ab, model='quad', origin=(0, -0.5), position=(0, B + 0.03 + EDGE, 0.001),
+                                   scale=(0.09 - 2 * EDGE, 0.09 - 2 * EDGE), color=C(AC))
+        self.ability_cd = text(ab, 'Q', 0, B + 0.075, 1.7, '#f5f4f2', origin=(0, 0), z=-0.02)
 
         # bottom middle, above the ability: build mode (what you're placing, controls or why it can't go there)
         self.build_box = Entity(parent=h, enabled=False)
-        box(self.build_box, -0.3, B + 0.3, 0.6, 0.088, INK, z=0.003)
-        self.build_accent = box(self.build_box, -0.3, B + 0.3, 0.6, 0.007, TEAL, z=0.002)
-        self.build_title = text(self.build_box, '', 0, B + 0.264, 1.0, PAPER, origin=(0, 0))
+        box(self.build_box, -0.3, B + 0.3, 0.6, 0.088, P, z=0.003)
+        self.build_accent = box(self.build_box, -0.3, B + 0.3, 0.6, 0.007, AC, z=0.002)
+        self.build_title = text(self.build_box, '', 0, B + 0.264, 1.0, FG, origin=(0, 0))
         self.build_sub = text(self.build_box, '', 0, B + 0.23, 0.72, '#aeb3c4', origin=(0, 0))
 
         # bottom right: mined resources (shown once you have some)
-        self.res_box = Entity(parent=h, enabled=False)
-        box(self.res_box, R - 0.33, B + 0.142, 0.3, 0.032, INK, z=0.003)
+        self.res_box = Entity(parent=el['resources'], enabled=False)
+        box(self.res_box, R - 0.33, B + 0.142, 0.3, 0.032, P, z=0.003)
         self.res_text = {}
         step = 0.296 / len(RESOURCES)
         for i, (rid, r) in enumerate(RESOURCES.items()):
             x = R - 0.324 + i * step
             box(self.res_box, x, B + 0.133, 0.013, 0.013, r['color'], z=0.001)
-            self.res_text[rid] = text(self.res_box, '0', x + 0.018, B + 0.126, 0.66, PAPER, origin=(-0.5, 0))
+            self.res_text[rid] = text(self.res_box, '0', x + 0.018, B + 0.126, 0.66, FG, origin=(-0.5, 0))
 
-        # bottom right: weapon
         # bottom right: a compact weapon box (name, slots, ammo) that stays clear of the gun
-        frame(h, R - 0.33, B + 0.105, 0.3, 0.075, PAPER, INK)
-        self.weapon_name = text(h, '', R - 0.318, B + 0.085, 0.72, INK, origin=(-0.5, 0))
-        self.slots = text(h, '', R - 0.318, B + 0.051, 0.58, MUTED, origin=(-0.5, 0))
-        box(h, R - 0.156, B + 0.094, 0.003, 0.053, LINE, z=-0.005)
-        self.ammo = text(h, '', R - 0.093, B + 0.067, 1.5, INK, origin=(0, 0))
+        wp = el['weapon']
+        frame(wp, R - 0.33, B + 0.105, 0.3, 0.075, PAPER, INK)
+        self.weapon_name = text(wp, '', R - 0.318, B + 0.085, 0.72, INK, origin=(-0.5, 0))
+        self.slots = text(wp, '', R - 0.318, B + 0.051, 0.58, MUTED, origin=(-0.5, 0))
+        box(wp, R - 0.156, B + 0.094, 0.003, 0.053, LINE, z=-0.005)
+        self.ammo = text(wp, '', R - 0.093, B + 0.067, 1.5, INK, origin=(0, 0))
+        self.apply_hud_layout()
+
+    def open_hud_editor(self):
+        from .hud_editor import HudEditor
+        self.hud_editor = HudEditor(self, 'pause' if self.game.state == 'paused' else 'menu')
+
+    def hud_sample(self):
+        """Fill the HUD with example values and show every part (for the HUD editor)."""
+        st = self.set_text
+        st(self.wave, '7')
+        st(self.remaining, '12 enemies left')
+        st(self.coins, '1250')
+        st(self.score, 'SCORE 4210')
+        self.hp_fill.scale_x = 0.375 * 0.7
+        st(self.hp_text, '70 / 100')
+        self.quest_box.enabled = True
+        st(self.quest_text, 'Light the three braziers (1/3)')
+        st(self.feed_text, 'Shambler +5\nBrute +12\nSpike barricade placed')
+        self.feed_box.enabled = True
+        self.feed_box.scale_y = 0.02 + 0.0245 * 3
+        self.boss.enabled = True
+        st(self.boss_name, 'THE HOLLOW KING')
+        self.boss_fill.scale_x = 0.69 * 0.6
+        self.banner_root.enabled = True
+        self.banner_text.text, self.banner_sub.text = 'WAVE 7', 'Here they come'
+        self.hint.enabled = True
+        self.res_box.enabled = True
+        for i, t in enumerate(self.res_text.values()):
+            st(t, str(20 + i * 7))
+        for i, (row, chip, name, secs) in enumerate(self.power_rows[:2]):
+            row.enabled = True
+            st(name, ('Gold Rush', 'Overdrive')[i])
+            st(secs, ('14s', '6s')[i])
+        st(self.weapon_name, 'AK-47')
+        st(self.slots, '1  [2]  3')
+        st(self.ammo, '24/30')
+        st(self.ability_name, 'SHOCKWAVE')
+        st(self.ability_cd, 'Q')
+
+    def apply_hud_layout(self):
+        """Move and show / hide the HUD parts as saved in the HUD editor."""
+        parts = self.game.hud_settings.get('parts', {})
+        for key, anchor in self.parts.items():
+            pl = parts.get(key, {})
+            anchor.position = (pl.get('x', 0.0), pl.get('y', 0.0), 0)
+            anchor.enabled = pl.get('on', True)
 
     def update_weapon(self):
         w = getattr(self.game, 'weapons', None)
@@ -432,7 +581,7 @@ class UI:
                 text(b, str(v), cx, y, 1.0, colour, origin=(ox, 0), z=-0.02)
             y -= rh
 
-    def banner(self, title, color=TEAL, duration=2.5, sub=''):
+    def banner(self, title, color='TEAL', duration=2.5, sub=''):
         self.banner_text.text = title
         self.banner_sub.text = sub
         self.banner_accent.color = C(color)
@@ -735,6 +884,19 @@ class UI:
             FlatButton(parent, a['name'].upper(), x + i * 0.13, y - 0.03, 0.122, 0.045,
                        lambda k=aid: (g.set_atmosphere(k), self.refresh_settings_screen()),
                        fill=TEAL if on else NAVY, edge=INK, size=0.85)
+        # UI theme: each button is drawn in that theme's own colours
+        from .data.themes import THEMES
+        y -= 0.09
+        text(parent, 'Theme', x, y, 0.95, INK)
+        FlatButton(parent, 'CUSTOMIZE HUD', x + 0.2, y + 0.01, 0.22, 0.04, self.open_hud_editor,
+                   fill=TEAL, edge=INK, size=0.8)
+        for i, (tid, t) in enumerate(THEMES.items()):
+            on = g.theme_id == tid
+            FlatButton(parent, t['name'], x + (i % 4) * 0.105, y - 0.035 - (i // 4) * 0.047, 0.1, 0.04,
+                       lambda k=tid: g.set_theme(k), fill=t['PAPER'], edge=t['TEAL'] if on else t['INK'],
+                       fg=t['INK'], size=0.6, hover=-0.08)
+            if on:
+                box(parent, x + (i % 4) * 0.105, y - 0.035 - (i // 4) * 0.047 - 0.04, 0.1, 0.006, t['TEAL'], z=-0.03)
 
     def refresh_settings_screen(self):
         if self.game.state == 'paused':

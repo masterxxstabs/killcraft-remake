@@ -27,7 +27,8 @@ from .projectiles import Projectiles
 from .render import col, hex_rgb, node, set_fog
 from .sounds import Sounds
 from .updater import Updater, restart
-from .ui import UI
+from .ui import UI, apply_theme
+from .data.themes import DEFAULT_THEME, THEMES, default_hud
 from .weapons import Weapons
 from .world import MAX_SIZE, MIN_SIZE, World
 from . import maps
@@ -35,6 +36,19 @@ from . import maps
 from .paths import USER_DIR as SAVE_DIR
 SAVE_FILE = SAVE_DIR / 'save.json'
 SETTINGS_FILE = SAVE_DIR / 'settings.json'
+
+
+def merge_hud(saved):
+    """Saved HUD settings on top of the defaults (so new HUD parts show up after an update)."""
+    hud = default_hud()
+    if isinstance(saved, dict):
+        for key in ('panel', 'accent', 'health', 'crosshair', 'opacity'):
+            if key in saved:
+                hud[key] = saved[key]
+        for key, pl in (saved.get('parts') or {}).items():
+            if key in hud['parts'] and isinstance(pl, dict):
+                hud['parts'][key].update({k: pl[k] for k in ('x', 'y', 'on') if k in pl})
+    return hud
 
 
 def load_json(path, default):
@@ -61,10 +75,14 @@ class Game(Entity):
         self.save = load_json(SAVE_FILE, dict(best_wave=0, best_score=0, total_kills=0, games=0))
         st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
                                            fov=90, auto_update=True, muted=False, map=None,
-                                           atmosphere=DEFAULT_ATMOSPHERE, arena_size=34))
+                                           atmosphere=DEFAULT_ATMOSPHERE, arena_size=34, theme=DEFAULT_THEME,
+                                           hud=None))
         self.atmosphere_id = st['atmosphere'] if st['atmosphere'] in ATMOSPHERES else DEFAULT_ATMOSPHERE
         self.atmosphere_override = None      # the map editor uses its own bright look
         self.arena_size = max(MIN_SIZE, min(MAX_SIZE, int(st['arena_size'])))   # random arena size (half width)
+        self.theme_id = st['theme'] if st['theme'] in THEMES else DEFAULT_THEME
+        self.hud_settings = merge_hud(st['hud'])
+        apply_theme(self.theme_id)
         self.sensitivity = st['sensitivity']
         self.fov = st['fov']
         self.auto_update = st['auto_update']
@@ -137,7 +155,8 @@ class Game(Entity):
     def save_settings(self):
         write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id,
                                        fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted,
-                                       map=self.map_stem, atmosphere=self.atmosphere_id, arena_size=self.arena_size))
+                                       map=self.map_stem, atmosphere=self.atmosphere_id, arena_size=self.arena_size,
+                                       theme=self.theme_id, hud=self.hud_settings))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
@@ -175,6 +194,18 @@ class Game(Entity):
     def select_map(self, stem):
         self.map_stem = stem
         self.save_settings()
+
+    def set_theme(self, tid):
+        """Recolour every screen with another UI theme."""
+        self.theme_id = tid
+        apply_theme(tid)
+        self.save_settings()
+        self.ui.rebuild()
+
+    def save_hud(self, rebuild=True):
+        self.save_settings()
+        if rebuild:
+            self.ui.rebuild_hud()
 
     def set_arena_size(self, half):
         self.arena_size = half
@@ -775,6 +806,8 @@ class Game(Entity):
 
     # ── input ────────────────────────────────────────────────────────────────
     def input(self, key):
+        if self.ui.hud_editor is not None:          # the HUD editor has the keyboard and mouse
+            return
         self._pressed.add(key)
         if key == 'f11':
             window.fullscreen = not window.fullscreen

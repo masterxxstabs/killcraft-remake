@@ -60,6 +60,25 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 Your best wave, best score and total kills are saved in a `.blockhold` folder in your
 home folder.
 
+### Themes and HUD
+
+Under **Settings** pick a **theme** for every screen (menus, shop, workbench, pause screen, HUD and
+map editor): Classic, Midnight, Military, Neon, Blood Moon, Arctic, Terminal or Sunset. Each theme
+button is drawn in its own colours so you can see what you're picking. Themes live in
+`blockhold/data/themes.py`; copy one and change the colours to make your own.
+
+**CUSTOMIZE HUD** (in Settings and the pause screen) shows the whole HUD with example values:
+
+- **Drag** any outlined part to move it anywhere on the screen (wave counter, coins, kill feed,
+  health bar, power-ups, ability, weapon and ammo, resources, quest tracker, wave banner, boss bar,
+  shop hint).
+- **Click a part's name** in the panel to switch it on or off (the crosshair too).
+- Pick colours for the HUD **panels**, the **accent** (bars, banner, ability), the **health bar** and
+  the **crosshair**, and how see-through the panels are. **T** uses the theme's colour.
+- **H** hides the panel so you can see behind it; **RESET POSITIONS** puts every part back.
+
+Everything is saved with your settings.
+
 ### Atmosphere
 
 By default the game plays at **dusk**, like the original: dark and foggy, with a torch
