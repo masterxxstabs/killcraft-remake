@@ -8,6 +8,7 @@ import random
 from ursina import Vec3, camera
 from .net import PlayerInput, new_id
 from .data.items import ITEMS
+from .data.items import USE_MOVE_MULT
 from .inventory import Inventory, ResourceView, total_protection
 from .data.barricades import BARRICADES
 
@@ -54,6 +55,7 @@ class Player:
         self.base_armor = 0.0    # from the shop's Plating upgrade (worn armor adds to it, see `armor`)
         self.magnet = 3.0
         self.buffs = {}
+        self.using = None        # dict(item, t, total) while bandaging / eating (healing.py)
         self.dead = False
         self.downed = False      # on the ground, waiting for an ally to revive them
         self.bleed = 0.0
@@ -162,7 +164,8 @@ class Player:
     def move_speed(self):
         weapons = getattr(self.game, 'weapons', None)
         held = weapons.d.get('move_mult', 1) if weapons and weapons.held else 1
-        return 5.6 * self.speed_mult * held * (1.5 if self.buffs.get('adrenaline', 0) > 0 else 1)
+        busy = USE_MOVE_MULT if self.using is not None else 1
+        return 5.6 * self.speed_mult * held * busy * (1.5 if self.buffs.get('adrenaline', 0) > 0 else 1)
 
     @property
     def sliding(self):

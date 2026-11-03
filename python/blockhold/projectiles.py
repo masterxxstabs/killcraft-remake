@@ -33,6 +33,7 @@ class Projectiles:
         g.lighting.flash(pos + Vec3(0, 0.5, 0), (1.0, 0.62, 0.3), p['radius'] * 3.5, 3.0, life=0.4)
         g.sounds.play('boom')
         g.shake(0.35)
+        g.enemies.blast_corpses(pos, p['radius'], 9 + p['knockback'])
         if getattr(g, 'animals', None) is not None:
             shooter = p['shooter'] if hasattr(p['shooter'], 'inventory') else None
             g.animals.blast(pos, p['radius'] + 0.5, p['damage'], shooter)

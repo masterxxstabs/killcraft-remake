@@ -3,6 +3,15 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.19.0
+- Ragdolls: dead zombies go limp and crumple to the ground, folding at the knees and elbows, slumping over things
+- The killing hit throws them: headshots snap the head back, shotguns and explosions send them flying
+- Shooting or blowing up bodies on the ground knocks them about. Switch ragdolls off in Settings on slow PCs
+- Healing takes time now: bandages, medkits and the new surgical kit go in your backpack
+- Press H to use the right one for how hurt you are (or right-click it in the backpack). You walk slowly and can't shoot while you do
+- Shooting, reloading or switching weapons stops it; nothing is used up
+- The shop's Medkit now puts a medkit in your backpack. Your medical items are shown over the health bar
+
 ## 1.18.0
 - NPCs for your maps: traders, quest givers and talkers. Press E next to one to talk, trade or take a job
 - EDIT NPC panel in the map editor (like the Custom NPCs mod): name, role, colours, hat, dialogue, trades and quests

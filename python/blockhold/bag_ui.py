@@ -59,6 +59,14 @@ def draw_icon(parent, icon, cx, cy, s, colour):
         quad(parent, cx, cy - s * 0.05, s * 0.66, s * 0.8, colour)
         quad(parent, cx, cy + s * 0.38, s * 0.26, s * 0.14, '#000000', z=-0.021, alpha=0.35)
         quad(parent, cx, cy - s * 0.05, s * 0.4, s * 0.3, U.contrast(colour), z=-0.021, alpha=0.18)
+    elif icon == 'bandage':
+        quad(parent, cx, cy, s * 0.7, s * 0.32, colour, rot=-35)
+        quad(parent, cx, cy, s * 0.2, s * 0.26, '#d64541', rot=-35, z=-0.021, alpha=0.7)
+    elif icon == 'medkit':
+        quad(parent, cx, cy - s * 0.02, s * 0.8, s * 0.56, colour)
+        quad(parent, cx, cy + s * 0.3, s * 0.3, s * 0.08, U.contrast(colour), z=-0.021, alpha=0.5)   # handle
+        quad(parent, cx, cy - s * 0.02, s * 0.36, s * 0.12, '#ffffff', z=-0.021)                      # cross
+        quad(parent, cx, cy - s * 0.02, s * 0.12, s * 0.36, '#ffffff', z=-0.021)
     elif icon == 'meat':
         quad(parent, cx + s * 0.22, cy - s * 0.2, s * 0.32, s * 0.08, '#f2ead8', rot=40, z=-0.019)    # bone
         quad(parent, cx - s * 0.04, cy + s * 0.04, s * 0.52, s * 0.42, colour, rot=40)
@@ -313,7 +321,7 @@ class BagScreen:
             self.tile(t, it, self.gx + it['x'] * CELL + 0.002, self.gy - it['y'] * CELL - 0.002,
                       w * CELL - 0.004, h * CELL - 0.004)
         U.text(t, 'Drag to move, R turns it.  Drop on a slot to wear / hold / smelt it, outside the window '
-                  'to drop it.  Right-click: quick move / eat.', self.gx, self.gy - BACKPACK[1] * CELL - 0.02, 0.6, U.MUTED,
+                  'to drop it.  Right-click: quick move / eat / heal.', self.gx, self.gy - BACKPACK[1] * CELL - 0.02, 0.6, U.MUTED,
                wordwrap=96)
         if self.furnace is not None:          # at a furnace: its slots take the place of your gear
             U.FlatButton(t, 'CLOSE  (E)', self.win.left, self.win.btn_y, 0.26, U.BTN_H, self.game.close_shop)
@@ -411,7 +419,7 @@ class BagScreen:
             home = (it['x'], it['y'], it['rot'])
             target = next((k for k in self.boxes() if self.accepts(k, it)), None)
             if target is None:
-                if ITEMS[it['id']]['kind'] == 'food':          # food: eat one
+                if ITEMS[it['id']]['kind'] in ('food', 'medical'):     # eat it / patch yourself up (takes time)
                     self.eat(it)
                 return
             inv.lift(it)
@@ -443,15 +451,9 @@ class BagScreen:
             self.refresh()
 
     def eat(self, it):
-        p, d = self.player, ITEMS[it['id']]
-        if p.health >= p.max_health:
-            self.ui.banner('NOT HUNGRY', '#d9912b', 1.0, 'You already have full health')
-            return
-        self.inv.remove(it['id'], 1)
-        p.health = min(p.max_health, p.health + d.get('heal', 10))
-        self.game.sounds.play('heal')
-        self.game.events.emit('ate', player=p, item=it['id'])
-        self.refresh()
+        """Start using food or a medical item; the backpack closes so you can see what's coming."""
+        if self.game.healing.start(self.player, it['id']):
+            self.game.close_shop()
 
     # ── dragging ─────────────────────────────────────────────────────────────
     def start_drag(self, it, src, grab):

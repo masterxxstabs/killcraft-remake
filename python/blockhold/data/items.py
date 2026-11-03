@@ -11,9 +11,12 @@
 #    kind       'resource'  mined / chopped / smelted, spent at workbenches
 #               'armor'     worn in the HEAD or BODY slot (see ARMOR below)
 #               'food'      right-click it in the backpack to eat it: gives back `heal` health
+#               'medical'   bandages and kits: H (or right-click in the backpack) to use; `heal` health
+#                           (999 = all of it) after `use_time` seconds. You walk slowly and can't shoot
+#                           while you use it; shooting or switching weapons stops it (nothing is used up)
 #               'trade'     only good for trading with NPCs
 #    icon       how the tile is drawn: 'ore', 'ingot', 'log', 'coal', 'stone', 'crystal',
-#               'helmet', 'vest', 'meat', 'feather', 'gem', 'coin', 'note'
+#               'helmet', 'vest', 'bandage', 'medkit', 'meat', 'feather', 'gem', 'coin', 'note'
 # ─────────────────────────────────────────────────────────────────────────────
 
 ITEMS = {
@@ -29,9 +32,17 @@ ITEMS = {
     'copper_ingot': dict(name='Copper ingot', size=(2, 1), stack=30, colour='#e8955a', kind='resource',
                          icon='ingot'),
     # food: hunt animals for raw meat, cook it in a furnace, right-click it in the backpack to eat
-    'raw_meat': dict(name='Raw meat', size=(1, 1), stack=20, colour='#d9606a', kind='food', icon='meat', heal=5),
+    'raw_meat': dict(name='Raw meat', size=(1, 1), stack=20, colour='#d9606a', kind='food', icon='meat', heal=5,
+                     use_time=1.5),
     'cooked_meat': dict(name='Cooked meat', size=(1, 1), stack=20, colour='#9a5a32', kind='food', icon='meat',
-                        heal=35),
+                        heal=35, use_time=2.0),
+    # medical (crafted at a workbench, or a Medkit from the shop): H uses the best one for how hurt you are
+    'bandage': dict(name='Bandage', size=(1, 1), stack=5, colour='#e8e4da', kind='medical', icon='bandage',
+                    heal=30, use_time=2.5),
+    'medkit': dict(name='Medkit', size=(2, 1), stack=3, colour='#d64541', kind='medical', icon='medkit',
+                   heal=70, use_time=5.0),
+    'surgery_kit': dict(name='Surgical kit', size=(2, 2), stack=1, colour='#2e9e6a', kind='medical',
+                        icon='medkit', heal=999, use_time=8.0),
     # trade goods (animals and loot; NPC traders want them)
     'feather': dict(name='Feathers', size=(1, 1), stack=50, colour='#f2efe6', kind='trade', icon='feather'),
     'hide': dict(name='Deer hide', size=(2, 2), stack=10, colour='#9a6a3f', kind='trade', icon='hide'),
@@ -60,6 +71,8 @@ ARMOR = {
 }
 SLOTS = [('head', 'HEAD'), ('body', 'BODY')]
 MAX_PROTECTION = 0.75        # armor from gear + the shop's Plating upgrade never goes past this
+
+USE_MOVE_MULT = 0.5          # how fast you walk while bandaging / eating
 
 BACKPACK = (10, 7)           # backpack size in cells (columns, rows)
 

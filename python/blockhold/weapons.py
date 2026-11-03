@@ -554,7 +554,10 @@ class Weapons:
         a = self.aim_t
         hx, hy, hz = self.hold_pos(d)
         aim_y = -getattr(self, 'sight_h', 0.06) * self.holder.scale_x     # sights on the crosshair when aiming
-        self.holder.position = (hx * (1 - a) + bob_x * (1 - a), hy * (1 - a) + aim_y * a + bob_y - self.switch_anim * 0.8 - rl * 0.1,
+        busy = 1 if getattr(p, 'using', None) is not None else 0         # bandaging: the gun goes down
+        self.lower_t = getattr(self, 'lower_t', 0) + (busy - getattr(self, 'lower_t', 0)) * min(1, dt * 8)
+        self.holder.position = (hx * (1 - a) + bob_x * (1 - a), hy * (1 - a) + aim_y * a + bob_y - self.switch_anim * 0.8
+                                - rl * 0.1 - self.lower_t * 0.45,
                                 hz - self.kick * 0.06)
         sw = math.sin(self.swing * math.pi) if d.get('melee') else 0
         self.holder.rotation = (-self.kick * 14 + rl * 35 + sw * 80, -sw * 35, -rl * 17)
@@ -719,6 +722,8 @@ class Weapons:
                 end = eye + direction * animal[0]
                 g.animals.hurt(animal[1], d['damage'] * dm, self.owner, direction)
                 any_hit = stopped = True
+            if not stopped:                                  # bodies on the ground get knocked about
+                g.enemies.shove_corpses(eye, direction, (end - eye).length(), 2.0 + d['knockback'] * 0.6)
             if not stopped and wall < rng:
                 g.effects.burst(end, '#8a8a8a', 3, speed=2, size=0.08, life=0.4)
                 crate = g.mining.at_point(eye + direction * (wall + 0.05)) if getattr(g, 'mining', None) else None

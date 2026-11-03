@@ -36,7 +36,7 @@ def _magnet(p):
 
 
 def _medkit(p):
-    p.health = p.max_health
+    p.inventory.add('medkit', 1)          # into the backpack: press H to use it (5 s, +70 health)
 
 
 UPGRADES = [
@@ -47,5 +47,5 @@ UPGRADES = [
     dict(id='hands', name='Quick Hands', desc='-12% reload time, +6% fire rate.', price=65, growth=1.55, max=6, apply=_hands),
     dict(id='armor', name='Plating', desc='Take 6% less damage.', price=90, growth=1.6, max=8, apply=_armor),
     dict(id='magnet', name='Coin Magnet', desc='Pick up coins from further away.', price=40, growth=1.5, max=6, apply=_magnet),
-    dict(id='medkit', name='Medkit', desc='Instantly restore all health.', price=45, growth=1.0, max=999, consumable=True, apply=_medkit),
+    dict(id='medkit', name='Medkit', desc='A Medkit for your backpack (H: 5 s, +70 hp).', price=45, growth=1.0, max=999, consumable=True, apply=_medkit),
 ]

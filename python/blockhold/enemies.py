@@ -11,6 +11,9 @@ from .textures import zombie_skin
 from .net import new_id
 
 # Hitboxes in the enemy's own (unscaled) space: (min, max)
+RAGDOLLS = [True]          # dead zombies go limp (Settings → Ragdolls switches it off on slow PCs)
+CORPSE_TIME = 7.0          # seconds a body lies there before it sinks away
+
 HEAD_BOX = ((-0.27, 1.45, -0.27), (0.27, 1.99, 0.27))
 BODY_BOX = ((-0.32, 0.0, -0.22), (0.32, 1.47, 0.22))
 
@@ -61,6 +64,10 @@ class Enemy:
         self.rise = 0.9
         self.dead = False
         self.death_t = 0
+        self.ragdoll = None         # the limp body once it's dead (ragdoll.py)
+        self.ragdoll_root = None
+        self.death_push = None      # the push from the hit that killed it
+        self.death_hit = 'body'
         self.stuck_t = 0
         self.detour = 0
         self.nav_t = 0.0
@@ -100,6 +107,7 @@ class Enemy:
                          faces('head_front', 'head_side', 'head_back', 'head_top', 'head_bottom'))
         leg = faces('leg_side', 'leg_side', 'leg_side', 'leg_top', 'leg_bottom')
         arm = faces('arm_side', 'arm_side', 'arm_side', 'arm_top', 'arm_bottom')
+        self.tex, self.leg_uv, self.arm_uv = tex, leg, arm          # (the ragdoll rebuilds the limbs from these)
         self.leg_l = self._limb(0.24, 0.75, -0.13, 0.75, leg, part)
         self.leg_r = self._limb(0.24, 0.75, 0.13, 0.75, leg, part)
         self.arm_l = self._limb(0.2, 0.72, -0.36, 1.44, arm, part)
@@ -129,6 +137,10 @@ class Enemy:
         return pivot
 
     def destroy(self):
+        if self.ragdoll is not None:
+            self.game.ragdolls.remove(self.ragdoll)
+            self.ragdoll.destroy()
+            self.ragdoll = None
         destroy(self.root)
 
     # ── helpers ──────────────────────────────────────────────────────────────
@@ -171,6 +183,8 @@ class Enemy:
         self.flash = 0.1
         if knock is not None:
             self.kb += knock / max(1, self.scale * self.scale)
+            self.death_push = knock
+            self.death_hit = 'head' if headshot else 'body'
         top = Vec3(self.position.x, self.position.y + self.height + 0.2, self.position.z)
         g.effects.damage_number(self.head_pos() + Vec3(0, 0.4, 0) if headshot else top, amount, crit=headshot)
         g.effects.burst(self.head_pos() if headshot else self.chest_pos(), self.d['colors']['skin'],
@@ -180,6 +194,16 @@ class Enemy:
             self.hp = 0
             g.sounds.play('death', pitch=0.8 + random.random() * 0.4)
             g.on_enemy_killed(self, headshot, self.last_attacker)
+
+    def go_limp(self):
+        """Turn into a ragdoll, pushed by whatever killed it."""
+        from .ragdoll import Ragdoll
+        k = self.death_push or Vec3(0, 0, 0)
+        mass = max(1.0, self.scale ** 3)
+        push = (k.x * 0.9 / mass, (0.8 + k.length() * 0.18) / mass, k.z * 0.9 / mass)
+        self.ragdoll = Ragdoll(self, push, self.death_hit)
+        self.game.ragdolls.add(self.ragdoll)
+        self.root.setColorScale(1, 1, 1, 1)
 
     def ignite(self, dps, seconds):
         self.burn_dps = max(self.burn_dps, dps)
@@ -243,7 +267,14 @@ class Enemy:
 
         if self.dead:
             self.death_t += dt
-            self.root.rotation_x = -min(90, self.death_t * 290)
+            if self.ragdoll is None and RAGDOLLS[0] and self.rise <= 0.3:
+                self.go_limp()
+            if self.ragdoll is not None:
+                self.ragdoll.step(dt)
+                if self.death_t > CORPSE_TIME:
+                    self.ragdoll.sink(dt * 0.5)                # into the ground
+                return self.death_t < CORPSE_TIME + 2.5
+            self.root.rotation_x = -min(90, self.death_t * 290)   # (ragdolls off: the old fall-over)
             self.position += self.kb * dt
             self.kb *= max(0, 1 - dt * 6)
             if self.death_t > 1.2:
@@ -565,6 +596,14 @@ class FlowField:
         return cx / length, cz / length
 
 
+def _ray_dist2(o, d, p):
+    """squared distance from point p to the ray o + t*d (d is unit)"""
+    tx, ty, tz = p[0] - o[0], p[1] - o[1], p[2] - o[2]
+    t = max(0.0, tx * d[0] + ty * d[1] + tz * d[2])
+    x, y, z = tx - d[0] * t, ty - d[1] * t, tz - d[2] * t
+    return x * x + y * y + z * z
+
+
 class EnemyManager:
     def __init__(self, game):
         self.game = game
@@ -622,3 +661,35 @@ class EnemyManager:
         for e in self.list:
             e.destroy()
         self.list = []
+        self.game.ragdolls.clear()
+
+    def shove_corpses(self, o, d, max_dist, force, at_end=None):
+        """Bullets that pass a body knock it about (it's only cosmetic)."""
+        for e in self.list:
+            r = e.ragdoll
+            if r is None:
+                continue
+            q = r.p[0]
+            to = (q[0] - o[0], q[1] - o[1], q[2] - o[2])
+            along = to[0] * d[0] + to[1] * d[1] + to[2] * d[2]
+            if along < 0 or along > max_dist + 1:
+                continue
+            close = min(r.p, key=lambda pt: _ray_dist2(o, d, pt))
+            if _ray_dist2(o, d, close) < (0.3 * e.scale) ** 2:
+                r.push((d[0] * force, d[1] * force + 0.5, d[2] * force), close)
+                self.game.effects.burst(Vec3(*close), e.d['colors']['skin'], 3, speed=3, size=0.08)
+                return True
+        return False
+
+    def blast_corpses(self, pos, radius, force):
+        for e in self.list:
+            r = e.ragdoll
+            if r is None:
+                continue
+            q = r.p[0]
+            away = Vec3(q[0] - pos.x, q[1] - pos.y, q[2] - pos.z)
+            dist = away.length()
+            if dist < radius + 1:
+                k = force * (1 - dist / (radius + 1))
+                a = away.normalized() if dist > 0.01 else Vec3(0, 1, 0)
+                r.push((a.x * k, abs(a.y) * k + k * 0.6, a.z * k))

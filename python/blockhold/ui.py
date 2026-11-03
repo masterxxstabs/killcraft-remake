@@ -18,6 +18,7 @@ from .data.resources import RESOURCES
 from .data.atmosphere import ATMOSPHERES
 from .render import col, destroy, hex_rgb
 from .data.themes import HUD_PARTS
+from .enemies import RAGDOLLS
 from .textures import icon, scope_texture, vignette_texture
 
 # ── PALETTE ──────────────────────────────────────────────────────────────────
@@ -523,6 +524,8 @@ class UI:
         box(hp, L + 0.1, B + 0.088, 0.375, 0.046, NAVY, z=0.001)
         self.hp_fill = box(hp, L + 0.1, B + 0.088, 0.375, 0.046, k['health'], round=False)
         self.hp_text = text(hp, '', L + 0.465, B + 0.065, 1.05, contrast(k['health']), origin=(0.5, 0), z=-0.02)
+        self.med_box = box(hp, L + 0.03, B + 0.137, 0.34, 0.032, P, z=0.003)     # what H would use
+        self.med_text = text(hp, '', L + 0.04, B + 0.121, 0.7, k['fg'], origin=(-0.5, 0), z=-0.02)
         # scoreboard (hold Tab): every player, then every ally
         self.scoreboard = Entity(parent=h, enabled=False, z=-0.05)
         self.board_rows = Entity(parent=self.scoreboard)
@@ -700,6 +703,14 @@ class UI:
             self.build_accent.color = C(colour)
             self.build_sub.color = C('#ff8a80' if why else '#aeb3c4')
 
+    @staticmethod
+    def med_line(p):
+        """'H  heal: 2 bandages, 1 medkit' over the health bar (empty when you have none)."""
+        from .data.items import ITEMS
+        have = [(d['name'].lower(), p.inventory.count(k)) for k, d in ITEMS.items() if d['kind'] == 'medical']
+        have = [f'{n} {name}' + ('s' if n > 1 else '') for name, n in have if n > 0]
+        return ('H  heal:  ' + ', '.join(have)) if have else ''
+
     def kill_feed(self, line):
         self.feed.insert(0, (line, pytime.time()))
         del self.feed[5:]
@@ -708,6 +719,12 @@ class UI:
         g, p = self.game, self.game.player
         self.hp_fill.scale_x = max(0.0001, 0.375 * clamp01(p.health / p.max_health))
         self.set_text(self.hp_text, 'DOWN' if p.downed else f'{math.ceil(p.health)} / {p.max_health}')
+        med = self.med_line(p)
+        self.set_text(self.med_text, med)
+        self.med_box.enabled = bool(med)
+        if med and self._cache.get('med_w') != med:
+            self._cache['med_w'] = med
+            self.med_box.scale_x = self.med_text.width + 0.02
         self.set_text(self.coins, str(g.coins))
         self.set_text(self.score, f'SCORE {g.score}')
         self.set_text(self.wave, str(g.wave_number))
@@ -929,7 +946,8 @@ class UI:
         y -= 0.04
         for label, on, toggle in (('Fullscreen', window.fullscreen, g.toggle_fullscreen),
                                   ('Check for updates on start', g.auto_update, g.toggle_auto_update),
-                                  ('Sound', not g.sounds.muted, g.toggle_mute)):
+                                  ('Sound', not g.sounds.muted, g.toggle_mute),
+                                  ('Ragdolls (dead zombies go limp)', RAGDOLLS[0], g.toggle_ragdolls)):
             text(b, label, x, y - 0.012, 1.05, INK)
             FlatButton(b, 'ON' if on else 'OFF', x + 0.42, y, 0.12, 0.045,
                        lambda t=toggle: (t(), self.refresh_menu()), fill=TEAL if on else NAVY,
@@ -1434,7 +1452,7 @@ class UI:
             lvl = g.upgrade_levels.get(u['id'], 0)
             price = g.upgrade_price(u)
             maxed = lvl >= u['max']
-            useless = u['id'] == 'medkit' and p.health >= p.max_health
+            useless = u['id'] == 'medkit' and p.inventory.free_spot('medkit') is None
             text(b, u['name'], x, y, 1.05, INK)
             text(b, u['desc'], x, y - 0.03, 0.78, MUTED)
             if u.get('consumable'):

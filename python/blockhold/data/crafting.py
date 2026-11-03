@@ -7,16 +7,19 @@
 #
 #  ITEMS are other things you can craft. kind:
 #    'weapon'   gives the weapon `weapon`
-#    'heal'     heals `amount` straight away
+#    'heal'     heals `amount` straight away (nothing uses this now: medical items go in the backpack)
 #    'item'     puts `item` (data/items.py) in your backpack: armor you wear from the backpack (I)
 #  Barricades (data/barricades.py) are added to the recipes automatically.
 # ─────────────────────────────────────────────────────────────────────────────
 
 ITEMS = [
-    dict(id='bandage', kind='heal', amount=40, name='Bandage', cost={'wood': 8, 'copper_ingot': 2},
-         desc='Heals 40 health right away.'),
-    dict(id='medkit', kind='heal', amount=100, name='Medkit', cost={'copper_ingot': 6, 'crystal': 1},
-         desc='Heals you completely.'),
+    dict(id='bandage', kind='item', item='bandage', name='Bandage', cost={'wood': 6, 'copper_ingot': 1},
+         desc='+30 health. Takes 2.5 s to put on (press H). Goes in your backpack.'),
+    dict(id='medkit', kind='item', item='medkit', name='Medkit', cost={'copper_ingot': 4, 'iron_ingot': 2},
+         desc='+70 health. Takes 5 s to use (press H). Goes in your backpack.'),
+    dict(id='surgery_kit', kind='item', item='surgery_kit', name='Surgical kit',
+         cost={'copper_ingot': 6, 'iron_ingot': 2, 'crystal': 1},
+         desc='Heals you completely. Takes 8 s to use (press H). Goes in your backpack.'),
 ]
 
 # armor you wear (data/items.py has how much it protects): goes in your backpack, put it on with I

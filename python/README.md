@@ -46,6 +46,7 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | E | talk to an NPC, use a workbench (crafting) or pick up a dropped gun; hold it to revive a downed ally, repair a barricade or refill a turret |
 | X | drop the gun you're holding (it keeps its ammo, upgrades and attachments) |
 | I | backpack: your items, the armor you're wearing and the weapons in your hands |
+| H | heal: use the bandage / medkit that fits how hurt you are (takes a few seconds; click to stop) |
 | G | build mode: place the barricades you crafted (R turns them, the wheel switches, right click stops) |
 | 1, 2, 3 or mouse wheel | tool, handgun, rifle (other weapons wait in your backpack) |
 | R | reload |
@@ -301,7 +302,7 @@ What you mine goes in your backpack (**I**). Walk up to a **workbench** and pres
 
 - **Any gun in the game**, instead of buying it with coins. Better guns need more iron and
   copper, and the energy weapons and heavy guns need crystal.
-- **Bandage** (heals 40), **Medkit** (full heal) and **armor** to wear (see below).
+- **Bandage**, **Medkit** and **Surgical kit** (they go in your backpack, see *Healing* below) and **armor** to wear.
 - **Barricades** (see below). These can only be crafted, never bought.
 
 Workbenches work during waves too, but zombies don't wait while you craft. Random arenas get two
@@ -353,10 +354,33 @@ drag it onto **HEAD** or **BODY** (or right-click it) to wear it.
 Armor wears down as it soaks up hits (the green bar on it) and stops protecting you when it breaks.
 It adds to the shop's Plating upgrade, up to 75% in total.
 
+**Healing takes time.** Bandages, medkits and surgical kits are crafted at the workbench (or a medkit
+bought in the shop) and go in your backpack. Press **H** to use the one that fits how hurt you are, or
+right-click one in the backpack. While you use it you walk at half speed and your gun is lowered;
+the health comes when the bar fills. Shooting, reloading or switching weapons stops it and nothing is
+used up. Getting hit doesn't stop it, so find cover first. What you're carrying is shown over the
+health bar.
+
+| Item | Heals | Takes | Size |
+| --- | --- | --- | --- |
+| Bandage | 30 | 2.5 s | 1 x 1, stacks 5 |
+| Medkit | 70 | 5 s | 2 x 1, stacks 3 |
+| Surgical kit | everything | 8 s | 2 x 2 |
+
 **Food.** Hunt animals for raw meat, put it in a furnace (it cooks like ore smelts) and
-**right-click** the cooked meat in your backpack to eat it: +35 health (raw meat gives only 5).
+**right-click** the cooked meat in your backpack to eat it (2 s): +35 health (raw meat gives only 5).
 Feathers, hides, old gold coins and sealed letters are trade goods for NPC traders. Items and costs are in
 `blockhold/data/items.py` and `blockhold/data/crafting.py`.
+
+### Ragdolls
+
+Zombies go limp when they die: their body is a physics skeleton (pelvis, neck, head, shoulders,
+elbows, hands, hips, knees and feet joined by bones with joint limits) that falls from the pose they
+died in, folds at the knees and elbows and slumps over blocks and props. The killing hit pushes them:
+headshots snap the head back, shotguns and explosions throw them. Bullets and explosions also knock
+bodies that are already down. Bodies lie there for about 7 seconds, then sink into the ground. Up to
+14 fall at once; the rest freeze where they are. Switch it off under **Settings → Ragdolls** on slow
+computers (zombies then just fall over like before). The physics is in `blockhold/ragdoll.py`.
 
 ### Barricades
 
@@ -582,6 +606,8 @@ are drawn in code in `blockhold/textures.py`. Change the colours there, or add a
 | `blockhold/npcs.py` | NPCs in a game: models, quests and trading |
 | `blockhold/npc_ui.py` | the talk window (dialogue, trade, jobs) |
 | `blockhold/animals.py` | passive animals: wandering, fleeing, hunting |
+| `blockhold/ragdoll.py` | ragdoll physics for dead zombies |
+| `blockhold/healing.py` | using bandages, medkits and food (it takes time) |
 | `blockhold/maps.py` | saving, loading and previewing maps |
 | `blockhold/lowpoly.py` | builds the flat-shaded low-poly models |
 | `blockhold/data/assets.py` | every placeable asset (trees, buildings, props...) |

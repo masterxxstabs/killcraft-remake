@@ -15,7 +15,8 @@ from .sky import Sky
 from .data.weapons import WEAPONS
 from .effects import Effects
 from .net import Events, PlayerInput
-from .enemies import EnemyManager
+from .enemies import RAGDOLLS, EnemyManager
+from .ragdoll import Ragdolls
 from .pickups import Pickups
 from .powerups import PowerUps
 from .mining import Mining
@@ -23,6 +24,7 @@ from .barricades import Barricades
 from .drops import WeaponDrops
 from .animals import Animals
 from .npcs import Npcs
+from .healing import Healing
 from .data.barricades import BARRICADES, MAX_CARRIED, PLACE_RANGE
 from .player import Player, REVIVE_TIME
 from .projectiles import Projectiles
@@ -79,7 +81,7 @@ class Game(Entity):
         st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
                                            fov=90, auto_update=True, muted=False, map=None,
                                            atmosphere=DEFAULT_ATMOSPHERE, arena_size=34, theme=DEFAULT_THEME,
-                                           style=DEFAULT_STYLE, hud=None))
+                                           style=DEFAULT_STYLE, hud=None, ragdolls=True))
         self.atmosphere_id = st['atmosphere'] if st['atmosphere'] in ATMOSPHERES else DEFAULT_ATMOSPHERE
         self.atmosphere_override = None      # the map editor uses its own bright look
         self.arena_size = max(MIN_SIZE, min(MAX_SIZE, int(st['arena_size'])))   # random arena size (half width)
@@ -91,6 +93,7 @@ class Game(Entity):
         self.sensitivity = st['sensitivity']
         self.fov = st['fov']
         self.auto_update = st['auto_update']
+        RAGDOLLS[0] = bool(st['ragdolls'])
         self.map_stem = st['map'] if st['map'] in [m for m, _ in maps.list_maps()] else None
         self.editor = None
         self.from_editor = None      # map data to return to after a play test
@@ -124,6 +127,7 @@ class Game(Entity):
         self.ui = UI(self)
         self.effects = Effects(self)
         self.weapons = Weapons(self)
+        self.ragdolls = Ragdolls(self)          # dead zombies go limp
         self.enemies = EnemyManager(self)
         self.projectiles = Projectiles(self)
         self.pickups = Pickups(self)
@@ -133,6 +137,7 @@ class Game(Entity):
         self.drops = WeaponDrops(self)          # guns dropped with X
         self.animals = Animals(self)            # deer, pigs and chickens
         self.npcs = Npcs(self)                  # traders, quest givers and talkers from the map
+        self.healing = Healing(self)            # bandages, medkits and food take time to use
         self.build_kind = None       # build mode: which barricade is being placed (None = not building)
         self.build_rot = 0
         self.build_spot = None
@@ -163,7 +168,8 @@ class Game(Entity):
         write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id,
                                        fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted,
                                        map=self.map_stem, atmosphere=self.atmosphere_id, arena_size=self.arena_size,
-                                       theme=self.theme_id, style=self.style_id, hud=self.hud_settings))
+                                       theme=self.theme_id, style=self.style_id, hud=self.hud_settings,
+                                       ragdolls=RAGDOLLS[0]))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
@@ -180,6 +186,10 @@ class Game(Entity):
 
     def toggle_auto_update(self):
         self.auto_update = not self.auto_update
+        self.save_settings()
+
+    def toggle_ragdolls(self):
+        RAGDOLLS[0] = not RAGDOLLS[0]
         self.save_settings()
 
     def toggle_mute(self):
@@ -341,7 +351,7 @@ class Game(Entity):
         self.show_cursor(False)
 
     def can_act(self):
-        return self.state == 'playing' and not self.shop_open and not self.player.dead
+        return self.state == 'playing' and not self.shop_open and not self.player.dead and self.player.using is None
 
     def begin_intermission(self, seconds=INTERMISSION):
         self.phase = 'intermission'
@@ -616,6 +626,9 @@ class Game(Entity):
             msg = f'{helper.name} is coming for you' if helper else 'Waiting for an ally'
             self.ui.set_prompt(f'{msg}   {math.ceil(p.bleed)}s', p.revive_progress / REVIVE_TIME if helper else None)
             return
+        if p.using is not None:                     # bandaging / eating: show how long it's got left
+            self.ui.set_prompt(self.healing.label(p), p.using['t'] / p.using['total'])
+            return
         near = None
         for a in self.allies:
             if a.downed and (a.position - p.position).length() < 2.6:
@@ -655,7 +668,7 @@ class Game(Entity):
         lvl = self.upgrade_levels.get(uid, 0)
         price = self.upgrade_price(u)
         p = self.player
-        if lvl >= u['max'] or self.coins < price or (uid == 'medkit' and p.health >= p.max_health):
+        if lvl >= u['max'] or self.coins < price or (uid == 'medkit' and p.inventory.free_spot('medkit') is None):
             self.sounds.play('deny')
             return
         self.coins -= price
@@ -886,6 +899,13 @@ class Game(Entity):
                     (key in ('i', 'e', 'tab') and self.ui.bag.active) or (key == 'e' and self.ui.talk.active):
                 self.close_shop()
             return
+        if self.player.using is not None and key in ('left mouse down', '1', '2', '3', 'r', 'scroll up',
+                                                     'scroll down', 'g', 'q'):
+            self.healing.cancel(self.player, '')        # shooting, reloading or switching stops it
+            return
+        if key == 'h' and not self.player.downed and self.build_kind is None:
+            self.healing.quick(self.player)
+            return
         if key == 'x' and self.build_kind is None:
             self.drops.drop(self.player)
             return
@@ -1073,5 +1093,6 @@ class Game(Entity):
             self.barricades.update(dt)
             self.animals.update(dt)
             self.npcs.update(dt)
+            self.healing.update(dt)
         self.drops.update(dt)
         self.ui.update(dt)
