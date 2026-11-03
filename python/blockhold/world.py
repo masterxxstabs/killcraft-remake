@@ -341,12 +341,19 @@ class World:
                            texture=smooth_texture('grass'))
         self.ground.setTwoSided(True)
 
+    WALL_HEIGHT = 8          # tall enough that nobody climbs out, even from the top of a palisade or a house
+
     def build_walls(self):
         n = self.n
         for i in range(n):
             for x, z in ((i, 0), (i, n - 1), (0, i), (n - 1, i)):
                 if (x, z) not in self.columns:
-                    self.column('mossy', x, z, 3)
+                    self.column('mossy', x, z, self.WALL_HEIGHT)
+
+    def clamp(self, x, z, radius=0.4):
+        """Keep a point inside the playable area (inside the outer walls), whatever it climbed on."""
+        lim = self.half - (1 if self.walls else 0) - radius
+        return max(-lim, min(lim, x)), max(-lim, min(lim, z))
 
     def flush(self):
         """Rebuild the meshes of every chunk that changed."""

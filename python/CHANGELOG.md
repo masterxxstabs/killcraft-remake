@@ -3,6 +3,10 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.12.2
+- The walls around the edge of every map are now 8 m tall, so you can't climb out by stacking barricades or standing on buildings
+- Nobody can leave the map any more, even maps without walls: players and zombies always stay inside the edge
+
 ## 1.12.1
 - Fixed misaligned parts on several map assets: sandbags and the sandbag wall (rows now sit on each other), supply pallet, radar dish, camo net, burning barrel, cave lantern, coffin, gravestone, armored jeep, dumpster
 - The guard tower ladder has rungs now

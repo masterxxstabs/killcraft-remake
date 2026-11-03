@@ -218,6 +218,7 @@ class Player:
         self.position.x += self.vel.x * dt
         self.position.z += self.vel.z * dt
         self.position.x, self.position.z = world.collide(self.position, self.radius)
+        self.position.x, self.position.z = world.clamp(self.position.x, self.position.z, self.radius)
 
         prev_y = self.position.y
         self.position.y += self.vel.y * dt
@@ -268,6 +269,8 @@ class Player:
             return False
         h, (tx, tz) = found
         rise = h - self.position.y
+        if (tx, tz) != self.game.world.clamp(tx, tz, self.radius):   # never climb out over the edge of the map
+            return False
         if rise > 2.15 or rise < 0.9:              # small steps are just jumped
             return False
         if self.game.world.blocked(tx, tz, self.radius * 0.8, h):
@@ -282,6 +285,8 @@ class Player:
             return False
         h, (tx, tz) = found
         rise = h - self.position.y
+        if (tx, tz) != self.game.world.clamp(tx, tz, self.radius):
+            return False
         if not 0.4 <= rise <= 1.1 or self.game.world.blocked(tx, tz, self.radius * 0.8, h):
             return False
         self.start_climb(Vec3(tx, h, tz), 0.2)
@@ -328,6 +333,7 @@ class Player:
         self.vel = Vec3(wx * 1.3, 0, wz * 1.3)
         self.position += self.vel * dt
         self.position.x, self.position.z = g.world.collide(self.position, self.radius)
+        self.position.x, self.position.z = g.world.clamp(self.position.x, self.position.z, self.radius)
         self.position.y = g.world.ground_at(self.position.x, self.position.z, self.radius, self.position.y)
         self.moving = False
         self.eye_height += (DOWNED_EYE - self.eye_height) * min(1, dt * 6)

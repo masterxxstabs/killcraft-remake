@@ -353,6 +353,7 @@ class Enemy:
         self.position.y = 0
         # walls use a slim radius so even big zombies fit through doorways (they clip a little)
         self.position.x, self.position.z = g.world.collide(self.position, min(self.radius, 0.45))
+        self.position.x, self.position.z = g.world.clamp(self.position.x, self.position.z, 0.3)
 
         # safety net: no progress towards the target for 10 s -> dig down and come up near it
         self.progress_t += dt
