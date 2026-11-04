@@ -64,6 +64,12 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 Your best wave, best score and total kills are saved in a `.blockhold` folder in your
 home folder.
 
+### Devlog
+
+The **DEVLOG** tab on the main menu explains what changed in every version and why, newest first.
+It says **NEW** when there's an entry you haven't read. The entries live in `DEVLOG.md`: each one
+starts with a line `## version | date | title`, and the text under it is shown in the game.
+
 ### Styles, themes and HUD
 
 Under **Settings** pick a **style**: the shape of every screen.

@@ -83,7 +83,8 @@ class Game(Entity):
         st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
                                            fov=90, auto_update=True, muted=False, map=None,
                                            atmosphere=DEFAULT_ATMOSPHERE, arena_size=34, theme=DEFAULT_THEME,
-                                           style=DEFAULT_STYLE, hud=None, ragdolls=True, cls=None))
+                                           style=DEFAULT_STYLE, hud=None, ragdolls=True, cls=None,
+                                           devlog_seen=None))
         self.atmosphere_id = st['atmosphere'] if st['atmosphere'] in ATMOSPHERES else DEFAULT_ATMOSPHERE
         self.atmosphere_override = None      # the map editor uses its own bright look
         self.arena_size = max(MIN_SIZE, min(MAX_SIZE, int(st['arena_size'])))   # random arena size (half width)
@@ -96,6 +97,7 @@ class Game(Entity):
         self.fov = st['fov']
         self.auto_update = st['auto_update']
         RAGDOLLS[0] = bool(st['ragdolls'])
+        self.devlog_seen = st['devlog_seen']      # newest devlog entry you've opened (for the NEW marker)
         self.map_stem = st['map'] if st['map'] in [m for m, _ in maps.list_maps()] else None
         self.editor = None
         self.from_editor = None      # map data to return to after a play test
@@ -177,7 +179,7 @@ class Game(Entity):
                                        fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted,
                                        map=self.map_stem, atmosphere=self.atmosphere_id, arena_size=self.arena_size,
                                        theme=self.theme_id, style=self.style_id, hud=self.hud_settings,
-                                       ragdolls=RAGDOLLS[0], cls=self.class_id))
+                                       ragdolls=RAGDOLLS[0], cls=self.class_id, devlog_seen=self.devlog_seen))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
@@ -485,6 +487,17 @@ class Game(Entity):
         self.ui.hud.enabled = False
         self.ui.skills.open()
         self.show_cursor(True)
+
+    def devlog_unread(self):
+        """True when the devlog has an entry newer than the last one you opened."""
+        from . import devlog
+        entries = devlog.load()
+        return bool(entries) and entries[0]['version'] != self.devlog_seen
+
+    def mark_devlog_read(self, version):
+        if version and version != self.devlog_seen:
+            self.devlog_seen = version
+            self.save_settings()
 
     def pick_class(self, cid):
         if cid in CLASSES:

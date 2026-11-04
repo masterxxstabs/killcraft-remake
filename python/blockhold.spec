@@ -23,6 +23,7 @@ hiddenimports += collect_submodules('blockhold')
 datas += [
     ('VERSION', '.'),
     ('CHANGELOG.md', '.'),
+    ('DEVLOG.md', '.'),
     ('README.md', '.'),
     ('maps/*.json', 'maps'),
     ('assets/models', 'assets/models'),

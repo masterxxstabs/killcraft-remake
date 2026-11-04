@@ -3,6 +3,11 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.21.1
+- New DEVLOG tab on the main menu: what changed in each version and why, back to 1.0.0
+- The tab says NEW when there's an entry you haven't read
+- The About tab credits the 3D models that ship with the game
+
 ## 1.21.0
 - Six new zombies: the Crawler drags itself along the ground, the Bloater pops into a toxic cloud,
   the Leaper pounces from range, the Screamer whips the horde into a frenzy and calls more,

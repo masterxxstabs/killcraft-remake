@@ -158,10 +158,15 @@ def rotate(d, axis):
 
 def credits():
     """Lines for the credits screen, from every model.json that has an author."""
-    out = []
-    if MODELS_DIR.is_dir():
-        for f in sorted(MODELS_DIR.iterdir()):
-            m = read_meta(f.name) if f.is_dir() else {}
+    out, seen = [], set()
+    for root in (MODELS_DIR, BUNDLED_MODELS):           # yours, then the ones that ship with the game
+        if not root.is_dir():
+            continue
+        for f in sorted(root.iterdir()):
+            if not f.is_dir() or f.name in seen:
+                continue
+            m = read_meta(f.name)
             if m.get('author'):
+                seen.add(f.name)
                 out.append(f"{m.get('name', f.name)} by {m['author']} ({m.get('license', '?')})")
     return out

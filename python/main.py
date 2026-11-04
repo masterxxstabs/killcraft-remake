@@ -78,6 +78,9 @@ def selftest():
         importlib.import_module(m.name)
     from blockhold import maps, paths, sounds, world_textures
     print('BLOCKHOLD', paths.VERSION_FILE.read_text().strip(), '| frozen:', paths.FROZEN, '| data:', paths.APP_DIR)
+    assert paths.DEVLOG_FILE.exists(), f'DEVLOG.md missing: {paths.DEVLOG_FILE}'
+    from blockhold import devlog
+    assert devlog.load(), 'DEVLOG.md has no entries'
     names = [stem for stem, _ in maps.list_maps()]
     assert {'village', 'forest_camp'} <= set(names), f'bundled maps missing: {names}'
     for stem in names:

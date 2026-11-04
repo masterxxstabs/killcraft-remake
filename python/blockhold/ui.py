@@ -828,7 +828,10 @@ class UI:
 
     # ── main menu ────────────────────────────────────────────────────────────
     MENU_TABS = [('play', 'PLAY'), ('maps', 'MAPS'), ('controls', 'CONTROLS'), ('settings', 'SETTINGS'),
-                 ('about', 'ABOUT')]
+                 ('devlog', 'DEVLOG'), ('about', 'ABOUT')]
+    DEVLOG_ROWS = 8            # entries per page on the DEVLOG tab
+    DEVLOG_LINES = 17          # lines of text per page of an entry
+    DEVLOG_WRAP = 56           # characters per line
 
     def build_menu(self):
         self.menu = Entity(parent=camera.ui, z=-1)
@@ -842,7 +845,9 @@ class UI:
 
     def refresh_menu(self):
         win, g = self.menu_win, self.game
-        win.set_tabs(self.MENU_TABS, self.menu_tab, self.set_menu_tab)
+        unread = g.devlog_unread() and self.menu_tab != 'devlog'       # (opening the tab marks it read)
+        tabs = [(k, 'DEVLOG  NEW' if k == 'devlog' and unread else name) for k, name in self.MENU_TABS]
+        win.set_tabs(tabs, self.menu_tab, self.set_menu_tab)
         win.clear()
         getattr(self, f'menu_{self.menu_tab}')(win, g)
         self.update_menu(force=True)
@@ -1035,6 +1040,83 @@ class UI:
             self.show_pause()
         else:
             self.refresh_menu()
+
+    # ── devlog ───────────────────────────────────────────────────────────────
+    def devlog_pick(self, i):
+        self.devlog_sel, self.devlog_body_page = i, 0
+        self.refresh_menu()
+
+    def devlog_turn(self, attr, step, last):
+        setattr(self, attr, max(0, min(last, getattr(self, attr, 0) + step)))
+        self.refresh_menu()
+
+    def menu_devlog(self, win, g):
+        from . import devlog
+        b = win.body
+        entries = devlog.load()
+        g.mark_devlog_read(entries[0]['version'] if entries else None)
+        if not entries:
+            text(b, 'No devlog found (DEVLOG.md is missing).', win.left, win.top, 1.0, MUTED)
+            win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
+            return
+        sel = min(getattr(self, 'devlog_sel', 0), len(entries) - 1)
+        rows = self.DEVLOG_ROWS
+        pages = (len(entries) + rows - 1) // rows
+        page = min(getattr(self, 'devlog_page', sel // rows), pages - 1)
+        self.devlog_page = page
+        # left: every version, newest first
+        x, y = win.left, win.top + 0.01
+        text(b, 'EVERY UPDATE, NEWEST FIRST', x, y, 0.8, MUTED)
+        y -= 0.035
+        for i in range(page * rows, min(len(entries), (page + 1) * rows)):
+            e, on = entries[i], i == sel
+            title = e['title'] if len(e['title']) <= 30 else e['title'][:28] + '...'
+            FlatButton(b, f"{e['version']}   {title}", x, y, 0.54, 0.043, lambda k=i: self.devlog_pick(k),
+                       fill=INK if on else PAPER, edge=INK if on else LINE, fg=PAPER if on else INK, size=0.82,
+                       align='left', right=e['date'][5:], hover=0.15 if on else -0.06)
+            y -= 0.049
+        if pages > 1:
+            by = win.btn_y + BTN_H + 0.03
+            FlatButton(b, 'NEWER', x, by, 0.12, 0.04, lambda: self.devlog_turn('devlog_page', -1, pages - 1),
+                       fill=PAPER if page > 0 else NAVY, edge=INK, size=0.8)
+            text(b, f'{page + 1} / {pages}', x + 0.27, by - 0.02, 0.85, MUTED, origin=(0, 0))
+            FlatButton(b, 'OLDER', x + 0.42, by, 0.12, 0.04, lambda: self.devlog_turn('devlog_page', 1, pages - 1),
+                       fill=PAPER if page < pages - 1 else NAVY, edge=INK, size=0.8)
+        # right: the entry, a page at a time
+        e = entries[sel]
+        xr, y = win.right_col + 0.03, win.top + 0.01
+        text(b, f"VERSION {e['version']}   ·   {e['date']}", xr, y, 0.8, MUTED)
+        text(b, e['title'], xr, y - 0.03, 1.35, INK, wordwrap=34)
+        y -= 0.115 if len(e['title']) > 34 else 0.08
+        # pages break between paragraphs / bullets, never in the middle of one
+        per, pages_txt, cur, prev = self.DEVLOG_LINES, [], [], None
+        for kind, para in e['blocks']:
+            if kind == 'li':
+                wrapped = devlog.wrap(para, self.DEVLOG_WRAP - 3)
+                block = ['-  ' + wrapped[0]] + ['   ' + ln for ln in wrapped[1:]]
+            else:
+                block = devlog.wrap(para, self.DEVLOG_WRAP)
+            gap = [''] if cur and not (kind == 'li' and prev == 'li') else []
+            if cur and len(cur) + len(gap) + len(block) > per:
+                pages_txt.append(cur)
+                cur, gap = [], []
+            cur += gap + block
+            prev = kind
+        if cur:
+            pages_txt.append(cur)
+        body_pages = max(1, len(pages_txt))
+        bp = min(getattr(self, 'devlog_body_page', 0), body_pages - 1)
+        self.devlog_body_page = bp
+        text(b, '\n'.join(pages_txt[bp] if pages_txt else []), xr, y, 0.78, INK)
+        if body_pages > 1:
+            by = win.btn_y + BTN_H + 0.03
+            FlatButton(b, 'PREV', xr, by, 0.12, 0.04, lambda: self.devlog_turn('devlog_body_page', -1, body_pages - 1),
+                       fill=PAPER if bp > 0 else NAVY, edge=INK, size=0.8)
+            text(b, f'page {bp + 1} of {body_pages}', xr + 0.25, by - 0.02, 0.85, MUTED, origin=(0, 0))
+            FlatButton(b, 'MORE', xr + 0.38, by, 0.12, 0.04, lambda: self.devlog_turn('devlog_body_page', 1, body_pages - 1),
+                       fill=TEAL if bp < body_pages - 1 else NAVY, edge=INK, size=0.8)
+        win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
+        win.bottom_right('PLAY', g.start_game)
 
     def menu_about(self, win, g):
         b, u = win.body, g.updater
