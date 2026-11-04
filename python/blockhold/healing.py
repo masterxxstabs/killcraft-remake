@@ -29,7 +29,7 @@ class Healing:
             return False
         if p.using is not None:
             self.cancel(p)
-        p.using = dict(item=item_id, t=0.0, total=d.get('use_time', 2.0))
+        p.using = dict(item=item_id, t=0.0, total=d.get('use_time', 2.0) / max(0.2, p.heal_speed))   # Medic skills
         g.weapons.trigger(False)
         g.aiming = False
         g.sounds.play('equip', volume=0.6, pitch=0.7)

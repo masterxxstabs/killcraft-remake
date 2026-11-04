@@ -25,6 +25,8 @@ from .drops import WeaponDrops
 from .animals import Animals
 from .npcs import Npcs
 from .healing import Healing
+from .progression import Progression
+from .data.classes import CLASSES, DEFAULT_CLASS
 from .data.barricades import BARRICADES, MAX_CARRIED, PLACE_RANGE
 from .player import Player, REVIVE_TIME
 from .projectiles import Projectiles
@@ -81,7 +83,7 @@ class Game(Entity):
         st = load_json(SETTINGS_FILE, dict(sensitivity=40, volume=0.5, ability=ABILITIES[0]['id'],
                                            fov=90, auto_update=True, muted=False, map=None,
                                            atmosphere=DEFAULT_ATMOSPHERE, arena_size=34, theme=DEFAULT_THEME,
-                                           style=DEFAULT_STYLE, hud=None, ragdolls=True))
+                                           style=DEFAULT_STYLE, hud=None, ragdolls=True, cls=None))
         self.atmosphere_id = st['atmosphere'] if st['atmosphere'] in ATMOSPHERES else DEFAULT_ATMOSPHERE
         self.atmosphere_override = None      # the map editor uses its own bright look
         self.arena_size = max(MIN_SIZE, min(MAX_SIZE, int(st['arena_size'])))   # random arena size (half width)
@@ -99,6 +101,8 @@ class Game(Entity):
         self.from_editor = None      # map data to return to after a play test
         camera.fov = self.fov
         self.ability_id = st['ability']
+        old = {'shockwave': 'brawler', 'adrenaline': 'soldier', 'blink': 'scout'}      # (settings from before classes)
+        self.class_id = st['cls'] if st['cls'] in CLASSES else old.get(self.ability_id, DEFAULT_CLASS)
         self.sounds = Sounds()
         self.sounds.volume = st['volume']
         self.sounds.muted = st['muted']
@@ -140,6 +144,7 @@ class Game(Entity):
         self.animals = Animals(self)            # deer, pigs and chickens
         self.npcs = Npcs(self)                  # traders, quest givers and talkers from the map
         self.healing = Healing(self)            # bandages, medkits and food take time to use
+        self.progress = Progression(self)       # XP, levels, skills and your class
         self.build_kind = None       # build mode: which barricade is being placed (None = not building)
         self.build_rot = 0
         self.build_spot = None
@@ -164,14 +169,15 @@ class Game(Entity):
     # ── settings / saving ────────────────────────────────────────────────────
     @property
     def ability(self):
-        return next((a for a in ABILITIES if a['id'] == self.ability_id), ABILITIES[0])
+        aid = CLASSES[self.class_id]['ability']          # your class decides your Q ability
+        return next((a for a in ABILITIES if a['id'] == aid), ABILITIES[0])
 
     def save_settings(self):
         write_json(SETTINGS_FILE, dict(sensitivity=self.sensitivity, volume=self.sounds.volume, ability=self.ability_id,
                                        fov=self.fov, auto_update=self.auto_update, muted=self.sounds.muted,
                                        map=self.map_stem, atmosphere=self.atmosphere_id, arena_size=self.arena_size,
                                        theme=self.theme_id, style=self.style_id, hud=self.hud_settings,
-                                       ragdolls=RAGDOLLS[0]))
+                                       ragdolls=RAGDOLLS[0], cls=self.class_id))
 
     def set_sensitivity(self, v):
         self.sensitivity = v
@@ -271,6 +277,7 @@ class Game(Entity):
         self.lighting.clear()
         self.start_quest()
         self.player.reset()
+        self.progress.start(self.player, self.class_id)
         self.player.position = Vec3(self.world.player_spawn)
         self.mining.reset()
         self.animals.reset()
@@ -423,6 +430,7 @@ class Game(Entity):
             return
         self.ui.bag.close()            # the backpack / furnace screen (drops whatever you were dragging back in)
         self.ui.talk.close()
+        self.ui.skills.close()
         self.shop_open = False
         self.craft_open = False
         self.ui.shop.enabled = False
@@ -463,6 +471,25 @@ class Game(Entity):
         self.ui.hud.enabled = False
         self.ui.bag.open(furnace)
         self.show_cursor(True)
+
+    def open_skills(self):
+        """The skill tree (K)."""
+        if self.shop_open or self.player.dead:
+            return
+        self.exit_build()
+        self.shop_open = True
+        self.aiming = False
+        camera.fov = self.fov
+        self.ui.scope.enabled = False
+        self.weapons.trigger(False)
+        self.ui.hud.enabled = False
+        self.ui.skills.open()
+        self.show_cursor(True)
+
+    def pick_class(self, cid):
+        if cid in CLASSES:
+            self.class_id = cid
+            self.save_settings()
 
     def open_talk(self, npc):
         """Talk to an NPC (E next to them)."""
@@ -688,8 +715,9 @@ class Game(Entity):
     def use_ability(self):
         if not self.can_act() or self.player.ability_cd > 0 or self.player.downed:
             return
-        self.ability['use'](self)
-        self.player.ability_cd = self.ability['cooldown']
+        if self.ability['use'](self) is False:            # (it couldn't go off: it sets its own short wait)
+            return
+        self.player.ability_cd = self.ability['cooldown'] * self.player.ability_cd_mult
 
     def on_enemy_killed(self, e, headshot, attacker=None):
         attacker = attacker or self.player
@@ -902,12 +930,20 @@ class Game(Entity):
             if self.ui.bag.active and self.ui.bag.input(key):
                 return
             if key in ('b', 'escape') or (key == 'e' and self.craft_open) or \
-                    (key in ('i', 'e', 'tab') and self.ui.bag.active) or (key == 'e' and self.ui.talk.active):
+                    (key in ('i', 'e', 'tab') and self.ui.bag.active) or (key == 'e' and self.ui.talk.active) or \
+                    (key == 'k' and self.ui.skills.active):
                 self.close_shop()
             return
         if self.player.using is not None and key in ('left mouse down', '1', '2', '3', 'r', 'scroll up',
                                                      'scroll down', 'g', 'q'):
             self.healing.cancel(self.player, '')        # shooting, reloading or switching stops it
+            return
+        if key == 'f' and self.build_kind is None:
+            from .defense import shove
+            shove(self, self.player)
+            return
+        if key == 'k':
+            self.open_skills()
             return
         if key == 'h' and not self.player.downed and self.build_kind is None:
             self.healing.quick(self.player)

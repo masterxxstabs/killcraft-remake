@@ -50,7 +50,9 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | G | build mode: place the barricades you crafted (R turns them, the wheel switches, right click stops) |
 | 1, 2, 3 or mouse wheel | tool, handgun, rifle (other weapons wait in your backpack) |
 | R | reload |
-| Q | use your ability |
+| Q | use your class's ability |
+| F | shove: knock the zombies in front of you down (they get back up) |
+| K | skill tree: spend the points you get from levelling up |
 | B | shop (between waves) |
 | Tab (hold) | scoreboard: kills, score and coins for you and your allies |
 | N | start the next wave early |
@@ -236,6 +238,49 @@ asset is a short function made of low-poly shapes (boxes, cylinders, cones, lump
 roofs, grass blades) plus a list of cells you can't walk through. Copy one, change the
 shapes and colours, and it shows up in the editor. Maps are plain JSON, so you can share them
 by sending the file.
+
+## Classes, levels and skills
+
+Pick a **class** on the main menu. It decides your **Q ability**, gives you a passive bonus, and
+has its own column in the skill tree:
+
+| Class | Passive | Q ability |
+| --- | --- | --- |
+| Soldier | +10% damage, 15% faster reloads | **Adrenaline**: double fire rate, +50% speed and 30 health for 7 s |
+| Brawler | +30 health, shoves twice as strong, +25% melee damage | **Shockwave**: 120 damage and a huge knockback around you |
+| Scout | +12% speed, 2 more shoves before you tire, +20% headshot damage | **Blink**: teleport 9 m forward |
+| Medic | bandages and kits 40% faster, +1 health per second | **Field Heal**: heal 40 now and 6/s for 6 s, heal allies, get downed ones up |
+| Engineer | barricades and turrets +50% health | **Sentry**: drop an auto-turret that fights for 25 s |
+
+**Levels.** Kills give XP (a shambler 10, a brute 40, a boss 500+; knocked-down kills +5), every
+cleared wave gives 25 x the wave number, and NPC jobs 150. Each level is a **skill point**. The
+level badge next to your health shows your level, the thin gold bar under the health your XP, and a
+**K** appears when you have points to spend. Like a Project Zomboid character, your level lasts
+for this run only: every game starts at level 1.
+
+**The skill tree (K).** Four columns of four skills; a skill opens up once the one above it has a
+point, and most take a few points:
+
+| Column | Skills |
+| --- | --- |
+| Combat | Marksman (+damage), Quick Hands (reloads), Deadeye (headshots), Hair Trigger (fire rate) |
+| Survival | Tough (+health), Thick Skin (armor), Second Wind (regeneration), First Aid (heal faster) |
+| Defense | Strong Arms (shove power), Stamina (more shoves), Bash (shove damage), Sweep (wider shoves) |
+| Your class | four skills of its own: e.g. the Brawler's Ground and Pound (+40% damage to knocked-down zombies) or the Engineer's Twin Sentries |
+
+Everything (classes, skills, XP numbers) is in `blockhold/data/classes.py`.
+
+### Shove (F)
+
+Like Left 4 Dead and Project Zomboid: press **F** to shove the zombies in front of you. Normal
+zombies are knocked off their feet: they go limp (a ragdoll), lie there for a couple of seconds,
+climb back up and come at you again. While they're down you can shoot them, hit them with melee
+(just face them, no need to look down) or shove them again. Big zombies only stumble back, and
+bosses barely move. Shoves do a little damage (more with Bash).
+
+Shoving tires you out: you get 4 good shoves in a row (more with Stamina or as a Scout), then
+they're slow and weak until you catch your breath. The blue bar over your health shows how much
+you have left, red means you're worn out.
 
 ## Weapons and upgrades
 
@@ -608,6 +653,9 @@ are drawn in code in `blockhold/textures.py`. Change the colours there, or add a
 | `blockhold/animals.py` | passive animals: wandering, fleeing, hunting |
 | `blockhold/ragdoll.py` | ragdoll physics for dead zombies |
 | `blockhold/healing.py` | using bandages, medkits and food (it takes time) |
+| `blockhold/progression.py` | XP, levels and buying skills |
+| `blockhold/skills_ui.py` | the skill tree screen (K) |
+| `blockhold/defense.py` | the shove (F) |
 | `blockhold/fastloop.py` | a faster version of Ursina's per-frame loop (only visits things that need updating) |
 | `blockhold/maps.py` | saving, loading and previewing maps |
 | `blockhold/lowpoly.py` | builds the flat-shaded low-poly models |

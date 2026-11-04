@@ -368,8 +368,10 @@ class UI:
     def build_bag(self):
         from .bag_ui import BagScreen
         from .npc_ui import TalkScreen
+        from .skills_ui import SkillScreen
         self.bag = BagScreen(self)
         self.talk = TalkScreen(self)
+        self.skills = SkillScreen(self)
 
     def inventory_changed(self):
         """The local player's backpack changed: redraw whatever shows it."""
@@ -403,6 +405,8 @@ class UI:
         destroy(self.bag.root)
         self.talk.close()
         destroy(self.talk.root)
+        self.skills.close()
+        destroy(self.skills.root)
         self.rebuild_hud()
         self.build_menu()
         self.build_pause()
@@ -443,7 +447,7 @@ class UI:
         self.part_rects = {
             'crosshair': (-0.04, 0.04, 0.08, 0.08), 'wave': (L + 0.03, T - 0.03, 0.42, 0.095),
             'quest': (L + 0.03, T - 0.135, 0.412, 0.042), 'money': (R - 0.33, T - 0.03, 0.3, 0.095),
-            'feed': (R - 0.33, T - 0.135, 0.3, 0.1), 'health': (L + 0.03, B + 0.1, 0.46, 0.07),
+            'feed': (R - 0.33, T - 0.135, 0.3, 0.1), 'health': (L + 0.03, B + 0.1, 0.54, 0.07),
             'powers': (L + 0.03, B + 0.152 + 3 * 0.047, 0.3, 0.18), 'ability': (-0.07, B + 0.175, 0.14, 0.145),
             'weapon': (R - 0.33, B + 0.105, 0.3, 0.075),
             'hint': (-0.27, B + 0.205, 0.54, 0.045), 'banner': (-0.46, 0.27, 0.92, 0.13),
@@ -524,6 +528,15 @@ class UI:
         box(hp, L + 0.1, B + 0.088, 0.375, 0.046, NAVY, z=0.001)
         self.hp_fill = box(hp, L + 0.1, B + 0.088, 0.375, 0.046, k['health'], round=False)
         self.hp_text = text(hp, '', L + 0.465, B + 0.065, 1.05, contrast(k['health']), origin=(0.5, 0), z=-0.02)
+        # XP to the next level (thin bar under the health), shove stamina (over it) and the level badge
+        box(hp, L + 0.1, B + 0.04, 0.375, 0.006, NAVY, z=0.001, round=False)
+        self.xp_fill = box(hp, L + 0.1, B + 0.04, 0.375, 0.006, AMBER, round=False)
+        self.stam_fill = box(hp, L + 0.1, B + 0.097, 0.375, 0.005, '#7fd4ff', round=False)
+        box(hp, L + 0.495, B + 0.1, 0.075, 0.07, P, z=0.003)
+        text(hp, 'LV', L + 0.5325, B + 0.088, 0.55, k['fg'], origin=(0, 0), z=-0.02)
+        self.lv_text = text(hp, '1', L + 0.5325, B + 0.058, 1.25, k['fg'], origin=(0, 0), z=-0.02)
+        self.pts_badge = box(hp, L + 0.553, B + 0.107, 0.03, 0.026, AMBER, z=-0.03)        # skill points: press K
+        self.pts_text = text(hp, 'K', L + 0.568, B + 0.094, 0.6, '#12121c', origin=(0, 0), z=-0.04)
         self.med_box = box(hp, L + 0.03, B + 0.137, 0.34, 0.032, P, z=0.003)     # what H would use
         self.med_text = text(hp, '', L + 0.04, B + 0.121, 0.7, k['fg'], origin=(-0.5, 0), z=-0.02)
         # scoreboard (hold Tab): every player, then every ally
@@ -719,6 +732,15 @@ class UI:
         g, p = self.game, self.game.player
         self.hp_fill.scale_x = max(0.0001, 0.375 * clamp01(p.health / p.max_health))
         self.set_text(self.hp_text, 'DOWN' if p.downed else f'{math.ceil(p.health)} / {p.max_health}')
+        from .data.classes import xp_to_next
+        from .defense import stamina_frac
+        self.xp_fill.scale_x = max(0.0001, 0.375 * clamp01(p.xp / xp_to_next(p.level)))
+        self.set_text(self.lv_text, str(p.level))
+        self.pts_badge.enabled = self.pts_text.enabled = p.skill_points > 0
+        st = stamina_frac(p)
+        self.stam_fill.enabled = st < 1
+        self.stam_fill.scale_x = max(0.0001, 0.375 * st)
+        self.stam_fill.color = C('#7fd4ff' if st > 0 else '#ff8a5a')
         med = self.med_line(p)
         self.set_text(self.med_text, med)
         self.med_box.enabled = bool(med)
@@ -827,15 +849,19 @@ class UI:
 
     def menu_play(self, win, g):
         b, y = win.body, win.top
-        text(b, 'CHOOSE YOUR ABILITY', win.left, y, 0.85, MUTED)
-        y -= 0.035
-        for ab in ABILITIES:
-            on = g.ability_id == ab['id']
-            FlatButton(b, ab['name'].upper(), win.left, y, 0.54, 0.052, lambda a=ab: self.pick_ability(a['id']),
-                       fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=1.05, align='left',
-                       right=f"{ab['cooldown']}s", hover=0.15 if on else -0.06)
-            y -= 0.062
-        text(b, g.ability['desc'], win.left, y - 0.005, 0.85, MUTED, wordwrap=62)
+        from .data.classes import CLASSES
+        text(b, 'CHOOSE YOUR CLASS', win.left, y, 0.85, MUTED)
+        y -= 0.033
+        for cid, c in CLASSES.items():
+            on = g.class_id == cid
+            ab = next((a for a in ABILITIES if a['id'] == c['ability']), ABILITIES[0])
+            FlatButton(b, c['name'].upper(), win.left, y, 0.54, 0.04, lambda k=cid: self.pick_class(k),
+                       fill=INK if on else PAPER, edge=c['colour'] if on else INK, fg=PAPER if on else INK, size=0.95,
+                       align='left', right=f"Q: {ab['name']}", hover=0.15 if on else -0.06)
+            box(b, win.left + 0.006, y - 0.007, 0.008, 0.026, c['colour'], z=-0.03, round=False)
+            y -= 0.045
+        c = CLASSES[g.class_id]
+        text(b, f"{c['desc']}  {c['passive']}\nQ: {g.ability['desc']}", win.left, y - 0.002, 0.72, MUTED, wordwrap=74)
         y -= 0.085
         hline(b, win.left, y, 0.54)
         s = g.save
@@ -917,9 +943,9 @@ class UI:
     CONTROLS = [
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
          ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
-         ('Reload', 'R'), ('Ability', 'Q')],
+         ('Reload', 'R'), ('Ability', 'Q'), ('Shove', 'F'), ('Skill tree', 'K')],
         [('Tool / handgun / rifle', '1 2 3 / wheel'), ('Craft / pick up', 'E'), ('Backpack / drop gun', 'I / X'), ('Build (R turns)', 'G'),
-         ('Revive / repair', 'Hold E'), ('Shop', 'B'), ('Scoreboard', 'Hold Tab'),
+         ('Revive / repair', 'Hold E'), ('Heal (bandage / kit)', 'H'), ('Shop', 'B'), ('Scoreboard', 'Hold Tab'),
          ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute / fullscreen', 'M / F11')],
     ]
 
@@ -928,13 +954,14 @@ class UI:
         for col_i, rows in enumerate(self.CONTROLS):
             x = win.left if col_i == 0 else win.right_col + 0.03
             y = win.top
+            step = 0.05 if len(rows) <= 10 else 0.041           # (squeeze long lists so they fit)
             for i, (action, key) in enumerate(rows):
                 if i == 4:
                     hline(b, x, y + 0.012, 0.5)
-                    y -= 0.022
-                text(b, action, x, y, 1.05, INK)
-                text(b, key, x + 0.25, y + 0.002, 1.15, TEAL)
-                y -= 0.05
+                    y -= 0.02
+                text(b, action, x, y, 1.05 if step > 0.045 else 0.95, INK)
+                text(b, key, x + 0.25, y + 0.002, 1.15 if step > 0.045 else 1.0, TEAL)
+                y -= step
         win.bottom_left('BACK', lambda: self.set_menu_tab('play'), 'home', lambda: self.set_menu_tab('play'))
         win.bottom_right('PLAY', g.start_game)
 
@@ -1057,6 +1084,10 @@ class UI:
     def pick_ability(self, aid):
         self.game.ability_id = aid
         self.game.save_settings()
+        self.refresh_menu()
+
+    def pick_class(self, cid):
+        self.game.pick_class(cid)
         self.refresh_menu()
 
     # ── pause ────────────────────────────────────────────────────────────────

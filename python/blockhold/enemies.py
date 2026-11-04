@@ -13,6 +13,8 @@ from .net import new_id
 # Hitboxes in the enemy's own (unscaled) space: (min, max)
 RAGDOLLS = [True]          # dead zombies go limp (Settings → Ragdolls switches it off on slow PCs)
 SEP_CELL = 2.2             # grid size for keeping zombies apart (at least the widest gap two bosses keep)
+GETUP_TIME = 0.75          # seconds to climb back up after a shove
+LIE_PITCH = -90.0          # how the body lies when it starts getting up (checked against screenshots)
 CORPSE_TIME = 7.0          # seconds a body lies there before it sinks away
 
 HEAD_BOX = ((-0.27, 1.45, -0.27), (0.27, 1.99, 0.27))
@@ -125,6 +127,11 @@ class Enemy:
         self.ragdoll = None         # the limp body once it's dead (ragdoll.py)
         self.ragdoll_root = None
         self.death_push = None      # the push from the hit that killed it
+        self.down = 0.0             # seconds left lying on the ground after a shove (a live ragdoll)
+        self.getting_up = 0.0       # seconds left of climbing back to its feet
+        self.lie = (0.0, 90.0)      # (yaw, pitch) it lies at while getting up
+        self.stagger = 0.0          # big zombies only stumble back from a shove
+        self.was_shoved = False
         self.death_hit = 'body'
         self.stuck_t = 0
         self.detour = 0
@@ -164,14 +171,26 @@ class Enemy:
         self.root.removeNode()
 
     # ── helpers ──────────────────────────────────────────────────────────────
+    @property
+    def knocked(self):
+        """Lying on the ground or getting up after a shove."""
+        return self.down > 0 or self.getting_up > 0
+
     def head_pos(self):
+        if self.ragdoll is not None and not self.dead:
+            return Vec3(*self.ragdoll.p[2])
         return Vec3(self.position.x, self.position.y + 1.72 * self.scale, self.position.z)
 
     def chest_pos(self):
+        if self.ragdoll is not None and not self.dead:
+            r = self.ragdoll.p
+            return Vec3((r[0][0] + r[1][0]) / 2, (r[0][1] + r[1][1]) / 2, (r[0][2] + r[1][2]) / 2)
         return Vec3(self.position.x, self.position.y + 1.1 * self.scale, self.position.z)
 
     def ray_hit(self, o, d):
         """(distance, is_head) where a world ray hits this enemy, or None."""
+        if self.ragdoll is not None:                   # lying on the ground: hit test the body's joints
+            return self.ragdoll.ray_hit(o, d)
         render = application.base.render
         lo = self.body.getRelativePoint(render, Point3(*o))
         ld = self.body.getRelativeVector(render, PVec3(*d))
@@ -190,6 +209,8 @@ class Enemy:
         g = self.game
         if attacker is not None or self.last_attacker is None:
             self.last_attacker = attacker or g.player
+        if self.knocked and amount >= 0.01:          # Ground and Pound (Brawler)
+            amount *= getattr(self.last_attacker, 'downed_dmg_mult', 1.0)
         if amount >= 0.01 and g.powerups.active('instakill') and not self.d.get('boss'):
             amount = max(amount, self.hp)          # Bonebreaker power-up
         self.hp -= amount
@@ -212,8 +233,102 @@ class Enemy:
         if self.hp <= 0:
             self.dead = True
             self.hp = 0
+            if self.ragdoll is not None and knock is not None:   # killed while down: the body takes the hit
+                self.ragdoll.push((knock.x * 0.5, 1.0, knock.z * 0.5))
+            if self.knocked:
+                self.death_t = 0.35                              # (no-ragdoll fall: it's already lying down)
             g.sounds.play('death', pitch=0.8 + random.random() * 0.4)
             g.on_enemy_killed(self, headshot, self.last_attacker)
+
+    # ── the shove (F) ────────────────────────────────────────────────────────
+    def shoved(self, push, power, attacker):
+        """A player shoved this zombie. Small ones fall over and get back up; big ones stumble; bosses barely move."""
+        self.was_shoved = True
+        self.last_attacker = attacker
+        dmg = getattr(attacker, 'shove_damage', 5) * max(0.5, power)
+        mass = max(1.0, self.scale ** 2)
+        if self.d.get('boss'):
+            self.kb += push * (0.15 / mass)
+            self.hurt(dmg, attacker=attacker)
+            return 'boss'
+        if self.scale >= 1.5 or power < 0.5:              # too big (or you're too tired) to knock over
+            self.kb += push * (0.6 / mass)
+            self.stagger = 0.45 + 0.25 * power
+            self.attack_cd = max(self.attack_cd, self.stagger + 0.2)
+            self.hurt(dmg, attacker=attacker)
+            return 'stagger'
+        self.hurt(dmg, attacker=attacker)
+        if self.dead:
+            return 'killed'
+        lie = 1.4 + 0.6 * power + random.random() * 0.6
+        if self.ragdoll is not None:                      # already down: knock it about and keep it down longer
+            self.ragdoll.push((push.x, 2.0, push.z))
+            self.down = max(self.down, lie * 0.6)
+            return 'down'
+        self.knock_down(push, lie)
+        return 'down'
+
+    def knock_down(self, push, seconds):
+        self.down = seconds
+        self.getting_up = 0.0
+        self.attack_anim = 0
+        if RAGDOLLS[0]:
+            from .ragdoll import Ragdoll
+            self.ragdoll = Ragdoll(self, (push.x, 1.4 + push.length() * 0.08, push.z), 'body')
+            self.game.ragdolls.add(self.ragdoll)
+            self.root.setColorScale(1, 1, 1, 1)
+        else:                                             # ragdolls off: just fall over backwards
+            self.kb += push * 0.4
+            self.lie = (self.yaw, 90.0)
+
+    def stand_up(self):
+        """Back on its feet: the parts go back on the walking model, which climbs up from where it lay."""
+        r = self.ragdoll
+        if r is not None:
+            p = r.p
+            feet = ((p[11][0] + p[14][0]) / 2, (p[11][2] + p[14][2]) / 2)
+            head = (p[2][0], p[2][2])
+            dx, dz = head[0] - feet[0], head[1] - feet[1]
+            yaw = math.degrees(math.atan2(dx, dz)) if abs(dx) + abs(dz) > 0.05 else self.yaw
+            r.restore()
+            self.game.ragdolls.remove(r)
+            self.ragdoll = None
+            self.position = Vec3(feet[0], 0, feet[1])
+            self.position.x, self.position.z = self.game.world.collide(self.position, min(self.radius, 0.45))
+            self.yaw = yaw
+            self.lie = (yaw, LIE_PITCH)                   # lying with its head where the ragdoll's head was
+        self.getting_up = GETUP_TIME
+        self.kb = Vec3(0, 0, 0)
+
+    def update_knocked(self, dt):
+        """Lying there, then getting up. Returns True (it stays in the game)."""
+        g = self.game
+        if self.down > 0:
+            self.down -= dt
+            if self.ragdoll is not None:
+                self.ragdoll.step(dt)
+                q = self.ragdoll.p[0]
+                self.position = Vec3(q[0], 0, q[2])        # (for distance checks, turrets and allies)
+            else:
+                self.position += self.kb * dt
+                self.kb *= max(0, 1 - dt * 6)
+                self.position.x, self.position.z = g.world.collide(self.position, min(self.radius, 0.45))
+                self.root.setPos(self.position)
+                self.root.setP(min(90.0, self.root.getP() + dt * 400))
+            if self.down <= 0:
+                self.stand_up()
+            return True
+        self.getting_up = max(0.0, self.getting_up - dt)
+        k = self.getting_up / GETUP_TIME                   # 1 lying flat -> 0 standing
+        yaw, pitch = self.lie
+        ease = k * k * (3 - 2 * k)
+        self.root.setPos(self.position)
+        self.root.setH(-yaw)
+        self.root.setP(pitch * ease)
+        if self.getting_up <= 0:
+            self.root.setP(0)
+            self.face(self.target.position if self.target is not None else self.position)
+        return True
 
     def go_limp(self):
         """Turn into a ragdoll, pushed by whatever killed it."""
@@ -301,6 +416,20 @@ class Enemy:
                 self.position.y -= dt * 1.5
             self.root.setPos(self.position)
             return self.death_t < 2.4
+
+        if self.knocked:                              # on the ground after a shove, or getting back up
+            return self.update_knocked(dt)
+        if self.stagger > 0:                          # stumbling back from a shove
+            self.stagger -= dt
+            self.position.x += self.kb.x * dt
+            self.position.z += self.kb.z * dt
+            self.kb *= max(0, 1 - dt * 6)
+            self.position.x, self.position.z = g.world.collide(self.position, min(self.radius, 0.45))
+            self.root.setPos(self.position)
+            self.root.setP(-12 * min(1.0, self.stagger * 3))
+            if self.stagger <= 0:
+                self.root.setP(0)
+            return True
 
         self.retarget_t -= dt
         if self.target is None or self.retarget_t <= 0 or getattr(self.target, 'dead', False):
@@ -661,7 +790,7 @@ class EnemyManager:
             self.flow.rebuild(g.targets(), bar.cells if bar is not None else None)
         grid = self.grid = {}                     # where everyone is, for keeping zombies apart
         for e in self.list:
-            if e.dead or e.rise > 0:
+            if e.dead or e.rise > 0 or e.down > 0:
                 continue
             x, z = e.position.x, e.position.z
             grid.setdefault((int(x // SEP_CELL), int(z // SEP_CELL)), []).append((e, x, z, e.radius))

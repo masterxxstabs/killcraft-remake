@@ -61,6 +61,32 @@ class Player:
         self.bleed = 0.0
         self.revive_progress = 0.0
         self.ability_cd = 0.0
+        # skill / class stats (data/classes.py changes these)
+        self.melee_mult = 1.0
+        self.headshot_mult = 1.0
+        self.heal_speed = 1.0          # bandages and kits are this many times faster
+        self.heal_power = 1.0          # Field Heal strength
+        self.ability_cd_mult = 1.0
+        self.xp_mult = 1.0
+        self.downed_dmg_mult = 1.0     # damage to knocked-down zombies
+        self.barricade_hp_mult = 1.0
+        self.sentry_time = 0.0         # extra seconds a Sentry lasts
+        self.sentry_count = 1
+        self.rage = 0                  # Juggernaut: free shoves below half health
+        # the shove (F): push zombies back and knock them down
+        self.shove_power = 1.0
+        self.shove_stamina = 4         # shoves in a row before you get tired
+        self.shove_damage = 5.0
+        self.shove_arc = 0.0           # extra width of the cone (added to cos of the angle)
+        self.shove_range = 0.0
+        self.shove_fatigue = 0.0       # how tired you are (each shove +1, wears off)
+        self.shove_cd = 0.0
+        # level and skills (this run only)
+        self.level = 1
+        self.xp = 0
+        self.skill_points = 0
+        self.skills = {}
+        self.cls = 'soldier'
         # each player's own economy (shared screens show the local player's)
         self.coins = 0
         self.score = 0
@@ -179,8 +205,11 @@ class Player:
             self.buffs[k] = max(0, self.buffs[k] - dt)
         if self.ability_cd > 0:
             self.ability_cd -= dt
-        if self.regen > 0 and self.health < self.max_health and not self.downed:
-            self.health = min(self.max_health, self.health + self.regen * dt)
+        regen = self.regen + (6 * self.heal_power if self.buffs.get('field_heal', 0) > 0 else 0)
+        if regen > 0 and self.health < self.max_health and not self.downed:
+            self.health = min(self.max_health, self.health + regen * dt)
+        self.shove_cd = max(0.0, self.shove_cd - dt)
+        self.shove_fatigue = max(0.0, self.shove_fatigue - dt / 1.6)      # one shove's worth every 1.6 s
         self.slide_cd = max(0, self.slide_cd - dt)
         self.land_dip = max(0, self.land_dip - dt * 3)
 

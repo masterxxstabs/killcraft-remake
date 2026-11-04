@@ -569,6 +569,13 @@ class Weapons:
                                 hz - self.kick * 0.06)
         sw = math.sin(self.swing * math.pi) if d.get('melee') else 0
         self.holder.rotation = (-self.kick * 14 + rl * 35 + sw * 80, -sw * 35, -rl * 17)
+        self.shove_t = max(0.0, getattr(self, 'shove_t', 0.0) - dt)        # the shove (F): gun shoved forward
+        if self.shove_t > 0:
+            from .defense import shove_offset
+            k = shove_offset(self.shove_t)
+            self.holder.setPos(self.holder.getPos() + (-0.06 * k, 0.03 * k, 0.16 * k))
+            self.holder.rotation_z = self.holder.rotation_z - 25 * k
+            self.holder.rotation_y = self.holder.rotation_y + 15 * k
         self.flash.position = self.muzzle * 1.0
         self.lens.setAspectRatio(window.aspect_ratio)
 
@@ -646,12 +653,17 @@ class Weapons:
                 continue
             to = e.chest_pos() - eye
             dist = max(0, to.length() - e.radius)
-            if dist <= reach and to.normalized().dot(fwd) >= 0.55:
+            if e.knocked:                        # lying at your feet: only the direction you face matters
+                ft, ff = Vec3(to.x, 0, to.z), Vec3(fwd.x, 0, fwd.z)
+                aim = ft.normalized().dot(ff.normalized()) if ft.length() > 0.05 and ff.length() > 0.05 else 1
+                if dist <= reach + 0.6 and aim >= 0.5:
+                    targets.append((dist, e))
+            elif dist <= reach and to.normalized().dot(fwd) >= 0.55:
                 targets.append((dist, e))
         targets.sort(key=lambda t: t[0])
         flat = Vec3(fwd.x, 0, fwd.z).normalized()
         for _, e in targets[:d.get('cleave', 1)]:
-            e.hurt(d['damage'] * dm, False, flat * d['knockback'])
+            e.hurt(d['damage'] * dm * self.owner.melee_mult, False, flat * d['knockback'], attacker=self.owner)
             self.on_hit(d, e, dm)
         if targets:
             g.sounds.play('thud')
@@ -715,7 +727,7 @@ class Weapons:
             animal = g.animals.raycast(eye, direction, wall) if getattr(g, 'animals', None) else None
             reach = animal[0] if animal else wall          # an animal in the way stops the bullet there
             for dist, e, head in g.enemies.raycast(eye, direction, reach):
-                mult = d.get('headshot', 2) if head else 1
+                mult = d.get('headshot', 2) * self.owner.headshot_mult if head else 1
                 flat = Vec3(direction.x, 0, direction.z)
                 e.hurt(d['damage'] * dm * mult, head, flat * d['knockback'])
                 self.on_hit(d, e, dm)

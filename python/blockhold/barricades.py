@@ -91,8 +91,9 @@ class Barricades:
         e = node(self.root, position=pos, rotation_y=rot)
         body = node(e)
         model(kind).copyTo(body)
-        b = dict(id=new_id(), kind=kind, d=d, owner=player, pos=pos, rot=rot, cells=cells, hp=float(d['hp']),
-                 max_hp=float(d['hp']), e=e, body=body, shake=0.0, flash=0.0, tick=0.0, grow=0.0)
+        hp = float(d['hp']) * getattr(player, 'barricade_hp_mult', 1.0)      # Engineer skills
+        b = dict(id=new_id(), kind=kind, d=d, owner=player, pos=pos, rot=rot, cells=cells, hp=hp,
+                 max_hp=hp, e=e, body=body, shake=0.0, flash=0.0, tick=0.0, grow=0.0)
         if d.get('turret'):
             head = node(e, y=d['turret']['head_y'])
             model(kind, 'build_head').copyTo(head)
@@ -244,6 +245,11 @@ class Barricades:
             k = 1 + b['flash'] * 8
             b['body'].setColorScale(k, k * 0.9, k * 0.8, 1)
             d = b['d']
+            if 'ttl' in b:                       # a Sentry from the Engineer's ability: gone after a while
+                b['ttl'] -= dt
+                if b['ttl'] <= 0:
+                    self.remove(b)
+                    continue
             if d.get('thorns'):
                 self.update_thorns(b, dt)
             if d.get('mine'):

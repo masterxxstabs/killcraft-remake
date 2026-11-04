@@ -274,6 +274,43 @@ class Ragdoll:
         if self.calm > 0.4 or self.t > SLEEP_AFTER:
             self.asleep = True
 
+    def restore(self):
+        """Give the zombie its torso and head back (it's getting up), and remove the ragdoll."""
+        e = self.e
+        static = self.torso.find('**/static')
+        if not static.isEmpty():
+            static.reparentTo(e.body)
+            static.setPos(0, 0, 0)
+        e.head.reparentTo(e.body)
+        e.head.setPos(0, 0, 0)
+        e.body.show()
+        self.root.removeNode()
+        e.ragdoll_root = None
+
+    def ray_hit(self, o, d):
+        """Where a ray (o + t*d) hits the body lying on the ground: (distance, is_head) or None."""
+        best = None
+        p = self.p
+        neck, top = p[I['neck']], p[I['head']]
+        spheres = [((neck[0] + top[0]) / 2, (neck[1] + top[1]) / 2, (neck[2] + top[2]) / 2, 0.3 * self.s, True)]
+        for i, q in enumerate(p):
+            if i != I['head']:
+                spheres.append((q[0], q[1], q[2], self.r[i] * 1.5, False))
+        torso = ((p[0][0] + neck[0]) / 2, (p[0][1] + neck[1]) / 2, (p[0][2] + neck[2]) / 2)
+        spheres.append((torso[0], torso[1], torso[2], 0.3 * self.s, False))
+        for cx, cy, cz, r, head in spheres:
+            tx, ty, tz = cx - o[0], cy - o[1], cz - o[2]
+            along = tx * d[0] + ty * d[1] + tz * d[2]
+            if along < 0:
+                continue
+            perp2 = tx * tx + ty * ty + tz * tz - along * along
+            if perp2 > r * r:
+                continue
+            dist = along - math.sqrt(r * r - perp2)
+            if best is None or dist < best[0]:
+                best = (max(0.0, dist), head)
+        return best
+
     def sink(self, amount):
         self.root.setY(self.root.getY() - amount)
 

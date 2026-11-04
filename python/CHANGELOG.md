@@ -3,6 +3,15 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.20.0
+- Classes: Soldier, Brawler, Scout, Medic and Engineer, each with a passive bonus and its own Q ability
+- Two new abilities: Field Heal (Medic) and Sentry (Engineer drops an auto-turret)
+- Levels: earn XP from kills, cleared waves and NPC jobs; every level is a skill point
+- Skill tree (press K): Combat, Survival, Defense and a column for your class, 16 skills in all
+- Shove (press F): knock zombies down like in Left 4 Dead. They ragdoll, then get back up and keep coming
+- Big zombies only stumble and bosses barely move. Shoving tires you out (blue bar over your health)
+- Hit or shoot zombies while they're down; melee finds them at your feet
+
 ## 1.19.1
 - Big performance update: with 40 zombies on screen the game does about a third of the work it used to each frame, and with 80 about a quarter
 - Zombies, animals and ragdolls are drawn with plain engine nodes instead of heavy game objects, and spawn much faster
