@@ -25,6 +25,7 @@ datas += [
     ('CHANGELOG.md', '.'),
     ('README.md', '.'),
     ('maps/*.json', 'maps'),
+    ('assets/models', 'assets/models'),
     ('sounds/README.txt', 'sounds'),
     ('installer/blockhold.ico', 'installer'),
     ('installer/blockhold.png', 'installer'),

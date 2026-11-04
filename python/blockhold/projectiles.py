@@ -43,7 +43,8 @@ class Projectiles:
                 k = 1 - max(0, d - e.radius) / p['radius']
                 away = Vec3(e.position.x - pos.x, 0, e.position.z - pos.z)
                 away = away.normalized() if away.length() > 0.01 else Vec3(0, 0, 1)
-                e.hurt(p['damage'] * (0.35 + 0.65 * k) * p['shooter'].damage_mult, False, away * p['knockback'] * k,
+                e.hurt(p['damage'] * (0.35 + 0.65 * k) * p['shooter'].damage_mult * e.d.get('blast_resist', 1), False,
+                       away * p['knockback'] * k,
                        attacker=p['shooter'])
 
     def update(self, dt):

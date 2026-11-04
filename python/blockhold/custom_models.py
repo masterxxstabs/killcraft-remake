@@ -13,7 +13,7 @@ from pathlib import Path
 from panda3d.core import Filename, GeomVertexReader, LPoint3f
 from ursina import application
 
-from .paths import MODELS_DIR
+from .paths import BUNDLED_MODELS, MODELS_DIR
 EXTENSIONS = ('.glb', '.gltf', '.bam', '.egg', '.obj')
 
 _cache = {}         # path -> loaded NodePath (we copy it for each use)
@@ -25,19 +25,25 @@ def folder(wid):
 
 
 def find(wid):
-    f = folder(wid)
-    if not f.is_dir():
-        return None
-    files = [p for p in f.rglob('*') if p.suffix.lower() in EXTENSIONS]
-    files.sort(key=lambda p: (EXTENSIONS.index(p.suffix.lower()), len(p.parts)))
-    return files[0] if files else None
+    """The model file for weapon wid: one you downloaded (models/) wins over one that ships with the game."""
+    for f in (folder(wid), BUNDLED_MODELS / wid):
+        if not f.is_dir():
+            continue
+        files = [p for p in f.rglob('*') if p.suffix.lower() in EXTENSIONS]
+        files.sort(key=lambda p: (EXTENSIONS.index(p.suffix.lower()), len(p.parts)))
+        if files:
+            return files[0]
+    return None
 
 
 def read_meta(wid):
-    try:
-        return json.loads((folder(wid) / 'model.json').read_text())
-    except Exception:
-        return {}
+    """model.json next to the model (how it's turned, set with F8 / F9): yours first, then the bundled one."""
+    for f in (folder(wid), BUNDLED_MODELS / wid):
+        try:
+            return json.loads((f / 'model.json').read_text())
+        except Exception:
+            continue
+    return {}
 
 
 def write_meta(wid, meta):

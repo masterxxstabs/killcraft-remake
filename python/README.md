@@ -239,6 +239,26 @@ roofs, grass blades) plus a list of cells you can't walk through. Copy one, chan
 shapes and colours, and it shows up in the editor. Maps are plain JSON, so you can share them
 by sending the file.
 
+## Zombies
+
+Eleven kinds of zombie (plus a secret one), each new one joining the waves a little later:
+
+| Zombie | From wave | What it does |
+| --- | --- | --- |
+| Shambler | 1 | slow, arms out, the basic zombie |
+| Crawler | 2 | no legs to stand on: drags itself along the ground, low and hard to hit |
+| Sprinter | 3 | fast and fragile |
+| Brute | 4 | huge, tough, hits hard; only stumbles when you shove it |
+| Bloater | 5 | covered in boils; **pops when it dies**, hurting everything close and leaving a toxic cloud. Kill it from a distance |
+| Spitter | 6 | spits acid from range |
+| Leaper | 7 | **pounces** at you from 4 to 11 m away; shove it out of the air |
+| Screamer | 8 | stops and **shrieks** when it sees you: nearby zombies go into a frenzy (45% faster) and more claw out of the ground. Kill it first |
+| Riot Zombie | 10 | riot helmet and vest: body shots and melee do only 30%. **Aim for the face**. Shoves don't knock it down |
+| Firefighter | 12 | can't be set on fire, and explosions do half damage |
+| The Hollow King | every 5th wave | the boss |
+
+All of them, and the waves they come in, are in `blockhold/data/enemies.py` and `waves.py`.
+
 ## Classes, levels and skills
 
 Pick a **class** on the main menu. It decides your **Q ability**, gives you a passive bonus, and
@@ -284,18 +304,22 @@ you have left, red means you're worn out.
 
 ## Weapons and upgrades
 
-There are 26 weapons, in 8 shop categories:
+There are 41 weapons, in 8 shop categories (every one can also be crafted at a workbench):
 
 | Category | Weapons |
 | --- | --- |
-| Melee | Rusty Wrench, Fire Axe (hits up to 3 enemies) |
+| Melee | Rusty Wrench, Pickaxe, Baseball Bat (big knockback), Machete (fast), Fire Axe (hits up to 3), Sledgehammer (slow, hits 3, smashes rock), Katana (hits 4) |
 | Pistols | Pebble Pistol, Glock 17, M1911, Six-Shooter, Desert Eagle |
-| SMGs | Nail Gun, Uzi, Buzz SMG, MP5 |
-| Rifles | Ranger Rifle, AR-15 (red dot), AK-47, AS Val (silenced), SCAR-H (goes through 2 enemies) |
-| Shotguns | Remington 870, Scattercannon |
-| Snipers | Railspike, Barrett M82 (both have a scope) |
-| Heavy | Firework Launcher (rockets), M249 SAW (100-round belt), Shredder (minigun) |
-| Special | Torch (sets enemies on fire), Frostbite (freezes them), Arc Caster (chain lightning) |
+| SMGs | Nail Gun, Uzi, Buzz SMG, MP5, P90 (50 rounds), KRISS Vector (very fast, low recoil) |
+| Rifles | Ranger Rifle, AR-15 (red dot), AK-47, AS Val (silenced), SCAR-H and M14 (go through 2 enemies) |
+| Shotguns | Double Barrel (two huge blasts), Remington 870, Scattercannon, AA-12 (full auto) |
+| Snipers | Railspike, Mosin-Nagant (pierces 3), Barrett M82 (all have a scope) |
+| Heavy | M79 Grenade Launcher, Firework Launcher (rockets), M249 SAW (100-round belt), Shredder (minigun) |
+| Special | Blaster and Blaster Repeater (plasma that singes), Crossbow (pierces every enemy in a line), Torch (sets enemies on fire), Frostbite (freezes them), Arc Caster (chain lightning) |
+
+The Blaster and Blaster Repeater use real 3D models from Kenney's
+[Starter Kit FPS](https://github.com/KenneyNL/Starter-Kit-FPS) (MIT License, see
+`assets/models/`). The rest are built in code in `blockhold/data/gun_models.py`.
 
 Between waves, the shop's **Weapons** tab lets you buy guns and upgrade each one separately:
 damage, fire rate, magazine size and reload speed (melee weapons get reach instead). The
@@ -473,7 +497,8 @@ Something is hidden on every map. If you hear whispering, look around...
 
 ## Real 3D gun models from Sketchfab
 
-Every weapon has a textured block model. You can swap any of them for a real 3D model from
+Every weapon has a textured block model (two ship with real 3D models, see `assets/models/`).
+You can swap any of them for a real 3D model from
 [Sketchfab](https://sketchfab.com/search?features=downloadable&q=tag%3Agun&sort_by=-likeCount&type=models).
 
 ### The recommended pack (one command)

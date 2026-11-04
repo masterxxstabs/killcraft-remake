@@ -386,3 +386,141 @@ def hollow_lance(s):
 
 
 MODELS["hollow_lance"] = hollow_lance
+
+
+# ── added in 1.21 ────────────────────────────────────────────────────────────
+def p90(s):
+    """FN P90: bullpup SMG with the see-through magazine lying along the top."""
+    s.side([(-0.2, 0.07), (0.16, 0.07), (0.2, 0.04), (0.2, -0.02), (0.08, -0.02), (0.06, -0.07), (0.0, -0.07),
+            (-0.02, -0.02), (-0.2, -0.04)], 0.055, 'polymer')                                 # the one-piece body
+    s.box(-0.022, 0.022, 0.07, 0.1, -0.15, 0.14, 'glass_dark', 'metal')                        # magazine on top
+    s.box(-0.023, 0.023, 0.072, 0.076, -0.15, 0.14, 'black', 'metal')
+    s.box(-0.008, 0.008, 0.1, 0.122, 0.0, 0.12, 'black', 'metal')                             # sight
+    s.tube(0.2, 0.27, 0.011, 'black', y=0.015)
+    s.flash_hider(0.27, 0.015, r=0.012, length=0.03)
+    s.box(-0.026, 0.026, -0.03, 0.0, 0.03, 0.09, 'black', 'metal')                            # thumb hole guard
+    s.mount('optic', (0.122, 0.06))
+    s.mount('under', (-0.02, 0.16))
+
+
+def vector(s):
+    """KRISS Vector: boxy, the magazine well slanted down at the front."""
+    s.box(-0.026, 0.026, 0.0, 0.065, -0.1, 0.2, 'black', 'main', bevel=0.008)
+    s.side([(0.02, 0.0), (0.2, 0.0), (0.24, -0.08), (0.12, -0.12), (0.06, -0.12)], 0.05, 'black')  # slanted lower
+    s.rail(-0.08, 0.18, 0.074)
+    s.tube(0.2, 0.3, 0.012, 'black', y=0.035)
+    s.box(-0.016, 0.016, 0.015, 0.055, 0.29, 0.33, 'black', 'metal')                         # flash hider block
+    s.mount('muzzle', (0, 0.035, 0.33))
+    s.grip(0.0, 0.0, length=0.1, angle=10, width=0.034)
+    s.magazine(0.1, -0.04, 0.16, depth=0.03, width=0.022, angle=-8, mat='black')
+    s.trigger_guard(0.0, 0.07, -0.005)
+    s.stock_folding(-0.1, 0.04)
+    s.mount('optic', (0.074, 0.05))
+    s.mount('under', (-0.06, 0.18))
+
+
+def m14(s):
+    """M14: walnut battle rifle, long barrel, box magazine."""
+    s.tube(0.25, 0.68, 0.012, 'gunmetal', y=0.045)
+    s.box(-0.026, 0.026, -0.03, 0.04, -0.06, 0.45, 'wood', 'furniture', bevel=0.012)         # long stock forend
+    s.box(-0.02, 0.02, 0.04, 0.07, -0.02, 0.24, 'gunmetal', 'main', bevel=0.006)              # receiver
+    s.box(-0.014, 0.014, 0.04, 0.07, 0.25, 0.42, 'black', 'metal')                            # hand guard top
+    s.iron_front(0.66, 0.06)
+    s.iron_rear(-0.0, 0.07)
+    s.flash_hider(0.68, 0.045, r=0.012, length=0.04)
+    s.magazine(0.1, -0.03, 0.12, depth=0.06, width=0.026, mat='black')
+    s.trigger_guard(-0.04, 0.04, -0.03)
+    s.stock_wood(-0.06, 0.02, drop=0.07, length=0.32)
+    s.mount('optic', (0.075, 0.1))
+    s.mount('under', (-0.03, 0.36))
+
+
+def double_barrel(s):
+    """Side-by-side double barrel shotgun."""
+    for x in (-0.016, 0.016):
+        s.tube(0.05, 0.62, 0.015, 'gunmetal', y=0.03, x=x)
+        s.tube(0.61, 0.62, 0.011, 'black', y=0.03, x=x)
+    s.box(-0.004, 0.004, 0.046, 0.05, 0.05, 0.6, 'steel', 'metal')                           # rib
+    s.box(-0.03, 0.03, -0.01, 0.045, -0.06, 0.07, 'steel', 'main', bevel=0.008)               # action
+    s.box(-0.028, 0.028, -0.012, 0.016, 0.07, 0.28, 'wood', 'furniture', bevel=0.008)         # forend
+    s.box(-0.006, 0.006, 0.045, 0.065, -0.05, -0.02, 'black', 'metal')                        # hammer
+    s.trigger_guard(-0.04, 0.03, -0.01)
+    s.stock_wood(-0.06, 0.02, drop=0.08, length=0.32)
+    s.mount('muzzle', (0, 0.03, 0.62))
+    s.mount('optic', (0.06, 0.0))
+    s.mount('under', (-0.012, 0.18))
+
+
+def aa12(s):
+    """AA-12: full-auto drum shotgun with a big rectangular receiver."""
+    s.box(-0.032, 0.032, -0.02, 0.07, -0.16, 0.26, 'polymer', 'main', bevel=0.01)
+    s.box(-0.033, 0.033, 0.05, 0.08, -0.16, 0.26, 'black', 'metal')                          # carry rail housing
+    s.rail(-0.1, 0.22, 0.088)
+    s.tube(0.26, 0.48, 0.018, 'black', y=0.025)
+    s.box(-0.02, 0.02, 0.0, 0.05, 0.4, 0.46, 'black', 'metal')                              # front sight block
+    s.muzzle_brake(0.48, 0.025, r=0.022, length=0.05, mat='black')
+    s.cyl_x(-0.05, 0.05, -0.09, 0.08, 0.075, 'black', sides=14)                               # 20-round drum
+    s.cyl_x(-0.052, 0.052, -0.09, 0.08, 0.025, 'steel', sides=8)
+    s.grip(0.0, -0.02, length=0.11, angle=14, width=0.036)
+    s.trigger_guard(-0.01, 0.06, -0.02)
+    s.box(-0.026, 0.026, -0.03, 0.05, -0.32, -0.16, 'polymer', 'furniture', bevel=0.01)       # fixed stock
+    s.box(-0.028, 0.028, -0.04, 0.06, -0.335, -0.32, 'rubber', 'metal')
+    s.mount('optic', (0.088, 0.06))
+    s.mount('under', (-0.02, 0.33))
+
+
+def mosin(s):
+    """Mosin-Nagant: long wooden bolt-action rifle."""
+    s.tube(0.3, 0.85, 0.011, 'gunmetal', y=0.045)
+    s.box(-0.024, 0.024, -0.025, 0.038, -0.04, 0.62, 'wood', 'furniture', bevel=0.01)        # full-length stock
+    s.box(-0.016, 0.016, 0.038, 0.06, 0.0, 0.14, 'gunmetal', 'main', bevel=0.004)             # receiver
+    s.cyl_x(0.016, 0.06, 0.05, 0.04, 0.006, 'steel')                                           # bolt handle
+    s.box(0.05, 0.066, 0.025, 0.045, 0.03, 0.05, 'steel', 'metal')                            # bolt knob
+    for z in (0.32, 0.55):
+        s.box(-0.026, 0.026, -0.027, 0.04, z, z + 0.012, 'steel', 'metal')                    # barrel bands
+    s.iron_front(0.84, 0.058)
+    s.iron_rear(0.2, 0.06)
+    s.trigger_guard(-0.03, 0.03, -0.025)
+    s.stock_wood(-0.04, 0.02, drop=0.07, length=0.34)
+    s.mount('muzzle', (0, 0.045, 0.86))
+    s.mount('optic', (0.07, 0.08))
+    s.mount('under', (-0.025, 0.4))
+
+
+def m79(s):
+    """M79: the 'blooper', a fat single-shot grenade launcher with a wooden stock."""
+    s.tube(0.04, 0.38, 0.032, 'gunmetal', y=0.03, sides=12)
+    s.tube(0.36, 0.38, 0.026, 'black', y=0.03, sides=12)
+    s.box(-0.026, 0.026, -0.02, 0.06, -0.08, 0.06, 'gunmetal', 'main', bevel=0.008)
+    s.box(-0.03, 0.03, -0.012, 0.014, 0.08, 0.24, 'wood', 'furniture', bevel=0.008)          # forend
+    s.box(-0.004, 0.004, 0.062, 0.1, 0.0, 0.1, 'black', 'metal')                              # flip-up sight
+    s.trigger_guard(-0.05, 0.02, -0.02)
+    s.stock_wood(-0.08, 0.02, drop=0.08, length=0.3)
+    s.mount('muzzle', (0, 0.03, 0.38))
+    s.mount('optic', (0.062, -0.02))
+    s.mount('under', (-0.012, 0.16))
+
+
+def crossbow(s):
+    """Hunting crossbow: limbs across the front, a bolt laid in the rail."""
+    s.box(-0.018, 0.018, -0.02, 0.03, -0.08, 0.42, 'polymer', 'main', bevel=0.006)          # stock / rail
+    s.box(-0.005, 0.005, 0.03, 0.036, 0.0, 0.4, 'black', 'metal')                            # flight groove
+    for x0, x1 in ((-0.26, -0.02), (0.02, 0.26)):                                              # the two limbs
+        s.box(x0, x1, 0.008, 0.024, 0.37, 0.4, 'black', 'metal', bevel=0.004)
+    for x0, x1 in ((-0.27, -0.25), (0.25, 0.27)):                                              # limb tips
+        s.box(x0, x1, 0.005, 0.027, 0.33, 0.39, 'gunmetal', 'metal')
+    s.box(-0.25, 0.25, 0.0145, 0.0175, 0.33, 0.333, 'steel', 'metal')                         # string
+    s.tube(0.33, 0.62, 0.004, 'steel', y=0.04)                                                # the bolt
+    s.box(-0.006, 0.006, 0.034, 0.05, 0.3, 0.34, 'red', 'metal')                              # fletching
+    s.box(-0.016, 0.016, 0.03, 0.06, 0.05, 0.16, 'black', 'metal')                            # scope base
+    s.tube(0.03, 0.2, 0.016, 'black', y=0.075)                                                # scope
+    s.grip(0.0, -0.02, length=0.1, angle=18, width=0.032)
+    s.trigger_guard(-0.01, 0.06, -0.02)
+    s.stock_skeleton(-0.08, 0.01)
+    s.mount('muzzle', (0, 0.04, 0.62))
+    s.mount('optic', (0.06, 0.1))
+    s.mount('under', (-0.02, 0.28))
+
+
+MODELS.update({'p90': p90, 'vector': vector, 'm14': m14, 'double_barrel': double_barrel, 'aa12': aa12,
+               'mosin': mosin, 'm79': m79, 'crossbow': crossbow})

@@ -31,6 +31,12 @@ def weights(n):
         'sprinter': 2 + n * 0.45 if n >= 3 else 0,
         'brute': 0.7 + n * 0.15 if n >= 4 else 0,
         'spitter': 1.5 + n * 0.2 if n >= 6 else 0,
+        'crawler': 2.5 + n * 0.1 if n >= 2 else 0,
+        'bloater': 1.0 + n * 0.08 if n >= 5 else 0,
+        'leaper': 1.0 + n * 0.12 if n >= 7 else 0,
+        'screamer': 0.6 + n * 0.04 if n >= 8 else 0,
+        'riot': 0.8 + n * 0.1 if n >= 10 else 0,
+        'firefighter': 0.6 + n * 0.08 if n >= 12 else 0,
     }
 
 

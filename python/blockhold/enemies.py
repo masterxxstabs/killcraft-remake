@@ -13,6 +13,7 @@ from .net import new_id
 # Hitboxes in the enemy's own (unscaled) space: (min, max)
 RAGDOLLS = [True]          # dead zombies go limp (Settings → Ragdolls switches it off on slow PCs)
 SEP_CELL = 2.2             # grid size for keeping zombies apart (at least the widest gap two bosses keep)
+CRAWL_PITCH = -80.0        # how far forward a Crawler's body lies (Panda pitch; Ursina's rotation_x = -P)
 GETUP_TIME = 0.75          # seconds to climb back up after a shove
 LIE_PITCH = -90.0          # how the body lies when it starts getting up (checked against screenshots)
 CORPSE_TIME = 7.0          # seconds a body lies there before it sinks away
@@ -92,9 +93,52 @@ def zombie_proto(kind, d):
         part(static, (0.56, 0.12, 0.56), (0, 2.03, 0), crown)
         for x, z in ((-0.22, -0.22), (0.22, -0.22), (-0.22, 0.22), (0.22, 0.22), (0, 0.22)):
             part(static, (0.09, 0.16, 0.09), (x, 2.15, z), crown)
+    _gear(d, extras, static, head)
+    if d.get('crawl'):                                 # lying on its front, dragging itself along
+        body.setP(CRAWL_PITCH)
     static.flattenStrong()
     _protos[kind] = dict(np=root, tex=tex, leg=leg, arm=arm)
     return _protos[kind]
+
+
+def _gear(d, extras, static, head):
+    """Extra 3D parts in plain colours: riot gear, a fire helmet and air tank, long hair, boils."""
+    from .lowpoly import LowPoly
+    body_lp, head_lp = LowPoly(seed=11, variation=0.04), LowPoly(seed=13, variation=0.04)
+    hair = d.get('look', {}).get('hair') or '#1a1a1e'
+    if 'riot_vest' in extras:
+        navy = '#1a222e'
+        body_lp.box((0, 1.12, 0), (0.56, 0.66, 0.34), navy)
+        body_lp.box((0, 1.3, 0.172), (0.36, 0.07, 0.012), '#e8e8e4')            # POLICE strip
+        for x in (-0.36, 0.36):
+            body_lp.box((x, 1.47, 0), (0.26, 0.1, 0.32), navy)                    # shoulder guards
+    if 'air_tank' in extras:
+        body_lp.cylinder((0, 0.78, -0.24), 0.1, 0.62, '#d8d8d0', sides=8)
+        body_lp.cylinder((0, 1.4, -0.24), 0.05, 0.06, '#3a3a3e', sides=6)
+        for y in (0.95, 1.25):
+            body_lp.box((0, y, -0.15), (0.52, 0.05, 0.03), '#2a2a2e')               # straps
+        for x in (-0.255, 0.255):
+            body_lp.box((x, 1.05, 0.0), (0.012, 0.06, 0.3), '#e8e86a')             # reflective stripes
+    if 'boils' in extras:
+        for x, y, z, r in ((0.12, 1.25, 0.15, 0.07), (-0.15, 1.0, 0.16, 0.06), (0.2, 0.92, 0.2, 0.08),
+                           (-0.05, 1.35, 0.14, 0.05), (0.26, 1.2, -0.05, 0.06), (-0.24, 1.15, 0.02, 0.07)):
+            body_lp.blob((x, y, z), r, '#c8d84a', jitter=0.2)
+    if 'riot_helmet' in extras:
+        head_lp.box((0, 2.0, -0.02), (0.6, 0.2, 0.6), '#1a222e')
+        head_lp.box((0, 1.8, 0.27), (0.54, 0.24, 0.03), '#4f9ab8')                # visor
+        head_lp.box((0, 1.66, 0.0), (0.58, 0.06, 0.56), '#1a222e')
+    if 'fire_helmet' in extras:
+        head_lp.box((0, 2.02, 0), (0.6, 0.16, 0.6), '#c8302a')
+        head_lp.box((0, 1.95, -0.08), (0.72, 0.04, 0.8), '#c8302a')                # long brim at the back
+        head_lp.box((0, 2.02, 0.31), (0.16, 0.14, 0.02), '#e8c040')                # badge
+    if 'long_hair' in extras:
+        head_lp.box((0, 1.66, -0.27), (0.56, 0.66, 0.08), hair)
+        for x in (-0.27, 0.27):
+            head_lp.box((x, 1.7, -0.06), (0.06, 0.52, 0.4), hair)
+    if body_lp.verts:
+        body_lp.mesh().reparentTo(static)
+    if head_lp.verts:
+        head_lp.mesh().reparentTo(head)
 
 
 class Enemy:
@@ -132,6 +176,12 @@ class Enemy:
         self.lie = (0.0, 90.0)      # (yaw, pitch) it lies at while getting up
         self.stagger = 0.0          # big zombies only stumble back from a shove
         self.was_shoved = False
+        self.frenzy = 0.0           # seconds left of a Screamer's frenzy (faster)
+        self.frenzy_mult = 1.0
+        self.scream_cd = 2 + random.random() * 3
+        self.screaming = 0.0
+        self.leap_cd = 1.5 + random.random() * 2
+        self.leaping = None         # dict(t, total, start, end, height) while pouncing
         self.death_hit = 'body'
         self.stuck_t = 0
         self.detour = 0
@@ -176,15 +226,23 @@ class Enemy:
         """Lying on the ground or getting up after a shove."""
         return self.down > 0 or self.getting_up > 0
 
+    def _body_point(self, y):
+        p = application.base.render.getRelativePoint(self.body, Point3(0, y, 0))
+        return Vec3(p.x, p.y, p.z)
+
     def head_pos(self):
         if self.ragdoll is not None and not self.dead:
             return Vec3(*self.ragdoll.p[2])
+        if self.d.get('crawl'):
+            return self._body_point(1.72)
         return Vec3(self.position.x, self.position.y + 1.72 * self.scale, self.position.z)
 
     def chest_pos(self):
         if self.ragdoll is not None and not self.dead:
             r = self.ragdoll.p
             return Vec3((r[0][0] + r[1][0]) / 2, (r[0][1] + r[1][1]) / 2, (r[0][2] + r[1][2]) / 2)
+        if self.d.get('crawl'):
+            return self._body_point(1.1)
         return Vec3(self.position.x, self.position.y + 1.1 * self.scale, self.position.z)
 
     def ray_hit(self, o, d):
@@ -209,6 +267,11 @@ class Enemy:
         g = self.game
         if attacker is not None or self.last_attacker is None:
             self.last_attacker = attacker or g.player
+        armor = self.d.get('armor', 0)
+        if armor and not headshot and amount >= 0.01:   # riot gear: aim for the face
+            amount *= 1 - armor
+            if random.random() < 0.5:
+                g.effects.burst(self.chest_pos(), '#c8d0d8', 3, speed=4, size=0.05, life=0.3)
         if self.knocked and amount >= 0.01:          # Ground and Pound (Brawler)
             amount *= getattr(self.last_attacker, 'downed_dmg_mult', 1.0)
         if amount >= 0.01 and g.powerups.active('instakill') and not self.d.get('boss'):
@@ -220,6 +283,7 @@ class Enemy:
                 self.hp = 0
                 g.sounds.play('death', pitch=0.8 + random.random() * 0.4)
                 g.on_enemy_killed(self, False, self.last_attacker)
+                self.on_death()
             return
         self.flash = 0.1
         if knock is not None:
@@ -239,6 +303,11 @@ class Enemy:
                 self.death_t = 0.35                              # (no-ragdoll fall: it's already lying down)
             g.sounds.play('death', pitch=0.8 + random.random() * 0.4)
             g.on_enemy_killed(self, headshot, self.last_attacker)
+            self.on_death()
+
+    def on_death(self):
+        if self.d.get('burst'):
+            self.game.enemies.burst(self)
 
     # ── the shove (F) ────────────────────────────────────────────────────────
     def shoved(self, push, power, attacker):
@@ -247,7 +316,12 @@ class Enemy:
         self.last_attacker = attacker
         dmg = getattr(attacker, 'shove_damage', 5) * max(0.5, power)
         mass = max(1.0, self.scale ** 2)
-        if self.d.get('boss'):
+        if self.d.get('boss') or (self.d.get('shove_proof') and power < 2.5):
+            if self.d.get('shove_proof') and not self.d.get('boss'):   # riot gear: a stumble, nothing more
+                self.kb += push * 0.4
+                self.stagger = 0.35
+                self.hurt(dmg * 0.3, attacker=attacker)
+                return 'stagger'
             self.kb += push * (0.15 / mass)
             self.hurt(dmg, attacker=attacker)
             return 'boss'
@@ -269,6 +343,9 @@ class Enemy:
         return 'down'
 
     def knock_down(self, push, seconds):
+        if self.leaping is not None:                      # knocked out of the air
+            self.leaping = None
+            self.position.y = 0
         self.down = seconds
         self.getting_up = 0.0
         self.attack_anim = 0
@@ -341,6 +418,8 @@ class Enemy:
         self.root.setColorScale(1, 1, 1, 1)
 
     def ignite(self, dps, seconds):
+        if self.d.get('fireproof'):
+            return
         self.burn_dps = max(self.burn_dps, dps)
         self.burn_t = max(self.burn_t, seconds)
 
@@ -419,6 +498,8 @@ class Enemy:
 
         if self.knocked:                              # on the ground after a shove, or getting back up
             return self.update_knocked(dt)
+        if self.leaping is not None:                  # in the air, pouncing
+            return self.update_leap(dt)
         if self.stagger > 0:                          # stumbling back from a shove
             self.stagger -= dt
             self.position.x += self.kb.x * dt
@@ -456,6 +537,25 @@ class Enemy:
             tx, tz = tx / dist, tz / dist
         mx, mz = tx, tz
         speed = self.speed * (self.slow_mult if self.slow_t > 0 else 1)
+        if self.frenzy > 0:                           # a Screamer got it worked up
+            self.frenzy -= dt
+            speed *= self.frenzy_mult
+        sc = self.d.get('scream')
+        if sc:
+            self.scream_cd -= dt
+            if self.screaming > 0:
+                self.screaming -= dt
+                speed = 0
+                self.attack_anim = 0.3
+            elif self.scream_cd <= 0 and dist < sc['range'] and g.world.line_of_sight(self.head_pos(), self.target.eye()):
+                self.scream(sc)
+        lp = self.d.get('leap')
+        if lp:
+            self.leap_cd -= dt
+            if self.leap_cd <= 0 and lp['min'] < dist < lp['max'] and not self.blocked \
+                    and g.world.line_of_sight(self.chest_pos(), self.target.eye()):
+                self.start_leap(lp, p)
+                return True
 
         r = self.d.get('ranged')
         if r:
@@ -589,6 +689,69 @@ class Enemy:
         self.root.setPos(self.position)
         return True
 
+    # ── specials ─────────────────────────────────────────────────────────────
+    def scream(self, sc):
+        """Screamer: shriek, work every zombie nearby into a frenzy and call more out of the ground."""
+        g = self.game
+        self.screaming = 1.2
+        self.scream_cd = sc['every'] * (0.8 + random.random() * 0.4)
+        g.sounds.play('scream', volume=0.9, pitch=0.9 + random.random() * 0.2)
+        g.effects.ring(self.position, sc['range'], '#ff4d4d')
+        for e in g.enemies.alive():
+            if e is not self and (e.position - self.position).length() < sc['range']:
+                e.frenzy = max(e.frenzy, sc['seconds'])
+                e.frenzy_mult = sc['frenzy']
+        for _ in range(sc.get('summons', 0)):
+            if g.enemies.alive_count() >= g.wave['max_alive'] + 6:
+                break
+            for _try in range(6):
+                a, r = random.random() * math.tau, 3 + random.random() * 3
+                x, z = self.position.x + math.cos(a) * r, self.position.z + math.sin(a) * r
+                if g.world.height_at(x, z) == 0 and abs(x) < g.world.half - 1 and abs(z) < g.world.half - 1:
+                    g.enemies.spawn('shambler', g.wave, Vec3(x, 0, z))
+                    g.remaining += 1                       # (the wave isn't over until these are dead too)
+                    break
+        g.events.emit('zombie_scream', enemy=self)
+
+    def start_leap(self, lp, target):
+        """Leaper: crouch and spring at the target in an arc."""
+        self.leap_cd = lp['every'] * (0.8 + random.random() * 0.4)
+        aim = Vec3(target.x, 0, target.z)
+        to = aim - Vec3(self.position.x, 0, self.position.z)
+        dist = to.length()
+        end = Vec3(self.position.x, 0, self.position.z) + to * (max(0.0, dist - 0.9) / max(dist, 0.01))
+        self.leaping = dict(t=0.0, total=0.25 + dist * 0.06, start=Vec3(self.position.x, 0, self.position.z), end=end,
+                            height=0.9 + dist * 0.12, hit=False)
+        self.game.sounds.play('leap', volume=0.8, pitch=0.9 + random.random() * 0.2)
+        self.face(aim)
+
+    def update_leap(self, dt):
+        g, L = self.game, self.leaping
+        L['t'] += dt
+        k = min(1.0, L['t'] / L['total'])
+        flat = L['start'] + (L['end'] - L['start']) * k
+        x, z = g.world.collide(Vec3(flat.x, 0, flat.z), min(self.radius, 0.45))
+        self.position = Vec3(x, 4 * L['height'] * k * (1 - k), z)
+        self.root.setPos(self.position)
+        self.root.setH(-self.yaw)
+        self.root.setP(-30 * math.sin(k * math.pi))           # leaning into the pounce
+        self.leg_l.setP(60)
+        self.leg_r.setP(60)
+        self.arm_l.setP(150)
+        self.arm_r.setP(150)
+        t = self.target
+        if t is not None and not L['hit'] and not getattr(t, 'dead', False):
+            if (t.position - self.position).length() < self.d['reach'] + t.radius + 0.4:
+                L['hit'] = True
+                t.hurt(self.d['leap']['damage'] * self.damage / self.d['damage'], self.position)
+                self.attack_cd = 1.0
+        if k >= 1.0:
+            self.leaping = None
+            self.position.y = 0
+            self.root.setP(0)
+            self.root.setPos(self.position)
+        return True
+
     def resurface(self):
         """Stuck somewhere: sink into the ground and climb out of a spawn point near the target."""
         g = self.game
@@ -612,6 +775,15 @@ class Enemy:
     def animate(self, dt, speed):
         self.walk += dt * (2 + speed * 2.2)
         swing = math.sin(self.walk) * 40 if speed > 0 else 0
+        if self.d['pose'] == 'crawl':                # arms reach ahead and pull, legs drag behind
+            pull = math.sin(self.walk * 1.4) * 30 if speed > 0 else 0
+            self.arm_l.setP(-(175 + pull))
+            self.arm_r.setP(-(175 - pull))
+            self.leg_l.setP(-(8 + pull * 0.2))
+            self.leg_r.setP(-(8 - pull * 0.2))
+            if self.attack_anim > 0:
+                self.attack_anim -= dt
+            return
         self.leg_l.setP(-swing)                  # (Ursina's rotation_x = -P)
         self.leg_r.setP(swing)
         pose = self.d['pose']
@@ -766,6 +938,7 @@ class EnemyManager:
         self.flow = FlowField(game.world)
         self.flow_t = 0.0
         self.grid = {}
+        self.clouds = []            # toxic clouds left by Bloaters: dict(pos, r, t, dps, tick)
 
     def spawn(self, kind, wave, pos):
         e = Enemy(self.game, kind, wave, pos)
@@ -794,6 +967,8 @@ class EnemyManager:
                 continue
             x, z = e.position.x, e.position.z
             grid.setdefault((int(x // SEP_CELL), int(z // SEP_CELL)), []).append((e, x, z, e.radius))
+        if self.clouds:
+            self.update_clouds(dt)
         for e in list(self.list):
             if not e.update(dt):
                 e.destroy()
@@ -823,7 +998,54 @@ class EnemyManager:
         for e in self.list:
             e.destroy()
         self.list = []
+        self.clouds = []
         self.game.ragdolls.clear()
+
+    def burst(self, e):
+        """A Bloater pops: hurts everything close and leaves a toxic cloud."""
+        g, b = self.game, e.d['burst']
+        pos = Vec3(e.position.x, 0.8, e.position.z)
+        g.effects.burst(pos, '#c8d84a', 26, speed=7, size=0.18, life=0.9)
+        g.effects.burst(pos, '#6b7a3a', 18, speed=5, size=0.3, life=1.2, gravity=2)
+        g.effects.ring(Vec3(pos.x, 0, pos.z), b['radius'], '#b8e04a')
+        g.sounds.play('bloat_pop')
+        g.shake(0.2)
+        scale = e.damage / e.d['damage']
+        for p in g.players:
+            if not p.dead and (p.position - pos).length() < b['radius']:
+                p.hurt(b['damage'] * scale, pos)
+        for o in list(self.alive()):
+            if o is e:
+                continue
+            away = Vec3(o.position.x - pos.x, 0, o.position.z - pos.z)
+            dd = away.length()
+            if dd < b['radius']:
+                o.hurt(b['damage'] * 2 * (1 - dd / b['radius'] * 0.5), False,
+                       away.normalized() * 8 if dd > 0.01 else None, attacker=e.last_attacker)
+        g.events.emit('bloater_burst', pos=pos)
+        self.clouds.append(dict(pos=Vec3(pos.x, 0, pos.z), r=b['cloud'], t=b['seconds'], dps=b['dps'] * scale,
+                                tick=0.0, puff=0.0))
+
+    def update_clouds(self, dt):
+        g = self.game
+        for c in list(self.clouds):
+            c['t'] -= dt
+            if c['t'] <= 0:
+                self.clouds.remove(c)
+                continue
+            c['puff'] -= dt
+            if c['puff'] <= 0:
+                c['puff'] = 0.12
+                a, r = random.random() * math.tau, random.random() * c['r']
+                at = c['pos'] + Vec3(math.cos(a) * r, 0.2 + random.random() * 0.8, math.sin(a) * r)
+                g.effects.burst(at, random.choice(('#9ab83a', '#b8d84a', '#6b7a3a')), 2, speed=0.6, size=0.4,
+                                life=1.4, gravity=-0.6)
+            c['tick'] -= dt
+            if c['tick'] <= 0:
+                c['tick'] = 0.5
+                for p in g.players:
+                    if not p.dead and (p.position - c['pos']).length() < c['r']:
+                        p.hurt(c['dps'] * 0.5, c['pos'])
 
     def shove_corpses(self, o, d, max_dist, force, at_end=None):
         """Bullets that pass a body knock it about (it's only cosmetic)."""

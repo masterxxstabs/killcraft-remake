@@ -1164,15 +1164,16 @@ class UI:
                        lambda c=cid: self.select_recipe(None, c), fill=INK if on else PAPER, edge=INK,
                        fg=PAPER if on else INK, size=0.8, hover=0.15 if on else -0.06)
         y -= 0.05 * ((len(cats) + 4) // 5) + 0.015
+        row_h, step = (0.05, 0.058) if len(mine) <= 5 else (0.04, 0.046)      # (long lists: tighter rows)
         for r in mine:
             blocker = g.craft_blocker(r)
             is_sel = r is sel
             right = 'READY' if not blocker else ('OWNED' if blocker == 'OWNED' else '')
             fg = PAPER if is_sel else (MUTED if blocker == 'OWNED' else INK)
-            FlatButton(b, r['name'], x, y, 0.54, 0.05, lambda rid=r['id']: self.select_recipe(rid),
-                       fill=INK if is_sel else PAPER, edge=INK if is_sel else LINE, fg=fg, size=1.0, align='left',
-                       right=right, hover=0.15 if is_sel else -0.06)
-            y -= 0.058
+            FlatButton(b, r['name'], x, y, 0.54, row_h, lambda rid=r['id']: self.select_recipe(rid),
+                       fill=INK if is_sel else PAPER, edge=INK if is_sel else LINE, fg=fg, size=1.0 if row_h > 0.045 else 0.9,
+                       align='left', right=right, hover=0.15 if is_sel else -0.06)
+            y -= step
         tip = {'build': 'Press G to build what you carry. The Furnace turns ore into ingots.',
                'armor': 'Armor goes in your backpack: press I and drag it onto HEAD or BODY.'}.get(
             self.craft_cat, 'Workbenches use ingots: smelt ore and coal in a Furnace (Build tab).')
@@ -1299,17 +1300,17 @@ class UI:
                        fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.85,
                        hover=0.15 if on else -0.06)
         y -= 0.115
-        for o in WEAPONS:
-            if o.get('category') != cat or (o.get('hidden') and not w.owns(o['id'])):
-                continue
+        shown = [o for o in WEAPONS if o.get('category') == cat and not (o.get('hidden') and not w.owns(o['id']))]
+        row_h, step = (0.05, 0.058) if len(shown) <= 5 else (0.043, 0.05)      # (long lists: tighter rows)
+        for o in shown:
             owned, sel = w.owns(o['id']), o['id'] == self.shop_sel
             lvl = w.total_level(o)
             price = ('EQUIPPED' if w.held is o else 'OWNED') if owned else f"{o['price']}"
             fg = PAPER if sel else (MUTED if owned else INK)
-            FlatButton(b, o['name'] + (f'  +{lvl}' if lvl else ''), x, y, 0.54, 0.05, lambda wid=o['id']: self.select_weapon(wid),
-                       fill=INK if sel else PAPER, edge=INK if sel else LINE, fg=fg, size=1.0, align='left',
-                       right=price, hover=0.15 if sel else -0.06)
-            y -= 0.058
+            FlatButton(b, o['name'] + (f'  +{lvl}' if lvl else ''), x, y, 0.54, row_h, lambda wid=o['id']: self.select_weapon(wid),
+                       fill=INK if sel else PAPER, edge=INK if sel else LINE, fg=fg, size=1.0 if row_h > 0.045 else 0.92,
+                       align='left', right=price, hover=0.15 if sel else -0.06)
+            y -= step
         owned_count = sum(1 for o in WEAPONS if w.owns(o['id']) and not o.get('hidden'))
         total = sum(1 for o in WEAPONS if not o.get('hidden'))
         text(b, f'{owned_count} / {total} weapons owned', x, win.btn_y + 0.045, 0.8, MUTED)

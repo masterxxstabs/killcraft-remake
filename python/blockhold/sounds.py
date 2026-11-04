@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 RATE = 22050
-VERSION = 7
+VERSION = 8           # bump when sounds are added or changed (regenerates the cache)
 from .paths import CUSTOM_SOUND_DIRS, SOUND_CACHE as CACHE_DIR
 
 
@@ -201,6 +201,11 @@ RECIPES = {
     'shoot_firework': lambda: mix(noise(0.45, 800, 'band', vol=0.6, sweep=3000), thump(80, 50, 0.2, 0.4)),
     'shoot_spit': lambda: noise(0.12, 900, 'band', vol=0.35, sweep=400),
     'shoot_blink': lambda: tone(500, 0.08, 'sine', vol=0.18, to=900),
+    'shoot_blaster': lambda: mix(tone(1400, 0.12, 'square', vol=0.12, to=300), tone(700, 0.1, 'sine', vol=0.15, to=180)),
+    'shoot_crossbow': lambda: mix(tone(220, 0.12, 'saw', vol=0.15, to=90), noise(0.06, 3000, 'high', vol=0.15)),
+    'scream': lambda: mix(tone(900, 0.9, 'saw', vol=0.12, to=1400), noise(0.9, 2500, 'band', vol=0.18, sweep=900)),
+    'bloat_pop': lambda: mix(lowpass(env_noise(0.5, 0.12, 131, 0.9), 700), thump(60, 35, 0.25, 0.6)),
+    'leap': lambda: mix(noise(0.25, 700, 'band', vol=0.35, sweep=1500), tone(260, 0.2, 'saw', vol=0.1, to=420)),
     # weapon handling
     'reload_out': lambda: mech([(0, 2200, 0.5), (0.05, 900, 0.35)], seed=101),
     'reload_in': lambda: mix(mech([(0, 1500, 0.7), (0.03, 3200, 0.4)], seed=102),

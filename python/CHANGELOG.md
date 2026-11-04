@@ -3,6 +3,15 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.21.0
+- Six new zombies: the Crawler drags itself along the ground, the Bloater pops into a toxic cloud,
+  the Leaper pounces from range, the Screamer whips the horde into a frenzy and calls more,
+  the Riot Zombie shrugs off body shots (aim for the face) and the Firefighter is fireproof
+- 14 new weapons: Baseball Bat, Machete, Sledgehammer, Katana, P90, KRISS Vector, M14, Double Barrel,
+  AA-12, Mosin-Nagant, M79 Grenade Launcher, Crossbow, Blaster and Blaster Repeater
+- The Blasters use real 3D models from Kenney's Starter Kit FPS (MIT License)
+- New sounds for the blasters, crossbow, Screamer, Bloater and Leaper
+
 ## 1.20.0
 - Classes: Soldier, Brawler, Scout, Medic and Engineer, each with a passive bonus and its own Q ability
 - Two new abilities: Field Heal (Medic) and Sentry (Engineer drops an auto-turret)

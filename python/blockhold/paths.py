@@ -35,3 +35,4 @@ CUSTOM_SOUND_DIRS = [USER_DIR / 'sounds', APP_DIR / 'sounds'] if FROZEN else [AP
 
 # downloaded 3D gun models (tools/sketchfab_guns.py)
 MODELS_DIR = USER_DIR / 'models' if FROZEN else APP_DIR / 'models'
+BUNDLED_MODELS = APP_DIR / 'assets' / 'models'      # models that ship with the game (see its README)
