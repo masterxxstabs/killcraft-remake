@@ -14,6 +14,7 @@ from .gunsmith import CAMOS
 from .data.abilities import ABILITIES
 from .data.upgrades import UPGRADES
 from .data.weapons import CATEGORIES, WEAPONS
+from .data.items import HEAVY, ITEMS, LIGHT
 from .data.resources import RESOURCES
 from .data.atmosphere import ATMOSPHERES
 from .render import col, destroy, hex_rgb
@@ -746,7 +747,6 @@ class UI:
     @staticmethod
     def med_line(p):
         """'H  heal: 2 bandages, 1 medkit' over the health bar (empty when you have none)."""
-        from .data.items import ITEMS
         have = [(d['name'].lower(), p.inventory.count(k)) for k, d in ITEMS.items() if d['kind'] == 'medical']
         have = [f'{n} {name}' + ('s' if n > 1 else '') for name, n in have if n > 0]
         return ('H  heal:  ' + ', '.join(have)) if have else ''
@@ -770,6 +770,10 @@ class UI:
         self.stam_fill.color = C('#7fd4ff' if st > 0 else '#ff8a5a')
         self.update_target(dt)
         med = self.med_line(p)
+        kg = getattr(p, 'kg', 0.0)
+        if kg > LIGHT:                              # carrying too much: you're slower (and can't sprint)
+            load = f'TOO HEAVY  {kg:.0f} kg, no sprint' if kg > HEAVY else f'HEAVY  {kg:.0f} kg'
+            med = load + ('   ·   ' + med if med else '')
         self.set_text(self.med_text, med)
         self.med_box.enabled = bool(med)
         if med and self._cache.get('med_w') != med:
@@ -1254,14 +1258,14 @@ class UI:
         win.clear()
         win.right.text = ''
         # header: what you've got
-        mats = ('stone', 'wood', 'coal', 'iron_ingot', 'copper_ingot', 'crystal')     # what workbenches use
+        mats = ('scrap', 'spring', 'pipe', 'cloth', 'iron_ingot', 'copper_ingot')     # what workbenches use most
         x = win.x + win.w - 0.06 - (len(mats) - 1) * 0.11 - 0.07
-        for rid, r in ((k, RESOURCES[k]) for k in mats):
-            box(b, x, win.y - 0.035, 0.024, 0.024, r['color'], z=-0.01)
+        for rid in mats:
+            box(b, x, win.y - 0.035, 0.024, 0.024, ITEMS[rid]['colour'], z=-0.01)
             text(b, str(p.resources.get(rid, 0)), x + 0.032, win.y - 0.047, 1.2, INK, origin=(-0.5, 0))
             x += 0.11
         recipes = all_recipes()
-        cats = [('items', 'Items'), ('armor', 'Armor'), ('build', 'Build')] + list(CATEGORIES)
+        cats = [('items', 'Items'), ('clothing', 'Clothes'), ('armor', 'Armor'), ('build', 'Build')] + list(CATEGORIES)
         mine = [r for r in recipes if r['category'] == self.craft_cat]
         sel = next((r for r in mine if r['id'] == self.craft_sel), None) or (mine[0] if mine else recipes[0])
         self.craft_sel = sel['id']
@@ -1275,18 +1279,23 @@ class UI:
                        fg=PAPER if on else INK, size=0.8, hover=0.15 if on else -0.06)
         y -= 0.05 * ((len(cats) + 4) // 5) + 0.015
         row_h, step = (0.05, 0.058) if len(mine) <= 5 else (0.04, 0.046)      # (long lists: tighter rows)
+        room = y - (win.btn_y + 0.075)                                       # ...and tighter still if they won't fit
+        if mine and step * len(mine) > room:
+            step = room / len(mine)
+            row_h = step - 0.005
         for r in mine:
             blocker = g.craft_blocker(r)
             is_sel = r is sel
             right = 'READY' if not blocker else ('OWNED' if blocker == 'OWNED' else '')
             fg = PAPER if is_sel else (MUTED if blocker == 'OWNED' else INK)
             FlatButton(b, r['name'], x, y, 0.54, row_h, lambda rid=r['id']: self.select_recipe(rid),
-                       fill=INK if is_sel else PAPER, edge=INK if is_sel else LINE, fg=fg, size=1.0 if row_h > 0.045 else 0.9,
+                       fill=INK if is_sel else PAPER, edge=INK if is_sel else LINE, fg=fg, size=1.0 if row_h > 0.045 else (0.9 if row_h > 0.034 else 0.78),
                        align='left', right=right, hover=0.15 if is_sel else -0.06)
             y -= step
         tip = {'build': 'Press G to build what you carry. The Furnace turns ore into ingots.',
-               'armor': 'Armor goes in your backpack: press I and drag it onto HEAD or BODY.'}.get(
-            self.craft_cat, 'Workbenches use ingots: smelt ore and coal in a Furnace (Build tab).')
+               'armor': 'Press I and drag armor onto HEAD or BODY to wear it.',
+               'clothing': 'Press I and drag clothes onto their slot: each piece gives you more room.'}.get(
+            self.craft_cat, 'Guns need scrap parts from barrels and crates, and ingots from a Furnace.')
         text(b, tip, x, win.btn_y + 0.045, 0.8, MUTED)
 
         # right: the selected recipe
@@ -1315,7 +1324,7 @@ class UI:
         y -= 0.04
         for rid, need in sel['cost'].items():
             have = p.resources.get(rid, 0)
-            r = RESOURCES[rid]
+            r = dict(name=ITEMS[rid]['name'], color=ITEMS[rid]['colour'])
             box(b, xr, y, 0.026, 0.026, r['color'], z=-0.01)
             text(b, r['name'], xr + 0.04, y - 0.013, 1.05, INK, origin=(-0.5, 0))
             bar(b, xr + 0.2, y - 0.006, 0.2, 0.016, clamp01(have / need), GREEN if have >= need else AMBER)

@@ -2083,6 +2083,57 @@ def _perimeter(half, door=None, height=3):
     return cells
 
 
+# ── loot containers (E to search them; they fill up again a while after you empty them) ──
+def loot_toolbox(lp):
+    lp.box((0, 0.13, 0), (0.62, 0.26, 0.3), '#b0302a', top='#c43a32')
+    lp.box((0, 0.27, 0), (0.6, 0.03, 0.28), '#8a2420')                  # lid seam
+    for x in (-0.18, 0.18):
+        lp.box((x, 0.33, 0), (0.04, 0.1, 0.04), '#2a2c30')
+    lp.box((0, 0.38, 0), (0.42, 0.035, 0.05), '#2a2c30')                 # handle
+    for x in (-0.24, 0.24):
+        lp.box((x, 0.16, 0.152), (0.07, 0.07, 0.01), '#c8cdd2')         # latches
+
+
+def loot_medical(lp):
+    lp.box((0, 0.2, 0), (0.7, 0.4, 0.42), '#e8e4da', top='#f2efe6')
+    lp.box((0, 0.41, 0), (0.72, 0.03, 0.44), '#b8b4aa')
+    for face in (0.212, -0.212):                                          # red cross both sides
+        lp.box((0, 0.2, face), (0.2, 0.06, 0.01), '#d64541')
+        lp.box((0, 0.2, face), (0.06, 0.2, 0.01), '#d64541')
+    lp.box((0, 0.45, 0), (0.24, 0.04, 0.05), '#6a6f78')                   # handle
+
+
+def loot_military(lp):
+    lp.box((0, 0.27, 0), (1.5, 0.54, 0.62), '#4f5a3a', top='#5a6644')
+    lp.box((0, 0.55, 0), (1.52, 0.04, 0.64), '#3e4730')                  # lid rim
+    for x in (-0.6, 0.6):
+        lp.box((x, 0.27, 0), (0.06, 0.56, 0.64), '#3e4730')                # end bands
+        lp.box((x * 1.27, 0.34, 0), (0.04, 0.05, 0.22), '#2a2c30')         # rope handles
+    lp.box((-0.2, 0.3, 0.315), (0.5, 0.12, 0.01), '#d9c98a')              # stencil
+    lp.box((0.35, 0.3, 0.315), (0.14, 0.12, 0.01), '#d9c98a')
+    for x in (-0.3, 0.3):
+        lp.box((x, 0.5, 0.315), (0.08, 0.06, 0.02), '#9aa0a8')             # latches
+
+
+def loot_clothes(lp):
+    for x in (-0.6, 0.6):
+        lp.beam((x, 0.0, -0.2), (x, 0.02, 0.2), 0.03, '#6a6f78', sides=4)  # feet
+        lp.beam((x, 0.0, 0), (x, 1.5, 0), 0.025, '#9aa0a8', sides=5)
+    lp.beam((-0.62, 1.5, 0), (0.62, 1.5, 0), 0.022, '#9aa0a8', sides=5)  # the rail
+    for i, (x, c, long) in enumerate(((-0.42, '#6a8ab0', False), (-0.18, '#5a5a62', True), (0.06, '#556043', True),
+                                      (0.3, '#a8322d', False), (0.48, '#3a4a6a', True))):
+        lp.beam((x, 1.5, 0), (x, 1.42, 0), 0.008, '#c8cdd2', sides=3)       # hanger hook
+        lp.beam((x - 0.1, 1.4, 0), (x + 0.1, 1.4, 0), 0.01, '#c8cdd2', sides=3)
+        h = 0.62 if long else 0.46
+        lp.box((x, 1.4 - h / 2, 0), (0.2, h, 0.06), c, yaw=6 * (i % 2 * 2 - 1))
+        lp.box((x, 1.36, 0), (0.32, 0.08, 0.06), c)                        # shoulders / sleeves
+
+
+def loot_barrel_marker(lp):
+    from .resources import draw_node
+    draw_node(lp, 'barrel')
+
+
 def A(name, category, build, solid=(), nature=False, variants=1, **extra):
     return dict(name=name, category=category, build=build, solid=list(solid), nature=nature, variants=variants, **extra)
 
@@ -2337,11 +2388,16 @@ ASSETS = {
     'npc_quest': A('NPC: quest giver', 'life', _npc_marker('quest'), [(0, 0, 2)], editor_only=True, npc='quest'),
     'npc_talker': A('NPC: talker', 'life', _npc_marker('talker'), [(0, 0, 2)], editor_only=True, npc='talker'),
     'loot_crate': A('Loot crate (breakable)', 'mining', _ore_marker('crate'), editor_only=True, ore='crate'),
+    'loot_barrel': A('Barrel (breakable)', 'loot', loot_barrel_marker, editor_only=True, ore='barrel'),
+    'loot_toolbox': A('Toolbox', 'loot', loot_toolbox, [(0, 0, 1)], loot='toolbox'),
+    'loot_medical': A('Medical box', 'loot', loot_medical, [(0, 0, 1)], loot='medical'),
+    'loot_military': A('Military crate', 'loot', loot_military, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)], loot='military'),
+    'loot_clothes': A('Clothes rack', 'loot', loot_clothes, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)], loot='clothes'),
 }
 
 ASSET_CATEGORIES = [('trees', 'Trees'), ('shrubs', 'Shrubs'), ('buildings', 'Buildings'), ('props', 'Props'),
                     ('town', 'Town'), ('military', 'Military'), ('farm', 'Farm'), ('graveyard', 'Graveyard'),
-                    ('church', 'Church'), ('life', 'Animals & NPCs'), ('zones', 'Zones'), ('hideout', 'Hideout'),
+                    ('church', 'Church'), ('life', 'Animals & NPCs'), ('zones', 'Zones'), ('loot', 'Loot'), ('hideout', 'Hideout'),
                     ('special', 'Special'), ('mining', 'Mining'), ('caves', 'Caves'), ('paths', 'Paths'),
                     ('blocks', 'Blocks')]
 

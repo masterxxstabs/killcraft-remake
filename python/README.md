@@ -45,10 +45,10 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | C or Ctrl | crouch; press it while sprinting to slide |
 | E | talk to an NPC, use a workbench (crafting) or pick up a dropped gun; hold it to revive a downed ally, repair a barricade or refill a turret |
 | X | drop the gun you're holding (it keeps its ammo, upgrades and attachments) |
-| I | backpack: your items, the armor you're wearing and the weapons in your hands |
+| I | inventory: your pockets, the clothes and armor you're wearing (each piece has its own grid) and the weapons in your hands |
 | H | heal: use the bandage / medkit that fits how hurt you are (takes a few seconds; click to stop) |
 | G | build mode: place the barricades you crafted (R turns them, the wheel switches, right click stops) |
-| 1, 2, 3 or mouse wheel | tool, handgun, rifle (other weapons wait in your backpack) |
+| 1, 2, 3 or mouse wheel | tool, handgun, rifle (other weapons wait in your inventory) |
 | R | reload |
 | Q | use your class's ability |
 | F | shove: knock the zombies in front of you down (they get back up) |
@@ -155,7 +155,8 @@ big maps stay playable (expect a somewhat lower frame rate than on small maps).
 | Zones | **zombie level zones**, **random encounter zones**, **safe zones** and **extraction points** (see below) |
 | Hideout | underground tunnel pieces (straight, corner, T, crossing, dead end), blast door, vault door, bank counter, merchant stall, support beams, wall pipes, hanging and wall lamps, mine rails and a minecart, lockers, bunk beds, supply shelves, stash box, ventilation fan, water tank, radio desk, exit ladder, tarp curtain |
 | Special | **zombie grave** (zombies climb out of these) and the **player start** |
-| Mining | workbench, ore / log pile spawns, and **loot crates** (break them for resources) |
+| Mining | workbench, ore / log pile spawns, and **loot crates** (break them for resources and scrap) |
+| Loot | barrel spawns (break them for scrap), toolbox, medical box, military crate, clothes rack (search them with E) |
 | Caves | dig a cave: set its depth, width, rock height and side tunnels, then click where the entrance goes |
 | Paths | dirt, gravel, cobblestone, road, sand, wood floor |
 | Blocks | stone, brick, planks, crate, log, obsidian and leaves columns, 1–4 high |
@@ -255,9 +256,12 @@ at a zombie to see its name, level and health under the crosshair.
 end to end on the grid and turn them with R to dig out an underground base. Hanging and wall lamps
 light it up; try the Night atmosphere.
 
-**Loot crates** (Mining tab) are supply crates you smash with a melee weapon or shoot open for a
-random handful of wood, stone, iron, copper and sometimes crystal. They come back about a minute later.
-Random arenas have some too.
+**Loot crates** (Mining tab) and **barrels** (Loot tab) break when you hit or shoot them, and leave a
+sack with what was inside: resources and scrap from crates, scrap parts from barrels. They come back
+about a minute later. The **Loot** tab also has containers you search with **E**: toolboxes (springs,
+gears, screws, gunpowder), medical boxes, military crates (gun bodies, armor, rigs) and clothes racks
+(clothes and backpacks). An emptied container fills up again 2 to 4 minutes later, but only while
+nobody is within 15 m of it. Random arenas get some of each. Loot tables are in `blockhold/data/loot.py`.
 
 **Add your own assets:** everything in the palette lives in `blockhold/data/assets.py`. Each
 asset is a short function made of low-poly shapes (boxes, cylinders, cones, lumpy blobs,
@@ -394,11 +398,14 @@ about a minute later. The **Pickaxe** mines 2.5x faster (craft it from 25 stone,
 | Log pile | wood (the Axe chops 3x faster) |
 | Coal (dark rock) | coal (fuel for the furnace) and some stone |
 
-What you mine goes in your backpack (**I**). Walk up to a **workbench** and press **E** to craft:
+What you mine goes in your inventory (**I**). Walk up to a **workbench** and press **E** to craft:
 
-- **Any gun in the game**, instead of buying it with coins. Better guns need more iron and
-  copper, and the energy weapons and heavy guns need crystal.
-- **Bandage**, **Medkit** and **Surgical kit** (they go in your backpack, see *Healing* below) and **armor** to wear.
+- **Any gun in the game**, instead of buying it with coins. Guns need **scrap parts** like in Rust:
+  scrap and springs for every gun, a metal pipe for the barrel, and an **SMG body** or **rifle body**
+  for the bigger ones, plus a few ingots. Better guns need gears and copper, and the energy weapons
+  and heavy guns need crystal. You find the parts in barrels, crates and containers (see *Loot*).
+- **Clothes** and **backpacks** from cloth, rope and tarp (the more you wear, the more you can carry).
+- **Bandage** (4 cloth), **Medkit** and **Surgical kit** (see *Healing* below) and **armor** to wear.
 - **Barricades** (see below). These can only be crafted, never bought.
 
 Workbenches work during waves too, but zombies don't wait while you craft. Random arenas get two
@@ -410,22 +417,37 @@ a `craft=` field in `weapons.py`.
 stone, iron, copper, crystal or log pile). If a map has ore spawns, nodes only grow there, so you can build
 a mine or a quarry. Without any, nodes appear anywhere there's room.
 
-### Backpack, furnace and armor
+### Inventory, clothes, weight, furnace and armor
 
-Everything you mine, chop or loot goes in your **backpack** (press **I**), a grid where every item
-takes up some space, like a real bag. Ore, coal, stone and wood stack in piles; ingots take 2 cells,
-helmets 2 x 2 and vests 2 x 3 or 3 x 3.
+What you can carry depends on what you **wear**. Press **I**: you always have your **pockets**
+(4 x 1), and every piece of clothing adds a grid of its own. You start in a T-shirt and jeans, which
+isn't much. Every item takes up some space, like a real bag. Ore, coal, stone and wood stack in
+piles; ingots take 2 cells, helmets 2 x 2 and vests 2 x 3 or 3 x 3.
+
+| Slot | Clothing (grid it gives you) |
+| --- | --- |
+| Top | T-shirt (2 x 1), Hoodie (2 x 2), Field jacket (4 x 2) |
+| Legs | Jeans (2 x 2), Cargo pants (4 x 2) |
+| Rig | Chest rig (4 x 2), Tactical rig (4 x 3) |
+| Backpack | Satchel (3 x 3), Backpack (4 x 4), Hiking pack (5 x 5), Military pack (6 x 6) |
 
 - **Drag** an item to move it, press **R** while dragging to turn it, and drop a pile onto a pile of
-  the same thing to merge them.
+  the same thing to merge them. Drag clothes onto their slot to put them on.
+- **Backpacks are real things:** take one off (or drop it) and everything inside goes with it. Pick
+  it up again and it's all still there. Clothes you pick up are put on straight away if that slot is free.
 - Drop something **outside the window** to put it on the ground; walk up to it and press **E** to
   pick it up again.
-- When the backpack is full, what you mine is lost, so tidy up or drop things you don't need.
+- When you're out of room, what you mine is lost, so tidy up, drop things or wear something bigger.
 
-**Weapons go in the backpack too.** You hold three: a **tool** (melee), a **handgun** and a
+**Weight.** Everything weighs something (the total is in the corner of the inventory screen). Up to
+25 kg you move at full speed; past that you slow down, past 40 kg you can't sprint, and at 55 kg you
+crawl along at under half speed. The HUD tells you when you're heavy. Weapons count too: a pistol is
+1 kg, a rifle about 3.5, a sniper 6, a heavy gun 9.
+
+**Weapons go in your inventory too.** You hold three: a **tool** (melee), a **handgun** and a
 **rifle** (any long gun), on keys **1**, **2** and **3**. New weapons go in their hand slot if
-it's free, otherwise in the backpack (a rifle takes 4 x 2 cells, a sniper 5 x 2, a pistol 2 x 1).
-Drag a weapon from the backpack onto a hand slot to swap it in (or right-click it). Weapons keep
+it's free, otherwise in your inventory (a rifle takes 4 x 2 cells, a sniper 5 x 2, a pistol 2 x 1), or on the
+ground at your feet if there's no room. Drag a weapon from your inventory onto a hand slot to swap it in (or right-click it). Weapons keep
 their upgrades, attachments and ammo wherever they are.
 
 **Workbenches use ingots, not ore.** Craft a **Furnace** (30 stone + 10 coal, in the workbench's
@@ -435,8 +457,9 @@ fuel keeps burning, the arrow how far the current ore has got, and ingots pile u
 (1 ore = 1 ingot, 4 seconds each). One coal smelts 8 ores, one wood 1.5. It only works while it has
 fuel and room for more ingots, and it keeps going while you fight. Coal comes from the dark coal rocks.
 
-**Armor** is crafted at the workbench (**Armor** tab) and goes in your backpack. Open the backpack and
-drag it onto **HEAD** or **BODY** (or right-click it) to wear it.
+**Armor** is crafted at the workbench (**Armor** tab), from scrap metal, sheet metal, cloth and
+ingots. You put it on straight away if that slot is free; otherwise open your inventory and drag it
+onto **HEAD** or **BODY** (or right-click it).
 
 | Armor | Slot | Damage taken off | Lasts for |
 | --- | --- | --- | --- |
@@ -451,8 +474,8 @@ Armor wears down as it soaks up hits (the green bar on it) and stops protecting 
 It adds to the shop's Plating upgrade, up to 75% in total.
 
 **Healing takes time.** Bandages, medkits and surgical kits are crafted at the workbench (or a medkit
-bought in the shop) and go in your backpack. Press **H** to use the one that fits how hurt you are, or
-right-click one in the backpack. While you use it you walk at half speed and your gun is lowered;
+bought in the shop) and go in your inventory. Press **H** to use the one that fits how hurt you are, or
+right-click one in your inventory. While you use it you walk at half speed and your gun is lowered;
 the health comes when the bar fills. Shooting, reloading or switching weapons stops it and nothing is
 used up. Getting hit doesn't stop it, so find cover first. What you're carrying is shown over the
 health bar.
@@ -464,7 +487,7 @@ health bar.
 | Surgical kit | everything | 8 s | 2 x 2 |
 
 **Food.** Hunt animals for raw meat, put it in a furnace (it cooks like ore smelts) and
-**right-click** the cooked meat in your backpack to eat it (2 s): +35 health (raw meat gives only 5).
+**right-click** the cooked meat in your inventory to eat it (2 s): +35 health (raw meat gives only 5).
 Feathers, hides, old gold coins and sealed letters are trade goods for NPC traders. Items and costs are in
 `blockhold/data/items.py` and `blockhold/data/crafting.py`.
 

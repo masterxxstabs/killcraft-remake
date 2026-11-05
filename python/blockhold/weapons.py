@@ -161,12 +161,12 @@ class Weapons:
             return
         if self.bag.add('w_' + wid) == 0:
             if self.owner.is_local:
-                self.game.ui.kill_feed(f"{d['name']} went in your backpack (I)")
+                self.game.ui.kill_feed(f"{d['name']} went in your inventory (I)")
             return
         pack = self.take_out(d)                       # no room anywhere: on the ground it goes
         self.game.drops.spawn(pack, Vec3(self.owner.position.x, 0, self.owner.position.z), 0, self.owner)
         if self.owner.is_local:
-            self.game.ui.banner('BACKPACK FULL', '#d9912b', 1.6, f"{d['name']} is on the ground at your feet")
+            self.game.ui.banner('NO ROOM', '#d9912b', 1.6, f"{d['name']} is on the ground at your feet")
 
     # ── hands and backpack ───────────────────────────────────────────────────
     def unslot(self, slot):

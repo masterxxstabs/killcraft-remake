@@ -20,6 +20,7 @@ from .ragdoll import Ragdolls
 from .pickups import Pickups
 from .powerups import PowerUps
 from .mining import Mining
+from .loot import Loot
 from .barricades import Barricades
 from .drops import WeaponDrops
 from .animals import Animals
@@ -142,6 +143,7 @@ class Game(Entity):
         self.pickups = Pickups(self)
         self.powerups = PowerUps(self)
         self.mining = Mining(self)
+        self.loot = Loot(self)                  # containers to search, sacks from broken barrels
         self.barricades = Barricades(self)
         self.drops = WeaponDrops(self)          # guns dropped with X
         self.animals = Animals(self)            # deer, pigs and chickens
@@ -275,6 +277,7 @@ class Game(Entity):
         self.barricades.clear()
         self.drops.clear()
         self.mining.clear()
+        self.loot.clear()
         self.animals.clear()
         self.npcs.clear()
         self.encounters.clear()
@@ -287,6 +290,7 @@ class Game(Entity):
         self.progress.start(self.player, self.class_id)
         self.player.position = Vec3(self.world.player_spawn)
         self.mining.reset()
+        self.loot.reset()
         self.animals.reset()
         self.npcs.reset()
         self.weapons.reset()
@@ -309,6 +313,7 @@ class Game(Entity):
         self.barricades.clear()
         self.drops.clear()
         self.mining.clear()
+        self.loot.clear()
         self.animals.clear()
         self.npcs.clear()
         self.end_quest()
@@ -466,8 +471,8 @@ class Game(Entity):
         self.ui.craft.enabled = True
         self.show_cursor(True)
 
-    def open_bag(self, furnace=None):
-        """The backpack (I), or a furnace's screen (E next to it, the backpack is shown too)."""
+    def open_bag(self, furnace=None, container=None):
+        """The backpack (I), a furnace's screen (E next to it) or a loot container (E): your own grids are shown too."""
         if self.player.downed or self.player.dead or self.shop_open:
             return
         self.exit_build()
@@ -477,7 +482,7 @@ class Game(Entity):
         self.ui.scope.enabled = False
         self.weapons.trigger(False)
         self.ui.hud.enabled = False
-        self.ui.bag.open(furnace)
+        self.ui.bag.open(furnace, container)
         self.show_cursor(True)
 
     def open_skills(self):
@@ -535,7 +540,7 @@ class Game(Entity):
             return 'OWNED'
         if r['kind'] == 'heal' and p.health >= p.max_health:
             return 'FULL HEALTH'
-        if r['kind'] == 'item' and p.inventory.free_spot(r['item']) is None:
+        if r['kind'] == 'item' and not p.inventory.has_room_for(r['item']):
             return 'NO ROOM'
         if r['kind'] == 'placeable' and p.placeables.get(r['placeable'], 0) >= MAX_CARRIED:
             return 'CARRYING MAX'
@@ -557,7 +562,7 @@ class Game(Entity):
         elif r['kind'] == 'heal':
             p.heal(r['amount'])
         elif r['kind'] == 'item':
-            p.inventory.add(r['item'], 1)
+            p.inventory.give(r['item'])
         elif r['kind'] == 'placeable':
             p.placeables[r['placeable']] = p.placeables.get(r['placeable'], 0) + 1
         self.events.emit('crafted', player=p, recipe=rid)
@@ -697,6 +702,10 @@ class Game(Entity):
             npc_msg = self.npcs.prompt(p)
             if npc_msg:
                 self.ui.set_prompt(npc_msg)
+                return
+            loot_msg = self.loot.prompt(p)
+            if loot_msg:
+                self.ui.set_prompt(loot_msg)
                 return
             if self.near_bench():
                 self.ui.set_prompt('Press E to use the workbench')
@@ -978,6 +987,10 @@ class Game(Entity):
         if key == 'i' and not self.player.downed:
             self.open_bag()
             return
+        box = self.loot.nearest(self.player.position)
+        if key == 'e' and box is not None and box['items'] and not self.player.downed:
+            self.loot.open(self.player, box)
+            return
         npc = self.npcs.nearest(self.player.position)
         if key == 'e' and npc is not None and not self.player.downed:
             self.open_talk(npc)
@@ -1158,6 +1171,7 @@ class Game(Entity):
         if self.state == 'playing':
             self.powerups.update(dt)
             self.mining.update(dt)
+            self.loot.update(dt)
             self.barricades.update(dt)
             self.animals.update(dt)
             self.npcs.update(dt)

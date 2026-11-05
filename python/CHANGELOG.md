@@ -3,6 +3,15 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.23.0
+- What you can carry now depends on what you wear: small pockets, plus a grid in every piece of clothing (T-shirt, hoodie, jacket, jeans, cargo pants, rigs and four backpacks)
+- Backpacks are real things: take one off or drop it and everything inside goes with it
+- Weight: past 25 kg you slow down, past 40 kg you can't sprint
+- Rust-style scrap: break barrels for springs, pipes, gears, rope, cloth and more; supply crates now drop scrap too
+- Loot containers to search with E: toolboxes, medical boxes, military crates and clothes racks. They fill up again a few minutes after you empty them
+- Guns are crafted from scrap parts (springs, pipes, SMG and rifle bodies) plus ingots; clothes and backpacks from cloth, rope and tarp
+- New Loot tab in the map editor; random arenas get containers and barrels
+
 ## 1.22.0
 - Your level, XP and skills are now saved and carry over to every game. RESET SKILLS gives every point back
 - Zombie levels: higher-level zombies have more health and damage and give more XP and coins

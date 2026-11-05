@@ -41,7 +41,7 @@ class WeaponDrops:
         return item
 
     def drop_item(self, player, it):
-        """Drop a backpack item (a pile, or a piece of armor) on the ground in front of player."""
+        """Drop an inventory item (a pile, armor, or clothing with whatever's in it) on the ground in front of player."""
         fwd = player.forward()
         flat = Vec3(fwd.x, 0, fwd.z).normalized() if (fwd.x or fwd.z) else Vec3(0, 0, 1)
         pos = Vec3(player.position.x, 0, player.position.z) + flat * 1.0
@@ -90,15 +90,20 @@ class WeaponDrops:
         item = item or self.nearest(player.position)
         if item is None or player.downed or player.dead:
             return False
-        if 'item' in item['pack']:                           # a backpack item
+        if 'item' in item['pack']:                           # an inventory item
             it = item['pack']['item']
-            if 'dur' in it:
-                ok = player.inventory.put_back(dict(it, x=0, y=0))
-                left = 0 if ok else 1
+            inv = player.inventory
+            slot = inv.slot_for(it['id'])
+            if slot is not None and inv.equipped.get(slot) is None:      # clothing / armor: put it straight on
+                inv.equipped[slot] = it
+                inv.changed()
+                left = 0
+            elif it['n'] == 1 or 'dur' in it or 'contents' in it:      # keep durability / what's inside
+                left = 0 if inv.put_back(it) else it['n']
             else:
-                left = player.inventory.add(it['id'], it['n'])
-            if left >= it['n'] or (left and 'dur' in it):
-                g.ui.banner('BACKPACK FULL', '#d9912b', 1.4, 'Make room first (press I)')
+                left = inv.add(it['id'], it['n'])
+            if left >= it['n']:
+                g.ui.banner('NO ROOM', '#d9912b', 1.4, 'Make room first (press I), or wear something with more pockets')
                 g.sounds.play('deny')
                 return False
             if left:                                         # only some of the pile fitted

@@ -9,8 +9,9 @@
 #    yields    resources you get in total, handed out a bit with every hit
 #    rock      colours of the rock, ore = colours of the ore chunks in it
 #    weight    how often it spawns compared to the others
-#    loot      breakable crates: (resource, min, max, chance) rolled when it breaks
-#              (crates can be shot as well as hit, and give nothing until they break)
+#    loot      breakables (crates, barrels): the loot table (data/loot.py) rolled when it breaks;
+#              what was inside is left in a sack you open with E. They can be shot as well as hit,
+#              and give nothing until they break
 # ─────────────────────────────────────────────────────────────────────────────
 
 from .items import ITEMS
@@ -32,12 +33,12 @@ NODE_TYPES = {
     # chopped rather than mined: the Fire Axe is fastest (its `chop` in weapons.py)
     'logs': dict(name='Log pile', hp=140, yields={'wood': 30}, weight=4, wood=True,
                  rock=['#6e5233', '#634a2e', '#7a5b39'], ore=['#cdb083', '#c4a574', '#d8bd92']),
-    # supply crates: smash or shoot them open for a random handful of crafting resources
-    'crate': dict(name='Supply crate', hp=60, yields={}, weight=1.5, wood=True, crate=True,
-                  loot=[('wood', 6, 14, 1.0), ('stone', 4, 10, 0.6), ('coal', 3, 8, 0.6), ('iron', 3, 9, 0.5),
-                        ('copper', 3, 8, 0.4), ('iron_ingot', 1, 3, 0.25), ('copper_ingot', 1, 3, 0.2),
-                        ('crystal', 1, 2, 0.12)],
+    # supply crates: smash or shoot them open for a random handful of resources and scrap
+    'crate': dict(name='Supply crate', hp=60, yields={}, weight=1.5, wood=True, crate=True, loot='supply',
                   rock=['#9a7448', '#8a6a40', '#a87e50'], ore=['#4a4e55', '#3a3d42', '#5b6067']),
+    # barrels: Rust-style scrap (springs, pipes, gears...) for crafting guns and gear
+    'barrel': dict(name='Barrel', hp=40, yields={}, weight=2.5, crate=True, barrel=True, loot='barrel',
+                   rock=['#3f6a8a', '#a8322d', '#4f5a3a'], ore=['#2a2c30', '#3a3d42', '#c8a028']),
 }
 
 MINE_DAMAGE = 20            # mining done by one swing of a weapon with gather=1
@@ -51,6 +52,15 @@ def draw_node(lp, kind):
     t = NODE_TYPES[kind]
     rnd = lp.rnd
     rock, ore = t['rock'], t['ore']
+    if t.get('barrel'):                    # an oil drum in one of three paints
+        body = rnd.choice(rock)
+        lp.cylinder((0, 0, 0), 0.34, 0.92, body, sides=12)
+        for y in (0.3, 0.62):                                           # the ribs round the drum
+            lp.cylinder((0, y, 0), 0.355, 0.04, ore[0], sides=12)
+        lp.cylinder((0, 0.92, 0), 0.3, 0.015, ore[1], sides=12)          # the lid
+        lp.cylinder((0.16, 0.935, 0.05), 0.045, 0.03, ore[0], sides=6)   # the bung
+        lp.box((0, 0.48, 0.345), (0.26, 0.18, 0.01), ore[2])             # a hazard label
+        return
     if t.get('crate'):                     # a banded wooden supply crate
         lp.box((0, 0.42, 0), (0.86, 0.84, 0.86), rock[0], top=rock[2])
         for y in (0.08, 0.76):

@@ -8,7 +8,7 @@ import random
 from ursina import Vec3, camera
 from .net import PlayerInput, new_id
 from .data.items import ITEMS
-from .data.items import USE_MOVE_MULT
+from .data.items import HEAVY, USE_MOVE_MULT, default_weight, speed_for_weight
 from .inventory import Inventory, ResourceView, total_protection
 from .data.barricades import BARRICADES
 
@@ -101,6 +101,25 @@ class Player:
         """How much less damage this player takes: Plating upgrades plus worn armor that isn't broken."""
         return total_protection(self.base_armor, self.inventory)
 
+    def carried_weight(self):
+        """kg you carry: your inventory, what you wear and the weapons in your hands."""
+        kg = self.inventory.weight()
+        weapons = getattr(self.game, 'weapons', None)
+        if weapons is not None and getattr(weapons, 'owner', None) is self:
+            kg += sum(default_weight('w_' + d['id']) for d in weapons.slots.values()
+                      if d is not None and 'w_' + d['id'] in ITEMS)
+        return kg
+
+    def weight_speed(self):
+        """How much your load slows you down (1 = not at all). Worked out 4 times a second."""
+        import time
+        now = time.perf_counter()
+        if now - getattr(self, '_kg_t', -1.0) > 0.25:
+            self._kg_t = now
+            self.kg = self.carried_weight()
+            self._kg_speed = speed_for_weight(self.kg)
+        return self._kg_speed
+
     def _inv_changed(self):
         if self.is_local and getattr(self.game, 'ui', None) is not None:
             self.game.ui.inventory_changed()
@@ -113,7 +132,7 @@ class Player:
             import time
             if time.time() - t > 3:
                 self._full_t = time.time()
-                g.ui.banner('BACKPACK FULL', '#d9912b', 1.6, f"{lost} {ITEMS[item_id]['name']} didn't fit (press I)")
+                g.ui.banner('NO ROOM', '#d9912b', 1.6, f"{lost} {ITEMS[item_id]['name']} didn't fit (press I: wear clothes with more pockets)")
 
     def eye(self):
         return Vec3(self.position.x, self.position.y + self.eye_height, self.position.z)
@@ -191,7 +210,14 @@ class Player:
         weapons = getattr(self.game, 'weapons', None)
         held = weapons.d.get('move_mult', 1) if weapons and weapons.held else 1
         busy = USE_MOVE_MULT if self.using is not None else 1
-        return 5.6 * self.speed_mult * held * busy * (1.5 if self.buffs.get('adrenaline', 0) > 0 else 1)
+        load = self.weight_speed()
+        return 5.6 * self.speed_mult * held * busy * load * (1.5 if self.buffs.get('adrenaline', 0) > 0 else 1)
+
+    @property
+    def overloaded(self):
+        """Carrying more than HEAVY kg: no sprinting."""
+        self.weight_speed()
+        return self.kg > HEAVY
 
     @property
     def sliding(self):
@@ -228,7 +254,7 @@ class Player:
         sin, cos = math.sin(yr), math.cos(yr)
         wx = fz * sin + fx * cos
         wz = fz * cos - fx * sin
-        sprinting = inp.sprint and fz > 0 and not inp.crouch
+        sprinting = inp.sprint and fz > 0 and not inp.crouch and not self.overloaded
         flat_speed = math.hypot(self.vel.x, self.vel.z)
 
         # slide: crouch while sprinting fast

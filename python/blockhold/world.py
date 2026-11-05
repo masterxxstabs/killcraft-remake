@@ -94,6 +94,7 @@ class World:
         self.zombie_spawns = []
         self.ore_spawns = []              # (position, ore kind or 'random') from map markers
         self.benches = []                 # workbench positions
+        self.loot_spots = []              # loot container props (toolboxes, crates...: loot.py fills them)
         self.animal_spawns = []           # (position, animal kind or 'random') from spawner markers
         self.npcs = []                    # NPC props (their 'data' says who they are; npcs.py brings them to life)
         self.zones = {}                   # zone kind ('level', 'encounter', 'safe', 'extraction') -> [props]
@@ -314,6 +315,8 @@ class World:
             self.graves.append(p)
         if a.get('station') == 'workbench':
             self.benches.append(Vec3(x, 0, z))
+        if a.get('loot'):
+            self.loot_spots.append(p)
         if a.get('light') and not self.editor:
             self.prop_lights.append((p, a['light']))
         return p
@@ -348,6 +351,8 @@ class World:
             self.graves.remove(p)
         if a.get('station') == 'workbench':
             self.benches = [b for b in self.benches if (b.x, b.z) != (p['x'], p['z'])]
+        if p in self.loot_spots:
+            self.loot_spots.remove(p)
         self.prop_lights = [pl for pl in self.prop_lights if pl[0] is not p]
 
     # ── zones ────────────────────────────────────────────────────────────────
@@ -660,6 +665,17 @@ class World:
             if fires < many(2, 20) and self.free(gx, gz, 1, paths_ok=False):
                 self.add_prop('campfire', gx - self.half + 0.5, gz - self.half + 0.5, r() * 360)
                 fires += 1
+        from .data.loot import CONTAINERS, RANDOM_CONTAINERS
+        kinds = ['toolbox', 'toolbox', 'medical', 'clothes', 'military']
+        placed = 0
+        for _ in range(many(RANDOM_CONTAINERS * 8, 1600)):      # loot containers to scavenge
+            if placed >= many(RANDOM_CONTAINERS, 200):
+                break
+            gx, gz = rand_cell(4)
+            if self.free(gx, gz, 1, paths_ok=False):
+                kind = kinds[int(r() * len(kinds))]
+                self.add_prop(CONTAINERS[kind]['asset'], gx - self.half + 0.5, gz - self.half + 0.5, int(r() * 2) * 180)
+                placed += 1
         path_cells = sorted(self.paths)
         lamps = 0
         for _ in range(many(60, 900)):            # lamp posts beside the tracks
@@ -681,15 +697,15 @@ class World:
                               r() * 360, 0.85 + r() * 0.35)
 
     POI = [   # little scenes dropped around big random arenas: (asset, x, z, turn) around a centre
-        [('house', 0, 0, 0), ('fence', -3, 3, 0), ('fence', -2, 3, 0), ('barrel', 3, -2, 0), ('crate', 3, -3, 0)],
+        [('house', 0, 0, 0), ('fence', -3, 3, 0), ('fence', -2, 3, 0), ('loot_clothes', 3, -2, 90), ('crate', 3, -4, 0)],
         [('ruin', 0, 0, 0), ('rubble', 2, 2, 0), ('rubble', -2, -1, 0), ('dead_tree', 3, -2, 0)],
         [('tent', 0, 0, 0), ('tent', 3, 1, 90), ('campfire', 1.5, -2, 0), ('log_pile', -2, -2, 0), ('crate', -2, 1, 0)],
         [('tower', 0, 0, 0), ('sandbags', 2, 2, 0), ('sandbags', -2, 2, 0), ('crate', 2, -1, 0)],
         [('cabin', 0, 0, 0), ('well', 4, 0, 0), ('hay_bale', -3, 2, 0), ('hay_bale', -3, 3, 0)],
-        [('car_wreck', 0, 0, 30), ('car_wreck', 3, 2, 200), ('barrel', -2, 1, 0), ('rubble', 1, -2, 0)],
+        [('car_wreck', 0, 0, 30), ('car_wreck', 3, 2, 200), ('loot_toolbox', -2, 1, 0), ('rubble', 1, -2, 0)],
         [('market_stall', 0, 0, 0), ('market_stall', 3, 0, 0), ('bench', 1.5, 3, 0), ('lamp_post', -2, 2, 0)],
         [('military_tent', 0, 0, 0), ('sandbag_wall', 0, 4, 0), ('ammo_crate', 4, -2, 0), ('burning_barrel', 3, 2, 0),
-         ('loot_crate', -4, 2, 0)],
+         ('loot_crate', -4, 2, 0), ('loot_military', 0, -4, 0)],
         [('sedan', 0, 0, 20), ('police_car', 1, 4, 170), ('street_light', 4, -2, 0), ('trash_can', -3, -2, 0),
          ('road_barrier', -3, 3, 90)],
     ]

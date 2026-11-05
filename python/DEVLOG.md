@@ -4,6 +4,21 @@ What changed in each version, and why. The newest entry is first. Each entry sta
 `## version | date | title`; the text under it is shown on the DEVLOG tab of the main menu.
 Lines starting with "- " become bullet points.
 
+## 1.23.0 | 2026-11-05 | What you wear is what you carry
+The second step towards the extraction mode. The old backpack was a big 10 by 7 grid that everybody had from the start, so you never had to choose what to take. Now your inventory is made of what you wear. You start with a T-shirt and jeans: four pockets and a couple of small grids, and that's it.
+
+Every piece of clothing adds a grid of its own: a hoodie, a field jacket, cargo pants, a chest rig, and four backpacks from a small satchel up to a 6 by 6 military pack. Backpacks are real things. Take one off, or drop it on the ground, and everything inside goes with it. Pick it up again and it's all still there. That's what extraction needs: when you go down in a raid, your bag stays where you fell.
+
+Everything weighs something now, guns included. Up to 25 kg you move at full speed. Past that you slow down, and past 40 kg you can't sprint. The total is in the corner of the inventory screen, and the HUD warns you when you're heavy.
+
+Loot works like Rust now. Barrels break when you hit or shoot them and leave a sack of scrap parts: springs, pipes, gears, rope, cloth, tarp, sheet metal. Toolboxes, medical boxes, military crates and clothes racks open with E, and you drag what you want into your clothes. An emptied container fills up again a few minutes later, but never while someone is close enough to see it happen.
+
+Those parts are what you craft with. A gun needs springs, a pipe for the barrel and, for the bigger ones, an SMG or rifle body from a military crate, plus a few ingots from the furnace. Clothes and backpacks are sewn from cloth, rope and tarp, and bandages from cloth.
+
+The editor has a new Loot tab with all of it, and random arenas get containers and barrels too.
+
+Coming next: the extraction loop itself. Raids, extracting with what you found, a stash in the hideout, and a banker who keeps your items safe for every merchant down there.
+
 ## 1.22.0 | 2026-11-05 | Building towards extraction
 This is the first step towards a much bigger goal: an open-world extraction mode, played with friends. We're building it in stages, and this update brings the map-making tools you need to set it up.
 
