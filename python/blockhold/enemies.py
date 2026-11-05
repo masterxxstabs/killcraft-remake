@@ -6,6 +6,7 @@ import random
 from panda3d.core import NodePath, Point3, Vec3 as PVec3
 from ursina import Vec3, application
 from .data.enemies import ENEMIES
+from .data.zones import level_scale
 from .render import box_mesh
 from .textures import zombie_skin
 from .net import new_id
@@ -142,7 +143,7 @@ def _gear(d, extras, static, head):
 
 
 class Enemy:
-    def __init__(self, game, kind, wave, pos):
+    def __init__(self, game, kind, wave, pos, level=None):
         d = ENEMIES[kind]
         self.game, self.kind, self.d = game, kind, d
         self.id = new_id()
@@ -154,6 +155,14 @@ class Enemy:
         self.speed = d['speed'] * wave['speed_mult'] * (0.9 + random.random() * 0.2)
         self.damage = d['damage'] * wave['damage_mult']
         self.coin_mult = wave['coin_mult']
+        self.level = max(1, level or 1)       # from a level zone or a zombie grave (data/zones.py)
+        hp_k, dmg_k, spd_k, self.reward = level_scale(self.level)
+        self.max_hp = round(self.max_hp * hp_k)
+        self.hp = self.max_hp
+        self.damage *= dmg_k
+        self.speed *= spd_k
+        self.coin_mult *= self.reward
+        self.wave_member = True               # False = not part of the wave (random encounters)
         self.scale = d['scale']
         self.radius = 0.35 * self.scale
         self.height = 2 * self.scale
@@ -708,8 +717,9 @@ class Enemy:
                 a, r = random.random() * math.tau, 3 + random.random() * 3
                 x, z = self.position.x + math.cos(a) * r, self.position.z + math.sin(a) * r
                 if g.world.height_at(x, z) == 0 and abs(x) < g.world.half - 1 and abs(z) < g.world.half - 1:
-                    g.enemies.spawn('shambler', g.wave, Vec3(x, 0, z))
-                    g.remaining += 1                       # (the wave isn't over until these are dead too)
+                    g.enemies.spawn('shambler', g.wave, Vec3(x, 0, z), level=self.level, wave_member=self.wave_member)
+                    if self.wave_member:
+                        g.remaining += 1                   # (the wave isn't over until these are dead too)
                     break
         g.events.emit('zombie_scream', enemy=self)
 
@@ -940,8 +950,12 @@ class EnemyManager:
         self.grid = {}
         self.clouds = []            # toxic clouds left by Bloaters: dict(pos, r, t, dps, tick)
 
-    def spawn(self, kind, wave, pos):
-        e = Enemy(self.game, kind, wave, pos)
+    def spawn(self, kind, wave, pos, level=None, wave_member=True):
+        """A new zombie at pos. Without a level it gets the level of the zone it spawns in (if any)."""
+        if level is None:
+            level = self.game.world.zombie_level(pos.x, pos.z)
+        e = Enemy(self.game, kind, wave, pos, level)
+        e.wave_member = wave_member
         self.list.append(e)
         return e
 

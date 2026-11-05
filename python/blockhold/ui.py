@@ -472,6 +472,13 @@ class UI:
             Entity(parent=self.hit, model='quad', color=C(k['cross']), scale=(0.042, 0.004), rotation_z=r)
         self.reload_back = box(cross, -0.04, -0.04, 0.08, 0.008, P, z=0.001)
         self.reload_fill = box(cross, -0.04, -0.04, 0.08, 0.008, AC, round=False)
+        # what you're aiming at: name, level and health
+        self.target_box = Entity(parent=cross, enabled=False)
+        box(self.target_box, -0.11, -0.058, 0.22, 0.05, P, z=0.003)
+        self.target_name = text(self.target_box, '', 0, -0.07, 0.72, FG, origin=(0, 0), z=-0.01)
+        box(self.target_box, -0.1, -0.088, 0.2, 0.01, NAVY, z=0.001, round=False)
+        self.target_fill = box(self.target_box, -0.1, -0.088, 0.2, 0.01, k['health'], round=False)
+        self._target_t = 0.0
 
         # top left: wave
         w_ = el['wave']
@@ -716,6 +723,26 @@ class UI:
             self.build_accent.color = C(colour)
             self.build_sub.color = C('#ff8a80' if why else '#aeb3c4')
 
+    def update_target(self, dt):
+        """Name, level and health of the zombie under the crosshair (checked 10 times a second)."""
+        self._target_t -= dt
+        if self._target_t > 0:
+            return
+        self._target_t = 0.1
+        g = self.game
+        e = None
+        if g.state == 'playing' and not g.shop_open:
+            eye, fwd = Vec3(camera.world_position), Vec3(camera.forward)
+            wall = g.world.raycast(eye, fwd, 60)
+            hits = g.enemies.raycast(eye, fwd, wall)
+            e = hits[0][1] if hits else None
+        self.target_box.enabled = e is not None
+        if e is None:
+            return
+        name = e.d['name'] + (f'   LV {e.level}' if e.level > 1 else '')
+        self.set_text(self.target_name, name)
+        self.target_fill.scale_x = max(0.0001, 0.2 * clamp01(e.hp / e.max_hp))
+
     @staticmethod
     def med_line(p):
         """'H  heal: 2 bandages, 1 medkit' over the health bar (empty when you have none)."""
@@ -741,6 +768,7 @@ class UI:
         self.stam_fill.enabled = st < 1
         self.stam_fill.scale_x = max(0.0001, 0.375 * st)
         self.stam_fill.color = C('#7fd4ff' if st > 0 else '#ff8a5a')
+        self.update_target(dt)
         med = self.med_line(p)
         self.set_text(self.med_text, med)
         self.med_box.enabled = bool(med)

@@ -46,6 +46,29 @@ def prototype(aid, variant=0):
     return _protos[key]
 
 
+_rings = {}
+
+
+def zone_ring(radius, colour):
+    """A flat coloured ring on the ground (shared mesh per radius and colour)."""
+    key = (round(radius, 1), colour)
+    if key not in _rings:
+        lp = LowPoly(seed=3, variation=0.0)
+        n = max(24, min(120, int(radius * 4)))
+        w = 0.18 if radius < 30 else 0.35
+        for i in range(n):
+            a0, a1 = i / n * math.tau, (i + 1) / n * math.tau
+            pts = [(math.cos(a) * r, 0.07, math.sin(a) * r) for a, r in ((a0, radius - w), (a0, radius), (a1, radius),
+                                                                        (a1, radius - w))]
+            lp.quad(*pts, colour, (0, -1, 0))
+            if i % max(1, n // 12) == 0:                     # little posts so the edge reads from far away
+                lp.box((math.cos(a0) * radius, 0.25, math.sin(a0) * radius), (0.08, 0.5, 0.08), colour)
+        holder = NodePath('ring')
+        lp.mesh().reparentTo(holder)
+        _rings[key] = holder
+    return _rings[key]
+
+
 def rotate_cell(dx, dz, rot):
     """Rotate a footprint offset the same way the model turns (Ursina rotation_y)."""
     a = math.radians(round(rot / 90) * 90)
@@ -73,6 +96,8 @@ class World:
         self.benches = []                 # workbench positions
         self.animal_spawns = []           # (position, animal kind or 'random') from spawner markers
         self.npcs = []                    # NPC props (their 'data' says who they are; npcs.py brings them to life)
+        self.zones = {}                   # zone kind ('level', 'encounter', 'safe', 'extraction') -> [props]
+        self.graves = []                  # zombie grave props (they can have a set zombie level)
         self.random_arena = map_data is None
         self.rnd = random.Random(seed).random
         self.atlas = Atlas(tile=32)
@@ -242,6 +267,9 @@ class World:
         if a.get('npc'):
             from .data.npcs import fill_npc
             p['data'] = fill_npc(data or dict(role=a['npc']))
+        elif a.get('fields'):                         # markers with settings (zones, graves)
+            from .data.zones import fill_fields
+            p['data'] = fill_fields(a['fields'], data)
         if a.get('npc') and self.editor:              # the editor shows the NPC as they'll look
             from .npcs import npc_model
             np = self.props_root.attachNewNode(aid)
@@ -278,6 +306,12 @@ class World:
             self.animal_spawns.append((Vec3(x, 0, z), a['animal']))
         if a.get('npc'):
             self.npcs.append(p)
+        if a.get('zone'):
+            self.zones.setdefault(a['zone'], []).append(p)
+            if self.editor or a['zone'] == 'safe':        # (safe zones show their edge in the game too)
+                self.draw_ring(p)
+        if a.get('spawn') == 'zombie':
+            self.graves.append(p)
         if a.get('station') == 'workbench':
             self.benches.append(Vec3(x, 0, z))
         if a.get('light') and not self.editor:
@@ -305,9 +339,52 @@ class World:
             self.animal_spawns = [s for s in self.animal_spawns if (s[0].x, s[0].z) != (p['x'], p['z'])]
         if a.get('npc') and p in self.npcs:
             self.npcs.remove(p)
+        if a.get('zone') and p in self.zones.get(a['zone'], []):
+            self.zones[a['zone']].remove(p)
+        if p.get('ring') is not None:
+            p['ring'].removeNode()
+            p['ring'] = None
+        if p in self.graves:
+            self.graves.remove(p)
         if a.get('station') == 'workbench':
             self.benches = [b for b in self.benches if (b.x, b.z) != (p['x'], p['z'])]
         self.prop_lights = [pl for pl in self.prop_lights if pl[0] is not p]
+
+    # ── zones ────────────────────────────────────────────────────────────────
+    def draw_ring(self, p):
+        """The zone's edge, as a coloured ring on the ground (redrawn when its radius changes)."""
+        from .data.zones import ZONE_COLOURS
+        if p.get('ring') is not None:
+            p['ring'].removeNode()
+        kind = ASSETS[p['id']]['zone']
+        ring = self.props_root.attachNewNode('zone_ring')
+        ring.setPos(p['x'], 0, p['z'])
+        zone_ring(p['data'].get('radius', 5), ZONE_COLOURS.get(kind, '#ffffff')).copyTo(ring)
+        p['ring'] = ring
+
+    def zone_at(self, kind, x, z):
+        """The smallest zone of this kind that covers (x, z), or None."""
+        best = None
+        for p in self.zones.get(kind, []):
+            r = p['data'].get('radius', 0)
+            if (p['x'] - x) ** 2 + (p['z'] - z) ** 2 <= r * r and (best is None or r < best['data']['radius']):
+                best = p
+        return best
+
+    def zombie_level(self, x, z):
+        """The level a zombie spawning at (x, z) gets: a grave's own level, else the level zone's, else None."""
+        for g in self.graves:
+            lv = g.get('data', {}).get('level', 0)
+            if lv and (g['x'] - x) ** 2 + (g['z'] - z) ** 2 < 2.5:
+                return lv
+        zone = self.zone_at('level', x, z)
+        if zone is None:
+            return None
+        lo, hi = zone['data']['min_level'], zone['data']['max_level']
+        return random.randint(min(lo, hi), max(lo, hi))
+
+    def in_safe_zone(self, x, z):
+        return self.zone_at('safe', x, z) is not None
 
     def set_dynamic_solid(self, gx, gz, h):
         """Make a cell solid up to height h (0 = back to normal) for things that come and go, like ore nodes."""

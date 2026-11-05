@@ -4,6 +4,19 @@ What changed in each version, and why. The newest entry is first. Each entry sta
 `## version | date | title`; the text under it is shown on the DEVLOG tab of the main menu.
 Lines starting with "- " become bullet points.
 
+## 1.22.0 | 2026-11-05 | Building towards extraction
+This is the first step towards a much bigger goal: an open-world extraction mode, played with friends. We're building it in stages, and this update brings the map-making tools you need to set it up.
+
+The editor has a new Zones tab. Level zones decide how tough the zombies are in each part of the map: a quiet field at level 1, a military base at level 15. Random encounter zones can throw a group of zombies at you when you walk in. Safe zones keep zombies out, and later they'll keep other players' bullets out too. Extraction points mark where you'll leave a raid with your loot. Every zone shows its size as a coloured ring, and placing one opens its settings.
+
+Zombies have levels now. Each level adds health and damage, and gives more XP and coins. Aim at one to see its name, level and health.
+
+Your character is persistent: level, XP and skills carry over from game to game. If you want to rebuild, RESET SKILLS on the skill screen gives every point back.
+
+There's also a new Hideout tab with 24 underground tunnel pieces, for building the base you'll come home to between raids: tunnels, blast doors, a bank counter with a vault door, merchant stalls, bunks, lockers and lamps.
+
+Coming next: Rust-style scrap loot from barrels and crates, clothing that decides how much you can carry, physical backpacks, and weight.
+
 ## 1.21.1 | 2026-11-04 | Welcome to the devlog
 This tab is new. The changelog lists what changed in a few words; the devlog explains why. Every update from now on gets an entry here, and we've written up all the old ones too, back to the very first version, so you can see how the game got to where it is.
 

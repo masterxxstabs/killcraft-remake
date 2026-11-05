@@ -1,8 +1,11 @@
 """Levels, XP, skill points and the class you picked (see data/classes.py).
 
-Each player has their own level, XP and skills for this run (player.level, .xp,
-.skill_points, .skills). XP comes from kills (the zombie's score), cleared waves and
-NPC jobs. Every level is a skill point; spend them in the skill tree (K).
+Each player has their own level, XP and skills (player.level, .xp, .skill_points,
+.skills). They're saved in your profile (save.json, 'profile') and carry over from
+game to game. XP comes from kills (the zombie's score), cleared waves and NPC jobs.
+Every level is a skill point; spend them in the skill tree (K). Skills in another
+class's column stay learned but only work while you play that class. RESET SKILLS
+gives every point back.
 Events: xp_gained, level_up, skill_bought.
 """
 from .data.classes import (CLASSES, DEFAULT_CLASS, MAX_LEVEL, SKILLS, XP_QUEST, XP_SHOVE_KILL, XP_WAVE, tree_for,
@@ -18,11 +21,42 @@ class Progression:
 
     # ── starting a run ───────────────────────────────────────────────────────
     def start(self, player, cls_id):
-        """Fresh level 1 character of class cls_id (call right after player.reset())."""
+        """Load your character (level, XP, skills) for a game as class cls_id (call right after player.reset())."""
         cls_id = cls_id if cls_id in CLASSES else DEFAULT_CLASS
         player.cls = cls_id
-        player.level, player.xp, player.skill_points, player.skills = 1, 0, 0, {}
+        prof = self.profile()
+        player.level = max(1, min(MAX_LEVEL, int(prof.get('level', 1))))
+        player.xp = max(0, int(prof.get('xp', 0)))
+        player.skill_points = max(0, int(prof.get('points', 0)))
+        player.skills = {k: v for k, v in prof.get('skills', {}).items() if k in SKILLS}
         CLASSES[cls_id]['apply'](player)
+        for sid, rank in player.skills.items():                     # learned skills that work for this class
+            if self.active(player, sid):
+                for _ in range(min(rank, SKILLS[sid]['ranks'])):
+                    SKILLS[sid]['apply'](player)
+
+    def profile(self):
+        return self.game.save.setdefault('profile', dict(level=1, xp=0, points=0, skills={}))
+
+    def store(self, player):
+        """Write the local player's character into the profile and save it to disk."""
+        if not getattr(player, 'is_local', False):
+            return
+        self.game.save['profile'] = dict(level=player.level, xp=player.xp, points=player.skill_points,
+                                         skills=dict(player.skills))
+        self.game.save_progress()
+
+    def active(self, player, sid):
+        s = SKILLS.get(sid)
+        return s is not None and (s['branch'] != 'class' or s.get('cls') == player.cls)
+
+    def reset_skills(self, player):
+        """Give back every point (the stats go back when the next game starts)."""
+        spent = sum(player.skills.values())
+        player.skill_points += spent
+        player.skills = {}
+        self.store(player)
+        return spent
 
     # ── XP ───────────────────────────────────────────────────────────────────
     def add_xp(self, player, amount, why=''):
@@ -36,6 +70,7 @@ class Progression:
             player.level += 1
             player.skill_points += 1
             self.game.events.emit('level_up', player=player, level=player.level)
+            self.store(player)
             if getattr(player, 'is_local', False):
                 self.game.sounds.play('powerup')
                 self.game.ui.banner(f'LEVEL {player.level}', '#ffd84a', 2.2, 'Skill point ready: press K')
@@ -46,7 +81,7 @@ class Progression:
         if enemy is None:
             return
         owner = getattr(attacker, 'owner', attacker) or self.game.player
-        xp = enemy.d.get('score', 10)
+        xp = enemy.d.get('score', 10) * getattr(enemy, 'reward', 1)      # higher-level zombies give more
         if getattr(enemy, 'was_shoved', False):
             xp += XP_SHOVE_KILL
         self.add_xp(owner, xp, 'kill')
@@ -92,6 +127,7 @@ class Progression:
         player.skill_points -= 1
         player.skills[sid] = self.rank(player, sid) + 1
         SKILLS[sid]['apply'](player)
+        self.store(player)
         self.game.sounds.play('buy')
         self.game.events.emit('skill_bought', player=player, skill=sid, rank=player.skills[sid])
         return True

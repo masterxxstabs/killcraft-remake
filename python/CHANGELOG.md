@@ -3,6 +3,14 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.22.0
+- Your level, XP and skills are now saved and carry over to every game. RESET SKILLS gives every point back
+- Zombie levels: higher-level zombies have more health and damage and give more XP and coins
+- Map editor Zones tab: zombie level zones, random encounter zones, safe zones and extraction points, each with a ring showing its size
+- Settings panel for placed markers (Ctrl+click, N): zone sizes, levels, encounter chance and group, and a level for each zombie grave
+- Aim at a zombie to see its name, level and health
+- New Hideout tab: 24 underground tunnel pieces, from tunnels and blast doors to a bank counter, vault door, merchant stall and lamps
+
 ## 1.21.1
 - New DEVLOG tab on the main menu: what changed in each version and why, back to 1.0.0
 - The tab says NEW when there's an entry you haven't read

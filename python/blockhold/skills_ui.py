@@ -40,6 +40,11 @@ class SkillScreen:
             self.ui.kill_feed(f"Learned {SKILLS[sid]['name']} ({self.game.player.skills[sid]}/{SKILLS[sid]['ranks']})")
         self.refresh()
 
+    def reset(self):
+        n = self.game.progress.reset_skills(self.game.player)
+        self.ui.banner('SKILLS RESET', '#d9912b', 2.0, f'{n} points back. The old skills wear off next game.')
+        self.refresh()
+
     def refresh(self):
         if not self.active:
             return
@@ -90,7 +95,8 @@ class SkillScreen:
                     U.box(b, cx + 0.012 + i * 0.022, ny - 0.036, 0.016, 0.007,
                           'AMBER' if i < rank else 'LINE', z=-0.03, round=False)
                 U.text(b, s['desc'], cx + 0.012, ny - 0.05, 0.58, tc, wordwrap=40, z=-0.03)
-        U.text(b, 'Click a skill to spend a point. Each one opens the next in its column. '
-                  'Level up by killing zombies, clearing waves and doing NPC jobs.',
+        U.text(b, 'Click a skill to spend a point. Each one opens the next in its column. Your level and skills '
+                  'are saved and carry over to every game; other classes\' skills only work as that class.',
                x0, win.btn_y + 0.03, 0.66, 'MUTED', wordwrap=110)
+        U.FlatButton(b, 'RESET SKILLS', x0, win.btn_y, 0.22, U.BTN_H, self.reset, fill='RED', edge='INK', size=0.9)
         U.FlatButton(b, 'CLOSE  (K)', x0 + 1.24 - 0.26, win.btn_y, 0.26, U.BTN_H, self.game.close_shop)

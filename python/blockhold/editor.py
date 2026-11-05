@@ -183,7 +183,8 @@ class Editor:
             for old in [q for q in self.world.props if ASSETS[q['id']].get('spawn') == 'player']:
                 self.world.remove_prop(old)
         q = self.world.add_prop(self.asset, x, z, rot, scale, self.tilt, self.roll)
-        if q is not None and ASSETS[self.asset].get('npc'):     # a new NPC: open their panel straight away
+        if q is not None and (ASSETS[self.asset].get('npc') or ASSETS[self.asset].get('fields')) \
+                and ASSETS[self.asset].get('spawn') != 'zombie':     # a new NPC or zone: open its settings straight away
             self.painting = False
             self.open_npc_panel(q)
         return True
@@ -236,7 +237,7 @@ class Editor:
                     jitter = Vec3((random.random() - 0.5) * 0.6, 0, (random.random() - 0.5) * 0.6)
                     if self.place_prop(p + (jitter if not first else Vec3(0, 0, 0))):
                         self.last_scatter = Vec3(p)
-            elif first or (cell != self.last_cell and len(a['solid']) <= 1 and not a.get('npc')):
+            elif first or (cell != self.last_cell and len(a['solid']) <= 1 and not a.get('npc') and not a.get('zone')):
                 # small props can be drawn in lines (fences, walls, hedges); big ones need a click each
                 self.place_prop(p, random_look=False)
                 self.last_cell = cell
@@ -470,7 +471,7 @@ class Editor:
             self.turn(0, 15 if key == 't' else -15, 0)
         elif key in ('y', 'h'):                          # roll left / right
             self.turn(0, 0, 15 if key == 'y' else -15)
-        elif key == 'n' and self.selected is not None and ASSETS[self.selected['id']].get('npc'):
+        elif key == 'n' and self.selected is not None and self.selected.get('data') is not None:
             self.open_npc_panel(self.selected)
         elif key == 'delete' and self.selected is not None:
             self.push_undo()
@@ -562,16 +563,28 @@ class Editor:
                                          ('90°', lambda: self.turn(90, 0, 0, snap=True)),
                                          ('RESET', lambda: (self.set_turn(0, 0, 0), self.refresh_rot_panel())))):
             FlatButton(p, label, x0 + 0.02 + i * 0.082, by, 0.076, 0.036, fn, fill=SLATE, edge=INK, size=0.72)
-        if self.selected is not None and ASSETS[self.selected['id']].get('npc'):
+        if self.selected is not None and self.selected.get('data') is not None:
             q = self.selected
-            FlatButton(p, f"EDIT NPC  (N):  {q['data']['name']}", x0, top - 0.35, w, 0.05,
-                       lambda: self.open_npc_panel(q), fill=GREEN, edge=INK, size=0.8)
+            label = f"EDIT NPC  (N):  {q['data']['name']}" if ASSETS[q['id']].get('npc') else 'EDIT SETTINGS  (N)'
+            FlatButton(p, label, x0, top - 0.35, w, 0.05, lambda: self.open_npc_panel(q), fill=GREEN, edge=INK, size=0.8)
 
     # ── NPCs ─────────────────────────────────────────────────────────────────
     def open_npc_panel(self, q):
-        from .npc_editor import NpcEditor
+        """The settings panel for a placed thing: the NPC editor, or the settings of a zone / grave."""
         self.close_npc_panel()
         self.push_undo()
+        if not ASSETS[q['id']].get('npc'):
+            from .prop_editor import PropPanel
+            self.npc_panel = PropPanel(self, q)
+            self.dialog = self.npc_panel.root
+            if self.rot_panel is not None:
+                destroy(self.rot_panel)
+                self.rot_panel = None
+            r = q['data'].get('radius', 6)                    # step back far enough to see the whole zone
+            self.pivot = Vec3(q['x'] - r * 0.5, 0, q['z'])
+            self.dist = max(self.dist, min(self.max_zoom(), r * 2.6 + 8))
+            return
+        from .npc_editor import NpcEditor
         self.npc_panel = NpcEditor(self, q)
         self.dialog = self.npc_panel.root
         # look at the NPC's face, with them on the right of the screen (the panel covers the left)
@@ -592,6 +605,14 @@ class Editor:
             self.dialog = None
             self.dirty = True
             self.refresh_rot_panel()
+
+    def refresh_prop_visual(self, q):
+        """Redraw a placed thing after its settings changed (an NPC's look, a zone's ring)."""
+        if ASSETS[q['id']].get('npc'):
+            self.refresh_npc_model(q)
+        elif ASSETS[q['id']].get('zone'):
+            self.world.draw_ring(q)
+        self.dirty = True
 
     def refresh_npc_model(self, q):
         """Show an NPC in the map the way their settings say."""
@@ -689,7 +710,8 @@ class Editor:
                 continue
             on = cid == self.category and not self.eraser
             FlatButton(p, cname, bx, by, cw, 0.039, lambda c=cid: self.select_category(c), fill=INK if on else PAPER,
-                       edge=INK, fg=PAPER if on else INK, size=0.72, hover=0.15 if on else -0.06)
+                       edge=INK, fg=PAPER if on else INK, size=0.72 if len(cname) <= 10 else 0.58,
+                       hover=0.15 if on else -0.06)
         y -= ((len(cats) + 2) // 3) * 0.045 + 0.012
         if self.category == 'paths':
             items = [(k, n, self.path_kind == k) for k, n in PATHS.items()]

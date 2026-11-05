@@ -26,6 +26,7 @@ from .animals import Animals
 from .npcs import Npcs
 from .healing import Healing
 from .progression import Progression
+from .encounters import Encounters
 from .data.classes import CLASSES, DEFAULT_CLASS
 from .data.barricades import BARRICADES, MAX_CARRIED, PLACE_RANGE
 from .player import Player, REVIVE_TIME
@@ -147,6 +148,7 @@ class Game(Entity):
         self.npcs = Npcs(self)                  # traders, quest givers and talkers from the map
         self.healing = Healing(self)            # bandages, medkits and food take time to use
         self.progress = Progression(self)       # XP, levels, skills and your class
+        self.encounters = Encounters(self)      # random encounter zones from the map
         self.build_kind = None       # build mode: which barricade is being placed (None = not building)
         self.build_rot = 0
         self.build_spot = None
@@ -219,6 +221,8 @@ class Game(Entity):
         mouse._i = 0
 
     def quit(self):
+        if self.state in ('playing', 'paused', 'dead'):
+            self.progress.store(self.player)
         application.quit()
 
     # ── flow ─────────────────────────────────────────────────────────────────
@@ -273,6 +277,7 @@ class Game(Entity):
         self.mining.clear()
         self.animals.clear()
         self.npcs.clear()
+        self.encounters.clear()
         self.world.destroy()
         self.world = World(map_data=map_data, size=self.arena_size)
         self.sky_dome.set_arena(self.world.half)
@@ -296,6 +301,7 @@ class Game(Entity):
         self.show_cursor(False)
 
     def to_menu(self):
+        self.progress.store(self.player)            # keep the XP earned since the last level-up
         self.close_shop()
         self.clear_allies()
         self.powerups.clear()
@@ -735,13 +741,14 @@ class Game(Entity):
     def on_enemy_killed(self, e, headshot, attacker=None):
         attacker = attacker or self.player
         owner = getattr(attacker, 'owner', attacker)       # allies earn for the player who hired them
-        self.remaining -= 1
+        if getattr(e, 'wave_member', True):                 # (random encounters don't count towards the wave)
+            self.remaining -= 1
         d = e.d
         if attacker is not owner and hasattr(attacker, 'kills'):
             attacker.kills += 1                             # for the ally's line on the scoreboard
         if hasattr(owner, 'kills'):
             owner.kills += 1
-            owner.score += round(d['score'] * (1.5 if headshot else 1) * (1 + self.wave_number * 0.1))
+            owner.score += round(d['score'] * getattr(e, 'reward', 1) * (1.5 if headshot else 1) * (1 + self.wave_number * 0.1))
         self.events.emit('enemy_killed', enemy=e, attacker=attacker, headshot=headshot)
         lo, hi = d['coins']
         coins = round((lo + random.random() * (hi - lo)) * e.coin_mult * (1 + self.wave_number * 0.04)
@@ -757,6 +764,7 @@ class Game(Entity):
         self.ui.kill_feed(f"{'HEADSHOT ' if headshot else ''}{d['name']} +{coins}")
 
     def on_player_death(self, player=None):
+        self.progress.store(player or self.player)     # your level and XP are kept
         if player is not None and not player.is_local:
             return                       # (multiplayer: a team-mate went down)
         self.close_shop()                # the workbench can be open mid-wave
@@ -1131,7 +1139,12 @@ class Game(Entity):
                     self.spawn_t = self.wave['spawn_interval'] * (0.6 + random.random() * 0.8)
                     kind = self.spawn_queue.pop(0)
                     near = random.choice([q for q in self.players if not q.dead] or self.players)
-                    self.enemies.spawn(kind, self.wave, self.world.random_spawn(near.position))
+                    spot = self.world.random_spawn(near.position)
+                    for _ in range(6):                          # never inside a safe zone
+                        if not self.world.in_safe_zone(spot.x, spot.z):
+                            break
+                        spot = self.world.random_spawn(near.position)
+                    self.enemies.spawn(kind, self.wave, spot)
                     if kind == BOSS:
                         self.sounds.play('boss_roar')
                         self.shake(0.4)
@@ -1149,5 +1162,6 @@ class Game(Entity):
             self.animals.update(dt)
             self.npcs.update(dt)
             self.healing.update(dt)
+            self.encounters.update(dt)
         self.drops.update(dt)
         self.ui.update(dt)

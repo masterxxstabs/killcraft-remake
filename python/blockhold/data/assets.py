@@ -26,7 +26,13 @@
 #    light      a light it gives off: dict(colour=(r, g, b), radius, strength, at=(x, y, z), flicker)
 #    animal     a spawner: animals of this kind live here ('random' or a kind from animals.py)
 #    npc        an NPC with this role (trader, quest, talker); edit who they are in the editor
+#    zone       a zone marker: 'level', 'encounter', 'safe' or 'extraction' (see data/zones.py)
+#    fields     settings you can change in the editor (Ctrl+click, N), saved with the map
 # ─────────────────────────────────────────────────────────────────────────────
+
+import math as _m
+
+from .zones import ZONE_COLOURS, ZONE_FIELDS
 
 BROWN = '#6b4528'
 DARK_WOOD = '#4e3220'
@@ -1760,6 +1766,314 @@ def _npc_marker(role):
     return build
 
 
+# ── hideout: underground tunnels (added in 1.22) ─────────────────────────────
+# Tunnel pieces are 5 x 5 m: 3 m of floor between 1 m thick walls, a 3.4 m ceiling.
+# Put them end to end on the grid (R turns them 90 degrees) to dig out a hideout.
+CONCRETE = ['#6e6e68', '#74746d', '#686862']
+FLOOR = '#4f4f4a'
+STEEL = '#4a4f57'
+RUST = '#7a4a2a'
+CEIL = 3.4
+
+
+def _tunnel(lp, sides):
+    """Floor, ceiling and the walls named in sides ('+x', '-x', '+z', '-z'); open sides get corner pillars."""
+    lp.flat((0, 0, 0), (5.0, 5.0), FLOOR, y_offset=0.01)
+    for x in (-0.4, 0.4):
+        lp.flat((x, 0, 0), (0.06, 5.0), '#3e3e3a', y_offset=0.015)                       # worn tracks in the floor
+    lp.box((0, CEIL + 0.15, 0), (5.0, 0.3, 5.0), '#5e5e58')                              # ceiling slab
+    walls = {'+x': ((2.0, 0), (1.0, 5.0)), '-x': ((-2.0, 0), (1.0, 5.0)),
+             '+z': ((0, 2.0), (5.0, 1.0)), '-z': ((0, -2.0), (5.0, 1.0))}
+    for side, ((x, z), (w, d)) in walls.items():
+        if side in sides:
+            lp.box((x, CEIL / 2, z), (w, CEIL, d), CONCRETE)
+            lp.box((x * 0.75 if x else 0, 0.15, z * 0.75 if z else 0), (w if x == 0 else 0.1, 0.3, d if z == 0 else 0.1),
+                   '#3e3e3a')                                                             # damp line at the foot
+    for cx in (-2.0, 2.0):                                                                # corner pillars always
+        for cz in (-2.0, 2.0):
+            lp.box((cx, CEIL / 2, cz), (1.0, CEIL, 1.0), CONCRETE)
+    # steel ribs holding the roof up, where there's a wall on both sides of the run
+    if '+x' in sides and '-x' in sides:
+        for z in (-1.25, 1.25):
+            for x in (-1.45, 1.45):
+                lp.box((x, CEIL / 2, z), (0.12, CEIL, 0.18), STEEL)
+            lp.box((0, CEIL - 0.08, z), (3.0, 0.16, 0.18), STEEL)
+    if '+z' in sides and '-z' in sides:
+        for x in (-1.25, 1.25):
+            for z in (-1.45, 1.45):
+                lp.box((x, CEIL / 2, z), (0.18, CEIL, 0.12), STEEL)
+            lp.box((x, CEIL - 0.08, 0), (0.18, 0.16, 3.0), STEEL)
+
+
+def _tunnel_cells(sides):
+    cells = {(cx, cz) for cx in (-2, 2) for cz in (-2, 2)}
+    for side in sides:
+        for k in range(-2, 3):
+            cells.add({'+x': (2, k), '-x': (-2, k), '+z': (k, 2), '-z': (k, -2)}[side])
+    return [(x, z, 4) for x, z in sorted(cells)]
+
+
+def tunnel_straight(lp):
+    _tunnel(lp, ('+x', '-x'))
+    lp.box((0, 0.02, 0), (0.5, 0.03, 0.5), '#2a2a2e')                                    # drain grate
+    for k in range(4):
+        lp.box((-0.18 + k * 0.12, 0.04, 0), (0.03, 0.02, 0.45), '#1a1a1e')
+
+
+def tunnel_corner(lp):
+    _tunnel(lp, ('+x', '+z'))
+
+
+def tunnel_t(lp):
+    _tunnel(lp, ('+x',))
+
+
+def tunnel_cross(lp):
+    _tunnel(lp, ())
+
+
+def tunnel_end(lp):
+    _tunnel(lp, ('+x', '-x', '+z'))
+    lp.box((0, 1.0, 1.42), (1.4, 0.9, 0.16), '#3a3a3e')                                  # old notice board
+    lp.box((0, 1.0, 1.33), (1.2, 0.7, 0.02), '#d8cfa8')
+
+
+def blast_door(lp):
+    """A heavy steel door filling the tunnel (3 m wide), in a concrete frame."""
+    lp.box((0, 1.6, 0), (3.0, 3.2, 0.3), '#5a6068')
+    lp.box((0, 1.6, -0.17), (2.6, 2.8, 0.04), '#4a5058')
+    for y in (0.6, 1.6, 2.6):
+        lp.box((0, y, -0.2), (2.4, 0.12, 0.04), '#3a3f46')                               # bracing
+    lp.box((0, 3.3, 0), (3.2, 0.2, 0.5), CONCRETE)
+    lp.box((1.0, 1.4, -0.24), (0.3, 0.3, 0.08), '#e8c040')                                # hazard wheel housing
+    lp.beam((1.0, 1.4, -0.28), (1.0, 1.4, -0.33), 0.18, '#2a2a2e', sides=8)              # the wheel
+    for x in (-1.4, -1.2, 1.2, 1.4):
+        lp.box((x, 0.15, -0.2), (0.12, 0.3, 0.02), '#e8c040' if x < 0 else '#1a1a1e')     # hazard stripes
+
+
+def vault_door(lp):
+    """A round bank vault door set in a wall (banker)."""
+    lp.box((0, 1.7, 0.1), (5.0, 3.4, 0.6), CONCRETE)
+    lp.beam((0, 1.5, -0.2), (0, 1.5, -0.36), 1.2, '#8a8f96', sides=20)               # the door (round, facing out)
+    lp.beam((0, 1.5, -0.36), (0, 1.5, -0.4), 1.0, '#a3a9b0', sides=20)
+    lp.beam((0, 1.5, -0.4), (0, 1.5, -0.5), 0.25, '#5a6068', sides=12)                # hub
+    for a in range(6):                                                                   # the wheel spokes
+        ang = a * _m.pi / 3
+        lp.beam((0, 1.5, -0.52), (_m.cos(ang) * 0.55, 1.5 + _m.sin(ang) * 0.55, -0.52), 0.03, '#c9a227', sides=4)
+    for a in range(8):                                                                   # locking bolts
+        ang = a * _m.pi / 4
+        lp.box((_m.cos(ang) * 1.05, 1.5 + _m.sin(ang) * 1.05, -0.42), (0.12, 0.12, 0.08), '#5a6068')
+
+
+def bank_counter(lp):
+    """Teller counter with bars: the banker stands behind it."""
+    lp.box((0, 0.55, 0), (3.0, 1.1, 0.6), '#5a3a22')
+    lp.box((0, 1.12, 0), (3.1, 0.06, 0.7), '#3a2618')
+    for x in (-1.5, -0.5, 0.5, 1.5):
+        lp.box((x, 1.75, 0.1), (0.08, 1.2, 0.08), '#3a3a3e')
+    for k in range(13):
+        lp.beam((-1.5 + k * 0.25, 1.15, 0.1), (-1.5 + k * 0.25, 2.35, 0.1), 0.012, '#8a8f96', sides=3)
+    lp.box((0, 2.38, 0.1), (3.1, 0.08, 0.12), '#3a3a3e')
+    lp.box((0, 1.15, 0.1), (0.6, 0.04, 0.3), '#2a2a2e')                                   # the gap you pass things through
+    lp.box((0, 2.6, 0.1), (1.0, 0.28, 0.04), '#1f2636')
+    lp.box((0, 2.6, 0.08), (0.8, 0.12, 0.01), '#e8c040')                                  # BANK sign
+
+
+def merchant_stall(lp):
+    """A trader's counter with shelves of goods behind it."""
+    lp.box((0, 0.5, 0.4), (3.0, 1.0, 0.6), '#6b4a2b')
+    lp.box((0, 1.03, 0.4), (3.1, 0.06, 0.7), '#4a3020')
+    for y in (0.6, 1.3, 2.0):
+        lp.box((0, y, -0.6), (3.0, 0.05, 0.5), STEEL)
+    for x in (-1.5, 1.5):
+        lp.box((x, 1.2, -0.6), (0.06, 2.4, 0.5), STEEL)
+    for y in (0.62, 1.32, 2.02):                                                          # goods on the shelves
+        for k in range(6):
+            col = lp.rnd.choice(['#8a6a3a', '#3a5a3a', '#a8322d', '#d8d0b0', '#4a4f57'])
+            lp.box((-1.2 + k * 0.48, y + 0.12, -0.6), (0.3, 0.22, 0.3), col)
+    for k in range(3):
+        lp.box((-0.8 + k * 0.8, 1.12, 0.4), (0.3, 0.14, 0.25), lp.rnd.choice(['#c9a227', '#8a8f96', '#6b8a3a']))
+    lp.beam((-1.5, 2.6, 0.7), (1.5, 2.6, 0.7), 0.02, '#2a2a2e', sides=4)
+    lp.box((0, 2.35, 0.72), (2.6, 0.5, 0.02), lp.rnd.choice(['#a8322d', '#2a5a8a', '#4a6a2a']))  # awning cloth
+
+
+def support_beams(lp):
+    """A timber frame propping up the roof (stand it across a tunnel)."""
+    for x in (-1.4, 1.4):
+        lp.box((x, CEIL / 2, 0), (0.22, CEIL, 0.22), '#6b4a2b')
+    lp.box((0, CEIL - 0.15, 0), (3.1, 0.25, 0.25), '#6b4a2b')
+    for x in (-1, 1):
+        lp.beam((x * 1.3, 2.6, 0), (x * 0.8, CEIL - 0.25, 0), 0.06, '#5e3b1f', sides=4)
+
+
+def wall_pipes(lp):
+    """Pipes and a valve running along a wall (put it against one)."""
+    for y, r, c in ((2.6, 0.1, '#5a6068'), (2.3, 0.07, RUST), (2.05, 0.05, '#3a5a3a')):
+        lp.beam((-2.5, y, 0), (2.5, y, 0), r, c, sides=8)
+    for x in (-1.6, 0.4, 2.0):
+        lp.box((x, 2.35, 0.1), (0.06, 0.6, 0.06), '#2a2a2e')                              # brackets
+    lp.cylinder((0.9, 2.6, -0.14), 0.13, 0.04, '#a8322d', sides=8)                         # valve wheel
+    lp.beam((0.9, 2.6, -0.12), (0.9, 2.6, -0.02), 0.02, '#2a2a2e', sides=4)
+
+
+def hanging_lamp(lp):
+    """A caged bulb hanging from the ceiling on its cable."""
+    lp.beam((0, CEIL, 0), (0, 2.5, 0), 0.01, '#1a1a1e', sides=3)
+    lp.cylinder((0, 2.42, 0), 0.12, 0.08, '#2a2a2e', sides=8)
+    for a in range(4):
+        ang = a * _m.pi / 2
+        lp.beam((_m.cos(ang) * 0.1, 2.42, _m.sin(ang) * 0.1), (_m.cos(ang) * 0.1, 2.2, _m.sin(ang) * 0.1), 0.008,
+                '#2a2a2e', sides=3)
+    lp.emissive = True
+    lp.blob((0, 2.3, 0), 0.08, '#ffe0a0', jitter=0.0)
+    lp.emissive = False
+
+
+def wall_light(lp):
+    """A caged bulkhead light on a wall."""
+    lp.box((0, 2.2, 0.0), (0.3, 0.22, 0.08), '#2a2a2e')
+    lp.emissive = True
+    lp.box((0, 2.2, -0.06), (0.22, 0.14, 0.05), '#fff0c0')
+    lp.emissive = False
+    for x in (-0.09, 0.0, 0.09):
+        lp.box((x, 2.2, -0.1), (0.015, 0.18, 0.015), '#1a1a1e')
+
+
+def rail_track(lp):
+    """Five metres of mine rail."""
+    for z in [k * 0.6 - 2.1 for k in range(8)]:
+        lp.box((0, 0.04, z), (1.4, 0.08, 0.16), '#5e3b1f')
+    for x in (-0.45, 0.45):
+        lp.box((x, 0.12, 0), (0.06, 0.08, 5.0), '#6a6f78')
+
+
+def minecart(lp):
+    lp.box((0, 0.6, 0), (1.0, 0.6, 1.4), RUST)
+    lp.box((0, 0.88, 0), (0.9, 0.06, 1.3), '#3a2a1e')
+    for x in (-0.5, 0.5):
+        for z in (-0.45, 0.45):
+            lp.box((x, 0.2, z), (0.06, 0.32, 0.32), '#2a2a2e')
+    for _ in range(5):                                                                    # a load of rock
+        lp.blob(((lp.rnd.random() - 0.5) * 0.6, 0.95, (lp.rnd.random() - 0.5) * 1.0), 0.18, STONE[0], detail=0)
+
+
+def locker_row(lp):
+    for k in range(4):
+        x = -1.1 + k * 0.74
+        lp.box((x, 1.0, 0), (0.7, 2.0, 0.5), lp.rnd.choice(['#4a5a6a', '#4a5a6a', '#5a6a4a']))
+        for y in (1.75, 1.65):
+            lp.box((x, y, -0.26), (0.4, 0.03, 0.02), '#2a2a2e')                          # vents
+        lp.box((x + 0.25, 1.0, -0.26), (0.04, 0.14, 0.03), '#8a8f96')                     # handle
+
+
+def bunk_bed(lp):
+    for y in (0.45, 1.45):
+        lp.box((0, y, 0), (0.95, 0.1, 2.0), '#4a5058')
+        lp.box((0, y + 0.1, 0), (0.85, 0.12, 1.9), lp.rnd.choice(['#556043', '#4a4f5a', '#6b5a3a']))
+        lp.box((0, y + 0.2, 0.8), (0.6, 0.1, 0.3), '#d8d0c0')                              # pillow
+    for x in (-0.45, 0.45):
+        for z in (-0.95, 0.95):
+            lp.box((x, 0.95, z), (0.06, 1.9, 0.06), '#3a3f46')
+    for k in range(4):
+        lp.box((0.45, 0.6 + k * 0.25, -0.95), (0.08, 0.03, 0.06), '#3a3f46')               # ladder rungs
+
+
+def supply_shelf(lp):
+    for y in (0.05, 0.75, 1.45, 2.1):
+        lp.box((0, y, 0), (2.0, 0.05, 0.6), STEEL)
+    for x in (-0.98, 0.98):
+        for z in (-0.28, 0.28):
+            lp.box((x, 1.1, z), (0.05, 2.2, 0.05), '#3a3f46')
+    for y in (0.08, 0.78, 1.48):
+        for k in range(3):
+            if lp.rnd.random() < 0.85:
+                lp.box((-0.6 + k * 0.6, y + 0.2, 0), (0.5, 0.36, 0.5),
+                       lp.rnd.choice(['#8a6a3a', '#556043', '#4a4f57', '#b08850']))
+
+
+def stash_box(lp):
+    """A big padlocked footlocker: your stash."""
+    lp.box((0, 0.35, 0), (1.4, 0.7, 0.8), '#4f5a3a')
+    lp.box((0, 0.72, 0), (1.45, 0.06, 0.85), '#3e4530')
+    for x in (-0.6, 0.6):
+        lp.box((x, 0.35, 0), (0.08, 0.72, 0.84), '#2a2a2e')                               # metal bands
+    lp.box((0, 0.5, -0.42), (0.14, 0.18, 0.04), '#c9a227')                                # padlock
+    lp.box((0, 0.6, -0.42), (0.08, 0.06, 0.02), '#8a8f96')
+
+
+def vent_fan(lp):
+    """A big ventilation fan in a square housing (stand it against a wall)."""
+    lp.box((0, 1.6, 0), (1.4, 1.4, 0.3), '#3a3f46')
+    lp.beam((0, 1.6, -0.15), (0, 1.6, -0.18), 0.6, '#1a1a1e', sides=16)
+    for a in range(5):
+        ang = a * _m.tau / 5
+        lp.beam((0, 1.6, -0.2), (_m.cos(ang) * 0.52, 1.6 + _m.sin(ang) * 0.52, -0.2), 0.07, '#5a6068', sides=4)
+    for k in range(5):
+        lp.box((0, 1.0 + k * 0.3, -0.24), (1.3, 0.03, 0.03), '#2a2a2e')                    # guard bars
+
+
+def water_tank(lp):
+    lp.cylinder((0, 0, 0), 0.75, 2.2, '#5a6068', sides=12)
+    lp.cylinder((0, 2.2, 0), 0.75, 0.1, '#4a5058', sides=12, top_radius=0.5)
+    for y in (0.5, 1.6):
+        lp.cylinder((0, y, 0), 0.77, 0.06, '#3a3f46', sides=12)
+    lp.beam((0.6, 0.3, 0), (1.1, 0.3, 0), 0.05, RUST, sides=6)
+    lp.cylinder((1.1, 0.22, 0), 0.08, 0.16, '#a8322d', sides=6)
+
+
+def radio_desk(lp):
+    lp.box((0, 0.75, 0), (1.6, 0.06, 0.8), '#6b4a2b')
+    for x in (-0.72, 0.72):
+        lp.box((x, 0.37, 0), (0.08, 0.74, 0.7), '#5e3b1f')
+    lp.box((-0.2, 0.95, 0.1), (0.7, 0.34, 0.4), '#3a3f46')                                 # radio set
+    for k in range(4):
+        lp.cylinder((-0.45 + k * 0.14, 0.9, -0.12), 0.035, 0.02, '#8a8f96', sides=6)
+    lp.emissive = True
+    lp.box((-0.1, 1.04, -0.105), (0.3, 0.08, 0.01), '#7dff8a')                              # dial glow
+    lp.emissive = False
+    lp.beam((0.1, 1.12, 0.2), (0.25, 1.9, 0.25), 0.01, '#2a2a2e', sides=3)                 # antenna
+    lp.box((0.5, 0.8, -0.05), (0.4, 0.02, 0.3), '#e8e4da')                                  # logbook
+
+
+def exit_ladder(lp):
+    """A ladder up to the surface hatch (where raids start)."""
+    for x in (-0.25, 0.25):
+        lp.box((x, CEIL / 2, 0), (0.06, CEIL, 0.06), '#5a6068')
+    for k in range(10):
+        lp.box((0, 0.3 + k * 0.32, 0), (0.5, 0.04, 0.04), '#6a6f78')
+    lp.box((0, CEIL + 0.05, -0.3), (1.0, 0.1, 1.0), '#3a3f46')                             # the hatch
+    lp.box((0, CEIL - 0.02, -0.3), (0.8, 0.04, 0.8), '#e8c040')
+
+
+def tarp_curtain(lp):
+    lp.beam((-1.5, CEIL - 0.2, 0), (1.5, CEIL - 0.2, 0), 0.02, '#2a2a2e', sides=4)
+    for k in range(5):
+        lp.box((-1.2 + k * 0.6, (CEIL - 0.3) / 2 + 0.1, (lp.rnd.random() - 0.5) * 0.08), (0.62, CEIL - 0.4, 0.02),
+               lp.rnd.choice(['#556043', '#4f5a3a', '#5a6a4a']))
+
+
+
+def _zone_marker(colour, symbol):
+    """A post with a coloured flag (the zone's ring is drawn around it in the editor)."""
+    def build(lp):
+        lp.cylinder((0, 0, 0), 0.35, 0.06, '#3a3d42', sides=8)
+        lp.beam((0, 0, 0), (0, 2.2, 0), 0.04, '#d8d8d0', sides=5)
+        lp.box((0.28, 1.95, 0), (0.52, 0.34, 0.02), colour)
+        if symbol == 'plus':                          # safe zone: a white cross
+            lp.box((0.28, 1.95, 0.012), (0.24, 0.07, 0.01), '#f5f4f2')
+            lp.box((0.28, 1.95, 0.012), (0.07, 0.24, 0.01), '#f5f4f2')
+        elif symbol == 'arrow':                       # extraction: an up arrow
+            lp.box((0.28, 1.92, 0.012), (0.07, 0.2, 0.01), '#12121c')
+            lp.box((0.28, 2.04, 0.012), (0.2, 0.06, 0.01), '#12121c')
+        elif symbol == 'skull':                       # encounter
+            lp.box((0.28, 1.97, 0.012), (0.18, 0.14, 0.01), '#f5f4f2')
+            lp.box((0.28, 1.88, 0.012), (0.1, 0.05, 0.01), '#f5f4f2')
+        else:                                         # level zone: three bars
+            for i in range(3):
+                lp.box((0.18 + i * 0.1, 1.86 + i * 0.05, 0.012), (0.06, 0.08 + i * 0.1, 0.01), '#f5f4f2')
+    return build
+
+
 def _perimeter(half, door=None, height=3):
     cells = []
     for dx in range(-half, half + 1):
@@ -1964,7 +2278,7 @@ ASSETS = {
     'ivy_wall': A('Ivy-covered wall', 'shrubs', ivy_wall, [(0, 0, 1)], variants=3),
     'pond': A('Pond', 'shrubs', pond, variants=2),
     # special
-    'zombie_grave': A('Zombie grave (spawn)', 'special', zombie_grave, spawn='zombie'),
+    'zombie_grave': A('Zombie grave (spawn)', 'special', zombie_grave, spawn='zombie', fields=ZONE_FIELDS['grave']),
     'player_spawn': A('Player start', 'special', player_spawn, editor_only=True, spawn='player'),
     # mining and crafting (ore spawns only show in the editor; the real nodes grow there in game)
     'workbench': A('Workbench (crafting)', 'mining', workbench, [(-1, 0, 1), (0, 0, 1), (1, 0, 1)], station='workbench',
@@ -1976,6 +2290,42 @@ ASSETS = {
     'ore_crystal': A('Crystal node spawn', 'mining', _ore_marker('crystal'), editor_only=True, ore='crystal'),
     'ore_coal': A('Coal node spawn', 'mining', _ore_marker('coal'), editor_only=True, ore='coal'),
     'ore_logs': A('Log pile spawn (wood)', 'mining', _ore_marker('logs'), editor_only=True, ore='logs'),
+    # hideout: underground tunnels (5 x 5 m pieces; R turns them)
+    'tunnel_straight': A('Tunnel', 'hideout', tunnel_straight, _tunnel_cells(('+x', '-x'))),
+    'tunnel_corner': A('Tunnel corner', 'hideout', tunnel_corner, _tunnel_cells(('+x', '+z'))),
+    'tunnel_t': A('Tunnel T-junction', 'hideout', tunnel_t, _tunnel_cells(('+x',))),
+    'tunnel_cross': A('Tunnel crossing', 'hideout', tunnel_cross, _tunnel_cells(())),
+    'tunnel_end': A('Tunnel dead end', 'hideout', tunnel_end, _tunnel_cells(('+x', '-x', '+z'))),
+    'blast_door': A('Blast door', 'hideout', blast_door, [(-1, 0, 4), (0, 0, 4), (1, 0, 4)]),
+    'vault_door': A('Vault door', 'hideout', vault_door, [(k, 0, 4) for k in range(-2, 3)]),
+    'bank_counter': A('Bank counter', 'hideout', bank_counter, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
+    'merchant_stall': A('Merchant stall', 'hideout', merchant_stall, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
+    'support_beams': A('Support beams', 'hideout', support_beams),
+    'wall_pipes': A('Wall pipes', 'hideout', wall_pipes),
+    'hanging_lamp': A('Hanging lamp', 'hideout', hanging_lamp,
+                      light=dict(colour=(1.0, 0.82, 0.55), radius=8, strength=1.2, at=(0, 2.3, 0), flicker=0.06)),
+    'wall_light': A('Wall light', 'hideout', wall_light,
+                    light=dict(colour=(1.0, 0.92, 0.75), radius=7, strength=1.0, at=(0, 2.2, -0.3), flicker=0.02)),
+    'rail_track': A('Mine rails', 'hideout', rail_track),
+    'minecart': A('Minecart', 'hideout', minecart, [(0, 0, 1)]),
+    'locker_row': A('Lockers', 'hideout', locker_row, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
+    'bunk_bed': A('Bunk bed', 'hideout', bunk_bed, [(0, 0, 2), (0, -1, 2)]),
+    'supply_shelf': A('Supply shelf', 'hideout', supply_shelf, [(-1, 0, 2), (0, 0, 2)]),
+    'stash_box': A('Stash box', 'hideout', stash_box, [(0, 0, 1)]),
+    'vent_fan': A('Ventilation fan', 'hideout', vent_fan),
+    'water_tank': A('Water tank', 'hideout', water_tank, [(0, 0, 3)]),
+    'radio_desk': A('Radio desk', 'hideout', radio_desk, [(0, 0, 1)]),
+    'exit_ladder': A('Exit ladder (to the surface)', 'hideout', exit_ladder),
+    'tarp_curtain': A('Tarp curtain', 'hideout', tarp_curtain),
+    # zones (settings: Ctrl+click and press N)
+    'zone_level': A('Zombie level zone', 'zones', _zone_marker(ZONE_COLOURS['level'], 'bars'), editor_only=True,
+                    zone='level', fields=ZONE_FIELDS['level']),
+    'zone_encounter': A('Random encounter zone', 'zones', _zone_marker(ZONE_COLOURS['encounter'], 'skull'),
+                        editor_only=True, zone='encounter', fields=ZONE_FIELDS['encounter']),
+    'zone_safe': A('Safe zone', 'zones', _zone_marker(ZONE_COLOURS['safe'], 'plus'), editor_only=True, zone='safe',
+                   fields=ZONE_FIELDS['safe']),
+    'zone_extract': A('Extraction point', 'zones', _zone_marker(ZONE_COLOURS['extraction'], 'arrow'), editor_only=True,
+                      zone='extraction', fields=ZONE_FIELDS['extraction']),
     # animals and NPCs
     'spawn_deer': A('Deer spawner', 'life', _animal_marker(['deer']), editor_only=True, animal='deer'),
     'spawn_pig': A('Pig spawner', 'life', _animal_marker(['pig']), editor_only=True, animal='pig'),
@@ -1991,7 +2341,7 @@ ASSETS = {
 
 ASSET_CATEGORIES = [('trees', 'Trees'), ('shrubs', 'Shrubs'), ('buildings', 'Buildings'), ('props', 'Props'),
                     ('town', 'Town'), ('military', 'Military'), ('farm', 'Farm'), ('graveyard', 'Graveyard'),
-                    ('church', 'Church'), ('life', 'Animals & NPCs'),
+                    ('church', 'Church'), ('life', 'Animals & NPCs'), ('zones', 'Zones'), ('hideout', 'Hideout'),
                     ('special', 'Special'), ('mining', 'Mining'), ('caves', 'Caves'), ('paths', 'Paths'),
                     ('blocks', 'Blocks')]
 

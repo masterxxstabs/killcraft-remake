@@ -152,6 +152,8 @@ big maps stay playable (expect a somewhat lower frame rate than on small maps).
 | Graveyard | gravestone, stone cross, iron fence, crypt, coffin, grave lantern, old church |
 | Church | pews, altar, lectern, candle stand, stained-glass wall, bell tower, church gate, confessional |
 | Animals & NPCs | deer, pig, chicken and random **animal spawners**, and **NPCs**: trader, quest giver, talker |
+| Zones | **zombie level zones**, **random encounter zones**, **safe zones** and **extraction points** (see below) |
+| Hideout | underground tunnel pieces (straight, corner, T, crossing, dead end), blast door, vault door, bank counter, merchant stall, support beams, wall pipes, hanging and wall lamps, mine rails and a minecart, lockers, bunk beds, supply shelves, stash box, ventilation fan, water tank, radio desk, exit ladder, tarp curtain |
 | Special | **zombie grave** (zombies climb out of these) and the **player start** |
 | Mining | workbench, ore / log pile spawns, and **loot crates** (break them for resources) |
 | Caves | dig a cave: set its depth, width, rock height and side tunnels, then click where the entrance goes |
@@ -170,7 +172,7 @@ big maps stay playable (expect a somewhat lower frame rate than on small maps).
 | T / G | tilt forward / back 15° |
 | Y / H | roll left / right 15° |
 | Ctrl+click | pick something you already placed, to turn it (Delete removes it, Esc lets go) |
-| N | edit the NPC you picked |
+| N | edit the settings of the NPC, zone or zombie grave you picked |
 | [ and ] | brush size 1, 3, 5, 9 or 15 cells across (paths, blocks, eraser) |
 | 1–4 | block height |
 | W A S D / arrows | move the camera |
@@ -235,6 +237,24 @@ The NPC in the map changes as you edit. In a game, walk up to an NPC and press *
 to you and say their greeting, with buttons for **TALK**, **TRADE** (traders), **JOB** (quest
 givers) and **BYE**. Accept a job, do it, and come back to hand it in. NPCs are saved with the map.
 
+**Zones and zombie levels** (Zones tab). Zones are flags with a coloured ring showing their size.
+Placing one opens its settings; Ctrl+click it and press **N** to change them later.
+
+| Zone | What it does | Settings |
+| --- | --- | --- |
+| Zombie level zone (orange) | zombies that spawn inside get a level between its lowest and highest. Where zones overlap, the smallest wins | radius, lowest and highest level |
+| Random encounter zone (red) | when a player walks in, there's a chance a group of zombies claws out of the ground 6-12 m away. They don't count towards the wave | radius, chance, cooldown, group size, which zombies, level |
+| Safe zone (green) | zombies never spawn inside; no PvP in multiplayer. Its edge shows in the game too | radius |
+| Extraction point (blue) | where you'll leave a raid with your loot (coming with the extraction mode) | radius, time to extract, name |
+
+A **zombie grave** has a level setting too (0 = use the zone it's in), so you can set zombie levels
+by hand. Each level adds 22% health, 10% damage and a little speed, and 20% more XP and coins. Aim
+at a zombie to see its name, level and health under the crosshair.
+
+**Hideout** (Hideout tab). Tunnel pieces are 5 x 5 m with 3 m of floor between solid walls; put them
+end to end on the grid and turn them with R to dig out an underground base. Hanging and wall lamps
+light it up; try the Night atmosphere.
+
 **Loot crates** (Mining tab) are supply crates you smash with a melee weapon or shoot open for a
 random handful of wood, stone, iron, copper and sometimes crystal. They come back about a minute later.
 Random arenas have some too.
@@ -281,8 +301,9 @@ has its own column in the skill tree:
 **Levels.** Kills give XP (a shambler 10, a brute 40, a boss 500+; knocked-down kills +5), every
 cleared wave gives 25 x the wave number, and NPC jobs 150. Each level is a **skill point**. The
 level badge next to your health shows your level, the thin gold bar under the health your XP, and a
-**K** appears when you have points to spend. Like a Project Zomboid character, your level lasts
-for this run only: every game starts at level 1.
+**K** appears when you have points to spend. Your level, XP and skills are **saved** and carry over
+to every game. Skills in another class's column stay learned but only work while you play that
+class, and **RESET SKILLS** on the skill screen gives every point back.
 
 **The skill tree (K).** Four columns of four skills; a skill opens up once the one above it has a
 point, and most take a few points:
