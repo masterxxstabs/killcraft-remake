@@ -298,12 +298,11 @@ def backdrop(parent, alpha):
 def milestones(save):
     """Long-term goals shown as progress bars."""
     return [
-        ('Reach wave 10', save['best_wave'] / 10, f"{min(save['best_wave'], 10)}/10"),
-        ('Reach wave 25', save['best_wave'] / 25, f"{min(save['best_wave'], 25)}/25"),
-        ('Score 10,000 in one game', save['best_score'] / 10000, f"{round(clamp01(save['best_score'] / 10000) * 100)}%"),
+        ('Get out of 10 raids alive', save.get('extractions', 0) / 10, f"{min(save.get('extractions', 0), 10)}/10"),
+        ('Get out of 50 raids alive', save.get('extractions', 0) / 50, f"{min(save.get('extractions', 0), 50)}/50"),
         ('Defeat 1,000 zombies', save['total_kills'] / 1000, f"{round(clamp01(save['total_kills'] / 1000) * 100)}%"),
         ('Defeat 10,000 zombies', save['total_kills'] / 10000, f"{round(clamp01(save['total_kills'] / 10000) * 100)}%"),
-        ('Play 25 games', save['games'] / 25, f"{min(save['games'], 25)}/25"),
+        ('Save 10,000 coins', save.get('coins', 0) / 10000, f"{round(clamp01(save.get('coins', 0) / 10000) * 100)}%"),
         ('???' if not save.get('lance') else 'Claim the Hollow Lance', 1 if save.get('lance') else 0,
          'found!' if save.get('lance') else '?'),
     ]
@@ -370,9 +369,12 @@ class UI:
         from .bag_ui import BagScreen
         from .npc_ui import TalkScreen
         from .skills_ui import SkillScreen
+        from .trader_ui import TraderScreen, RaidMenu
         self.bag = BagScreen(self)
         self.talk = TalkScreen(self)
         self.skills = SkillScreen(self)
+        self.trader = TraderScreen(self)
+        self.raid_menu = RaidMenu(self)
 
     def inventory_changed(self):
         """The local player's backpack changed: redraw whatever shows it."""
@@ -446,7 +448,7 @@ class UI:
         # every movable part of the HUD hangs off its own anchor (moved / hidden as one)
         self.parts = {key: Entity(parent=h) for key, _ in HUD_PARTS}
         self.part_rects = {
-            'crosshair': (-0.04, 0.04, 0.08, 0.08), 'wave': (L + 0.03, T - 0.03, 0.42, 0.095),
+            'crosshair': (-0.04, 0.04, 0.08, 0.08), 'wave': (L + 0.03, T - 0.03, 0.52, 0.095),
             'quest': (L + 0.03, T - 0.135, 0.412, 0.042), 'money': (R - 0.33, T - 0.03, 0.3, 0.095),
             'feed': (R - 0.33, T - 0.135, 0.3, 0.1), 'health': (L + 0.03, B + 0.1, 0.54, 0.07),
             'powers': (L + 0.03, B + 0.152 + 3 * 0.047, 0.3, 0.18), 'ability': (-0.07, B + 0.175, 0.14, 0.145),
@@ -484,9 +486,9 @@ class UI:
         # top left: wave
         w_ = el['wave']
         box(w_, L + 0.03, T - 0.03, 0.12, 0.095, P, z=0.003)
-        text(w_, 'WAVE', L + 0.09, T - 0.047, 0.85, FG, origin=(0, 0))
+        self.wave_label = text(w_, 'WAVE', L + 0.09, T - 0.047, 0.85, FG, origin=(0, 0))
         self.wave = text(w_, '0', L + 0.09, T - 0.088, 2.6, FG, origin=(0, 0))
-        frame(w_, L + 0.15 - EDGE, T - 0.03, 0.3, 0.095, PAPER, INK)
+        frame(w_, L + 0.15 - EDGE, T - 0.03, 0.4, 0.095, PAPER, INK)
         self.remaining = text(w_, '', L + 0.17, T - 0.0775, 1.15, INK, origin=(-0.5, 0))
         self.quest_box = Entity(parent=el['quest'], enabled=False)
         box(self.quest_box, L + 0.03, T - 0.135, 0.412, 0.042, P, z=0.003)
@@ -781,12 +783,20 @@ class UI:
             self.med_box.scale_x = self.med_text.width + 0.02
         self.set_text(self.coins, str(g.coins))
         self.set_text(self.score, f'SCORE {g.score}')
-        self.set_text(self.wave, str(g.wave_number))
-        if g.phase == 'wave':
-            self.set_text(self.remaining, f'{g.remaining} enemies left')
+        if g.raids.mode:                           # hideout / raid: where you are and the nearest way out
+            hideout = g.raids.mode == 'hideout'
+            self.set_text(self.wave_label, 'RAIDS' if hideout else 'MINUTES')   # raids survived / time up top
+            self.set_text(self.wave, str(g.save.get('extractions', 0) if hideout else int(g.raids.t // 60)))
+            self.set_text(self.remaining, g.raids.status())
+            self.hint.enabled = False
         else:
-            self.set_text(self.remaining, f'Next wave in {math.ceil(g.intermission)}s')
-        self.hint.enabled = g.phase == 'intermission' and not g.shop_open
+            self.set_text(self.wave_label, 'WAVE')
+            self.set_text(self.wave, str(g.wave_number))
+            if g.phase == 'wave':
+                self.set_text(self.remaining, f'{g.remaining} enemies left')
+            else:
+                self.set_text(self.remaining, f'Next wave in {math.ceil(g.intermission)}s')
+            self.hint.enabled = g.phase == 'intermission' and not g.shop_open
         tracker = g.quest.tracker() if getattr(g, 'quest', None) else ''
         self.quest_box.enabled = bool(tracker)
         if tracker:
@@ -903,16 +913,13 @@ class UI:
         hline(b, win.left, y, 0.54)
         s = g.save
         y -= 0.03
-        pair(b, win.left, y, 'Best wave', s['best_wave'], 0.15, 0.95)
-        pair(b, win.left + 0.28, y, 'Best score', s['best_score'], 0.16, 0.95)
+        pair(b, win.left, y, 'Extractions', s.get('extractions', 0), 0.15, 0.95)
+        pair(b, win.left + 0.28, y, 'Raids lost', s.get('raids_lost', 0), 0.16, 0.95)
         pair(b, win.left, y - 0.05, 'Total kills', s['total_kills'], 0.15, 0.95)
-        pair(b, win.left + 0.28, y - 0.05, 'Games', s['games'], 0.16, 0.95)
+        pair(b, win.left + 0.28, y - 0.05, 'Coins', s.get('coins', 0), 0.16, 0.95)
         hline(b, win.left, y - 0.1, 0.54)
-        names = dict(maps.list_maps())
-        text(b, 'Map', win.left, y - 0.125, 0.95, INK)
-        text(b, names.get(g.map_stem, 'Random arena'), win.left + 0.15, y - 0.122, 1.1, TEAL)
-        FlatButton(b, 'CHANGE', win.left + 0.42, y - 0.115, 0.12, 0.04, lambda: self.set_menu_tab('maps'),
-                   fill=PAPER, edge=INK, fg=INK, size=0.8, hover=-0.06)
+        text(b, 'PLAY takes you to the hideout. Climb the ladder there to go on a raid.', win.left, y - 0.122,
+             0.75, MUTED, wordwrap=74)
 
         x, y = win.right_col + 0.03, win.top
         text(b, 'MILESTONES', x, y, 0.85, MUTED)
@@ -925,7 +932,7 @@ class UI:
 
     def menu_maps(self, win, g):
         b, x, y = win.body, win.left, win.top
-        text(b, 'CHOOSE A MAP', x, y, 0.85, MUTED)
+        text(b, 'MAPS  (to edit; maps with extraction points are raids at the hideout ladder)', x, y, 0.75, MUTED)
         y -= 0.035
         options = [(None, 'Random arena')] + maps.list_maps()
         for stem, name in options[:9]:
@@ -943,8 +950,7 @@ class UI:
         if g.map_stem is None:
             box(b, xr, y - 0.035, size, size, NAVY)
             text(b, '?', xr + size / 2, y - 0.035 - size / 2, 5, PAPER, origin=(0, 0))
-            info = ('A new random arena\nevery game, with block\ntrees, crates and ruins.\n\n'
-                    f'{maps.size_label(g.arena_size)}')
+            info = ('Raids from the hideout are\nrandom arenas like this:\nOutskirts, Wildlands and\nthe Blacksite.')
 
         else:
             data = maps.load_map(g.map_stem)
@@ -963,14 +969,6 @@ class UI:
                        fill=SLATE, edge=SLATE_EDGE, size=1.0)
         FlatButton(b, 'NEW MAP', xr + (0.27 if g.map_stem is not None else 0), by, 0.2, 0.055, lambda: g.open_editor(),
                    fill=TEAL, edge=INK, size=1.0)
-        if g.map_stem is None:                   # how big the random arena is
-            text(b, 'ARENA SIZE', xr + 0.23, by - 0.012, 0.8, MUTED)
-            for i, (label, half) in enumerate(maps.MAP_SIZES):
-                on = g.arena_size == half
-                FlatButton(b, label, xr + i * 0.112, by - 0.07, 0.106, 0.045,
-                           lambda h=half: (g.set_arena_size(h), self.refresh_menu()),
-                           fill=INK if on else PAPER, edge=INK, fg=PAPER if on else INK, size=0.85,
-                           hover=0.15 if on else -0.06)
         if g.map_stem is not None:
             text(b, 'Build your own maps with trees, buildings, paths and zombie graves.', xr, by - 0.08, 0.8, MUTED,
                  wordwrap=55)
@@ -981,9 +979,9 @@ class UI:
         [('Move', 'W A S D'), ('Look', 'Mouse'), ('Shoot', 'Left click'), ('Aim / scope', 'Right click'),
          ('Jump / climb', 'Space'), ('Sprint', 'Shift'), ('Crouch', 'C / Ctrl'), ('Slide', 'Sprint + C'),
          ('Reload', 'R'), ('Ability', 'Q'), ('Shove', 'F'), ('Skill tree', 'K')],
-        [('Tool / handgun / rifle', '1 2 3 / wheel'), ('Craft / pick up', 'E'), ('Backpack / drop gun', 'I / X'), ('Build (R turns)', 'G'),
-         ('Revive / repair', 'Hold E'), ('Heal (bandage / kit)', 'H'), ('Shop', 'B'), ('Scoreboard', 'Hold Tab'),
-         ('Next wave', 'N'), ('Pause', 'Esc'), ('Mute / fullscreen', 'M / F11')],
+        [('Tool / handgun / rifle', '1 2 3 / wheel'), ('Use / talk / pick up', 'E'), ('Inventory / drop gun', 'I / X'), ('Build (R turns)', 'G'),
+         ('Revive / repair', 'Hold E'), ('Heal (bandage / kit)', 'H'), ('Scoreboard', 'Hold Tab'),
+         ('Raid: stand in an exit', 'wait'), ('Pause', 'Esc'), ('Mute / fullscreen', 'M / F11')],
     ]
 
     def menu_controls(self, win, g):
@@ -1213,12 +1211,19 @@ class UI:
     def show_pause(self):
         g, win = self.game, self.pause_win
         win.clear()
-        win.right.text = f'WAVE {g.wave_number}'
+        r = g.raids
+        win.right.text = {'hideout': 'HIDEOUT', 'raid': 'RAID'}.get(r.mode, f'WAVE {g.wave_number}')
         b, x, y = win.body, win.left, win.top
-        text(b, 'THIS RUN', x, y, 0.85, MUTED)
-        t = g.time
-        rows = [('Wave', g.wave_number), ('Kills', g.kills), ('Score', g.score), ('Coins', g.coins),
-                ('Time', f'{int(t // 60)}:{int(t % 60):02d}'), ('Weapons', len(g.weapons.owned))]
+        text(b, 'THIS RAID' if r.mode == 'raid' else ('YOU' if r.mode else 'THIS RUN'), x, y, 0.85, MUTED)
+        t = r.t if r.mode == 'raid' else g.time
+        p = g.player
+        if r.mode:
+            rows = [('Level', p.level), ('Kills', g.kills), ('Carrying', f'{p.carried_weight():.1f} kg'),
+                    ('Coins (bank)', g.coins), ('Time', f'{int(t // 60)}:{int(t % 60):02d}'),
+                    ('Extractions', g.save.get('extractions', 0))]
+        else:
+            rows = [('Wave', g.wave_number), ('Kills', g.kills), ('Score', g.score), ('Coins', g.coins),
+                    ('Time', f'{int(t // 60)}:{int(t % 60):02d}'), ('Weapons', len(g.weapons.owned))]
         y -= 0.045
         for i, (label, value) in enumerate(rows):
             if i == 3:
@@ -1227,7 +1232,11 @@ class UI:
             pair(b, x, y, label, value, 0.25, 1.1)
             y -= 0.058
         self.settings_rows(b, win.right_col + 0.03, win.top, g)
-        win.bottom_left('EDITOR' if g.from_editor is not None else 'MAIN MENU', g.to_menu, 'home', g.to_menu)
+        if r.mode == 'raid' and not r.practice:
+            win.bottom_left('GIVE UP', g.give_up, 'cross', g.give_up)
+            text(b, 'Giving up leaves everything you carry up here.', x, win.btn_y + 0.03, 0.66, MUTED)
+        else:
+            win.bottom_left('EDITOR' if g.from_editor is not None else 'MAIN MENU', g.to_menu, 'home', g.to_menu)
         win.bottom_right('RESUME', g.resume, fill=TEAL)
         self.pause.enabled = True
 
@@ -1363,7 +1372,12 @@ class UI:
 
     def refresh_shop(self):
         g, win = self.game, self.shop_win
-        win.set_tabs([('weapons', 'WEAPONS'), ('player', 'PLAYER'), ('allies', 'ALLIES')], self.shop_tab, self.set_tab)
+        if g.raids.mode:                           # the gunsmith: guns, upgrades, attachments and camos
+            self.shop_tab = 'weapons'
+            win.set_tabs([('weapons', 'GUNSMITH')], 'weapons', self.set_tab)
+        else:
+            win.set_tabs([('weapons', 'WEAPONS'), ('player', 'PLAYER'), ('allies', 'ALLIES')], self.shop_tab,
+                         self.set_tab)
         win.clear()
         win.right.text = f'{g.coins} coins'
         if self.shop_tab == 'player':
@@ -1490,13 +1504,12 @@ class UI:
         owned = w.owns(d['id'])
         if not owned:
             ok = g.coins >= d['price']
-            win.bottom_right(f"BUY  {d['price']}", lambda: g.buy_weapon(d['id']), 'play', g.shop_start_wave,
+            win.bottom_right(f"BUY  {d['price']}", lambda: g.buy_weapon(d['id']), None, None,
                              fill=GREEN if ok else NAVY, w=0.3)
         elif w.held is not d:
-            win.bottom_right('EQUIP', lambda: (w.ready(d), self.refresh_shop()), 'play',
-                             g.shop_start_wave, fill=SLATE, w=0.3)
+            win.bottom_right('EQUIP', lambda: (w.ready(d), self.refresh_shop()), fill=SLATE, w=0.3)
         else:
-            win.bottom_right('START WAVE', g.shop_start_wave, fill=TEAL, w=0.3)
+            win.bottom_right('DONE', g.close_shop, fill=TEAL, w=0.3)
 
     def weapon_customize(self, b, g, w, d, xr, y):
         """Attachments and camo, with a 3D preview of the gun."""
@@ -1581,7 +1594,7 @@ class UI:
             text(b, 'DOWN' if a.downed else f'{math.ceil(a.hp)} hp', xr + 0.47, y - 0.02, 0.8,
                  RED if a.downed else INK, origin=(-0.5, 0))
             y -= 0.06
-        win.bottom_right('START WAVE', g.shop_start_wave, fill=TEAL, w=0.3)
+        win.bottom_right('DONE', g.close_shop, fill=TEAL, w=0.3)
 
     def dmg_stat(self, d, w):
         dm = 1 + 0.15 * w.level(d, 'damage')
@@ -1617,7 +1630,7 @@ class UI:
             FlatButton(b, 'MAX' if maxed else str(price), x + 0.45, y - 0.005, 0.13, 0.05,
                        lambda uid=u['id']: g.buy_upgrade(uid), fill=TEAL if ok else NAVY, edge=INK,
                        icon_name=None if maxed else 'cart', size=0.9)
-        win.bottom_right('START WAVE', g.shop_start_wave, fill=TEAL, w=0.3)
+        win.bottom_right('DONE', g.close_shop, fill=TEAL, w=0.3)
 
     # ── game over ────────────────────────────────────────────────────────────
     def build_dead(self):
@@ -1628,17 +1641,25 @@ class UI:
     def show_dead(self, stats, record):
         g, win = self.game, self.dead_win
         win.clear()
-        win.right.text = f"WAVE {stats['wave']}"
+        r = g.raids
+        raid = r.mode == 'raid'
+        win.right.text = stats.get('raid', '').upper() if raid else f"WAVE {stats['wave']}"
         b, x, y = win.body, win.left, win.top
-        text(b, 'THIS RUN', x, y, 0.85, MUTED)
-        t = stats['time']
+        text(b, 'THIS RAID' if raid else 'THIS RUN', x, y, 0.85, MUTED)
+        t = r.t if raid else stats['time']
         y -= 0.05
-        for label, value in (('Wave reached', stats['wave']), ('Zombies defeated', stats['kills']),
-                             ('Score', stats['score']), ('Time survived', f'{int(t // 60)}:{int(t % 60):02d}')):
+        rows = ((('Raid', stats.get('raid', '')), ('Zombies defeated', stats['kills']),
+                 ('Time up there', f'{int(t // 60)}:{int(t % 60):02d}'), ('Level', g.player.level)) if raid else
+                (('Wave reached', stats['wave']), ('Zombies defeated', stats['kills']),
+                 ('Score', stats['score']), ('Time survived', f'{int(t // 60)}:{int(t % 60):02d}')))
+        for label, value in rows:
             pair(b, x, y, label, value, 0.3, 1.15)
             y -= 0.065
         hline(b, x, y + 0.015, 0.54)
-        if record:
+        if raid and not r.practice:
+            text(b, 'Everything you carried stays where you fell.\nYour bank, coins, level and skills are safe.',
+                 x, y - 0.02, 0.85, INK)
+        elif record:
             glyph(b, 'star', x + 0.02, y - 0.03, 0.04, AMBER)
             text(b, 'NEW PERSONAL BEST!', x + 0.05, y - 0.03, 1.2, AMBER, origin=(-0.5, 0))
         xr, y = win.right_col + 0.03, win.top
@@ -1648,6 +1669,9 @@ class UI:
             stat_row(b, xr, y, 0.38, label, frac, value, GREEN if frac >= 1 else TEAL)
             y -= 0.063
         win.bottom_left('EDITOR' if g.from_editor is not None else 'MAIN MENU', g.to_menu, 'home', g.to_menu)
-        win.bottom_right('PLAY AGAIN', lambda: g.start_game(g.from_editor, from_editor=g.from_editor is not None),
-                         fill=TEAL)
+        if raid and not r.practice:
+            win.bottom_right('BACK TO THE HIDEOUT', g.raids.enter_hideout, fill=TEAL, w=0.38)
+        else:
+            win.bottom_right('PLAY AGAIN', lambda: g.start_game(g.from_editor, from_editor=g.from_editor is not None),
+                             fill=TEAL)
         self.dead.enabled = True

@@ -1776,11 +1776,13 @@ RUST = '#7a4a2a'
 CEIL = 3.4
 
 
-def _tunnel(lp, sides):
-    """Floor, ceiling and the walls named in sides ('+x', '-x', '+z', '-z'); open sides get corner pillars."""
+def _tunnel(lp, sides, pillars=True):
+    """Floor, ceiling and the walls named in sides ('+x', '-x', '+z', '-z'); open sides get corner pillars
+    (halls leave them out, so several pieces side by side make one big room)."""
     lp.flat((0, 0, 0), (5.0, 5.0), FLOOR, y_offset=0.01)
-    for x in (-0.4, 0.4):
-        lp.flat((x, 0, 0), (0.06, 5.0), '#3e3e3a', y_offset=0.015)                       # worn tracks in the floor
+    if pillars or ('+x' in sides and '-x' in sides):
+        for x in (-0.4, 0.4):
+            lp.flat((x, 0, 0), (0.06, 5.0), '#3e3e3a', y_offset=0.015)                   # worn tracks in the floor
     lp.box((0, CEIL + 0.15, 0), (5.0, 0.3, 5.0), '#5e5e58')                              # ceiling slab
     walls = {'+x': ((2.0, 0), (1.0, 5.0)), '-x': ((-2.0, 0), (1.0, 5.0)),
              '+z': ((0, 2.0), (5.0, 1.0)), '-z': ((0, -2.0), (5.0, 1.0))}
@@ -1789,9 +1791,10 @@ def _tunnel(lp, sides):
             lp.box((x, CEIL / 2, z), (w, CEIL, d), CONCRETE)
             lp.box((x * 0.75 if x else 0, 0.15, z * 0.75 if z else 0), (w if x == 0 else 0.1, 0.3, d if z == 0 else 0.1),
                    '#3e3e3a')                                                             # damp line at the foot
-    for cx in (-2.0, 2.0):                                                                # corner pillars always
+    for cx in (-2.0, 2.0):                                                                # corner pillars
         for cz in (-2.0, 2.0):
-            lp.box((cx, CEIL / 2, cz), (1.0, CEIL, 1.0), CONCRETE)
+            if pillars:
+                lp.box((cx, CEIL / 2, cz), (1.0, CEIL, 1.0), CONCRETE)
     # steel ribs holding the roof up, where there's a wall on both sides of the run
     if '+x' in sides and '-x' in sides:
         for z in (-1.25, 1.25):
@@ -1805,8 +1808,8 @@ def _tunnel(lp, sides):
             lp.box((x, CEIL - 0.08, 0), (0.18, 0.16, 3.0), STEEL)
 
 
-def _tunnel_cells(sides):
-    cells = {(cx, cz) for cx in (-2, 2) for cz in (-2, 2)}
+def _tunnel_cells(sides, pillars=True):
+    cells = {(cx, cz) for cx in (-2, 2) for cz in (-2, 2)} if pillars else set()
     for side in sides:
         for k in range(-2, 3):
             cells.add({'+x': (2, k), '-x': (-2, k), '+z': (k, 2), '-z': (k, -2)}[side])
@@ -1836,6 +1839,19 @@ def tunnel_end(lp):
     _tunnel(lp, ('+x', '-x', '+z'))
     lp.box((0, 1.0, 1.42), (1.4, 0.9, 0.16), '#3a3a3e')                                  # old notice board
     lp.box((0, 1.0, 1.33), (1.2, 0.7, 0.02), '#d8cfa8')
+
+
+def _hall(sides):
+    def build(lp):
+        _tunnel(lp, sides, pillars=False)
+    return build
+
+
+def tunnel_pillar(lp):
+    """A square concrete column, floor to ceiling (halls use them where two walls meet at a corner)."""
+    lp.box((0, CEIL / 2, 0), (1.0, CEIL, 1.0), CONCRETE)
+    lp.box((0, 0.15, 0), (1.06, 0.3, 1.06), '#3e3e3a')
+    lp.box((0, CEIL - 0.1, 0), (1.1, 0.2, 1.1), STEEL)
 
 
 def blast_door(lp):
@@ -2043,6 +2059,16 @@ def exit_ladder(lp):
         lp.box((0, 0.3 + k * 0.32, 0), (0.5, 0.04, 0.04), '#6a6f78')
     lp.box((0, CEIL + 0.05, -0.3), (1.0, 0.1, 1.0), '#3a3f46')                             # the hatch
     lp.box((0, CEIL - 0.02, -0.3), (0.8, 0.04, 0.8), '#e8c040')
+
+
+def extract_beacon(lp):
+    """The flare on an extraction point, so you can find it in the dark."""
+    lp.beam((0, 0, 0), (0, 2.4, 0), 0.04, '#3a3f46', sides=5)
+    lp.box((0, 0.05, 0), (0.6, 0.1, 0.6), '#2a2a2e')
+    lp.emissive = True
+    lp.blob((0, 2.55, 0), 0.18, '#7dffb0', detail=0, jitter=0.05)
+    lp.box((0, 1.9, 0.0), (0.5, 0.3, 0.02), '#4fd8ff')                                  # the EXIT sign
+    lp.emissive = False
 
 
 def tarp_curtain(lp):
@@ -2347,6 +2373,12 @@ ASSETS = {
     'tunnel_t': A('Tunnel T-junction', 'hideout', tunnel_t, _tunnel_cells(('+x',))),
     'tunnel_cross': A('Tunnel crossing', 'hideout', tunnel_cross, _tunnel_cells(())),
     'tunnel_end': A('Tunnel dead end', 'hideout', tunnel_end, _tunnel_cells(('+x', '-x', '+z'))),
+    'hall_open': A('Hall floor (no walls)', 'hideout', _hall(()), _tunnel_cells((), False)),
+    'hall_wall': A('Hall wall', 'hideout', _hall(('+x',)), _tunnel_cells(('+x',), False)),
+    'hall_corner': A('Hall corner', 'hideout', _hall(('+x', '+z')), _tunnel_cells(('+x', '+z'), False)),
+    'hall_straight': A('Hall, two walls', 'hideout', _hall(('+x', '-x')), _tunnel_cells(('+x', '-x'), False)),
+    'hall_end': A('Hall end', 'hideout', _hall(('+x', '-x', '+z')), _tunnel_cells(('+x', '-x', '+z'), False)),
+    'tunnel_pillar': A('Concrete pillar', 'hideout', tunnel_pillar, [(0, 0, 4)]),
     'blast_door': A('Blast door', 'hideout', blast_door, [(-1, 0, 4), (0, 0, 4), (1, 0, 4)]),
     'vault_door': A('Vault door', 'hideout', vault_door, [(k, 0, 4) for k in range(-2, 3)]),
     'bank_counter': A('Bank counter', 'hideout', bank_counter, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
@@ -2362,11 +2394,13 @@ ASSETS = {
     'locker_row': A('Lockers', 'hideout', locker_row, [(-1, 0, 2), (0, 0, 2), (1, 0, 2)]),
     'bunk_bed': A('Bunk bed', 'hideout', bunk_bed, [(0, 0, 2), (0, -1, 2)]),
     'supply_shelf': A('Supply shelf', 'hideout', supply_shelf, [(-1, 0, 2), (0, 0, 2)]),
-    'stash_box': A('Stash box', 'hideout', stash_box, [(0, 0, 1)]),
+    'stash_box': A('Stash box (your bank)', 'hideout', stash_box, [(0, 0, 1)], station='stash'),
     'vent_fan': A('Ventilation fan', 'hideout', vent_fan),
     'water_tank': A('Water tank', 'hideout', water_tank, [(0, 0, 3)]),
     'radio_desk': A('Radio desk', 'hideout', radio_desk, [(0, 0, 1)]),
-    'exit_ladder': A('Exit ladder (to the surface)', 'hideout', exit_ladder),
+    'exit_ladder': A('Exit ladder (start a raid)', 'hideout', exit_ladder, station='raid'),
+    'extract_beacon': A('Extraction flare', 'zones', extract_beacon, editor_only=False, hidden=True,
+                        light=dict(colour=(0.3, 1.0, 0.6), radius=9, strength=1.6, at=(0, 2.6, 0), flicker=0.15)),
     'tarp_curtain': A('Tarp curtain', 'hideout', tarp_curtain),
     # zones (settings: Ctrl+click and press N)
     'zone_level': A('Zombie level zone', 'zones', _zone_marker(ZONE_COLOURS['level'], 'bars'), editor_only=True,

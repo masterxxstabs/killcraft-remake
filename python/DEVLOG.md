@@ -4,6 +4,21 @@ What changed in each version, and why. The newest entry is first. Each entry sta
 `## version | date | title`; the text under it is shown on the DEVLOG tab of the main menu.
 Lines starting with "- " become bullet points.
 
+## 1.24.0 | 2026-11-05 | Home is underground
+This is the biggest change BLOCKHOLD has had. It isn't a wave game any more. You live in a hideout deep under ground, and you go up to the surface on raids.
+
+The hideout is built from the editor's tunnel pieces, plus new hall pieces without pillars so rooms can be big and open. Your quarters have a bunk, a workbench and your stash. The bank is behind a barred counter with a vault door. The market has five merchants, and a ladder at the south end takes you up. It's an ordinary map file, so you can open it in the editor and make it your own.
+
+Raids are the heart of it. Pick the Outskirts, the Wildlands or the Blacksite at the ladder. Each is a fresh random map, more dangerous towards the middle, and the zombies don't stop: they keep climbing out of the ground around you, a few more every couple of minutes. Every map has a few ways out, each with a green flare and a ring on the ground. Stand in one for eight seconds and you're home with everything you carried.
+
+If you die up there, everything you wore, carried and held stays where you fell. You wake up in the hideout in a T-shirt and jeans. Quitting mid-raid counts as dying, so there's no getting out of it. That's what makes the loot mean something: every trip up the ladder is a bet.
+
+Some things are always safe. The bank holds items and weapons (upgrades and all), and your coins live in your account. All the merchants work through it: buy something with no room on your back and it's delivered to the bank, or sell straight from the bank without carrying anything. Your level and skills are safe too.
+
+Waves, the between-wave shop and the B key are gone. The gunsmith in the market sells guns, upgrades, attachments and camos instead.
+
+Coming next: vehicles, then playing raids with friends.
+
 ## 1.23.0 | 2026-11-05 | What you wear is what you carry
 The second step towards the extraction mode. The old backpack was a big 10 by 7 grid that everybody had from the start, so you never had to choose what to take. Now your inventory is made of what you wear. You start with a T-shirt and jeans: four pockets and a couple of small grids, and that's it.
 

@@ -3,6 +3,17 @@
 The auto-updater shows the bullet points under the newest version to players.
 To publish an update: bump the number in VERSION, add a section here, push to GitHub.
 
+## 1.24.0
+- The game now starts in the hideout: an underground base with your quarters, a bank, a market and a ladder to the surface
+- Raids: climb the ladder to go to the Outskirts, the Wildlands or the Blacksite (or any map you build with extraction points)
+- Zombies keep climbing out of the ground around you up top, tougher towards the middle and more the longer you stay
+- Extraction: find a way out (flare and ring, the HUD shows how far and which way) and stand in it to come home with your loot
+- Die up there and everything you carried is lost. Quitting mid-raid counts too. Your bank, coins, level and skills are always safe
+- The bank: Banker Moss or your stash box. Items and weapons (with their upgrades) and your coins
+- Merchants buy and sell through the bank: scrap dealer, tailor, medic, armorer and gunsmith (guns and upgrades)
+- Your kit (what you wear, carry and the weapons you own) is saved between games
+- Waves and the between-wave shop are retired; new editor pieces: halls without pillars, a concrete pillar, an extraction flare; Banker, Merchant and Gunsmith NPC roles
+
 ## 1.23.0
 - What you can carry now depends on what you wear: small pockets, plus a grid in every piece of clothing (T-shirt, hoodie, jacket, jeans, cargo pants, rigs and four backpacks)
 - Backpacks are real things: take one off or drop it and everything inside goes with it

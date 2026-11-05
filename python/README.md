@@ -1,7 +1,8 @@
 # BLOCKHOLD (Python version)
 
-The same blocky first-person wave survival game, written in Python with the
-[Ursina](https://www.ursinaengine.org/) game engine.
+A blocky first-person zombie extraction game, written in Python with the
+[Ursina](https://www.ursinaengine.org/) game engine. You live in an underground hideout; you
+go up to the surface on raids to scavenge, and you only keep what you carry back down.
 
 ## Play
 
@@ -43,7 +44,7 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | Space | jump; hold it against a ledge to climb up |
 | Shift | sprint (sprint at low cover to vault over it) |
 | C or Ctrl | crouch; press it while sprinting to slide |
-| E | talk to an NPC, use a workbench (crafting) or pick up a dropped gun; hold it to revive a downed ally, repair a barricade or refill a turret |
+| E | talk to an NPC, search a container, use a workbench, your stash or the exit ladder, or pick something up; hold it to revive a downed ally, repair a barricade or refill a turret |
 | X | drop the gun you're holding (it keeps its ammo, upgrades and attachments) |
 | I | inventory: your pockets, the clothes and armor you're wearing (each piece has its own grid) and the weapons in your hands |
 | H | heal: use the bandage / medkit that fits how hurt you are (takes a few seconds; click to stop) |
@@ -53,16 +54,13 @@ with `git pull`, which is the most reliable way (see [Updates](#updates)).
 | Q | use your class's ability |
 | F | shove: knock the zombies in front of you down (they get back up) |
 | K | skill tree: spend the points you get from levelling up |
-| B | shop (between waves) |
 | Tab (hold) | scoreboard: kills, score and coins for you and your allies |
-| N | start the next wave early |
 | M | mute |
 | F11 | fullscreen on/off |
 | Esc | pause (mouse sensitivity, volume and field of view are here) |
 | F8 / F9 | turn / roll a downloaded 3D gun model that's facing the wrong way |
 
-Your best wave, best score and total kills are saved in a `.blockhold` folder in your
-home folder.
+Your kit, bank, coins, level and records are saved in a `.blockhold` folder in your home folder.
 
 ### Devlog
 
@@ -115,6 +113,64 @@ clear) under Settings or in the pause menu. The presets are in `blockhold/data/a
 ![Dusk (top) and night (bottom)](docs/atmosphere.jpg)
 
 ![First-person view: blocky arms holding an AK-47](docs/first_person.jpg)
+
+## The hideout and raids
+
+**PLAY** takes you to the **hideout**, a base deep under ground. It's safe down there: no zombies.
+
+| Room | What's there |
+| --- | --- |
+| Quarters (north, you start here) | your bunk, your **stash box** (opens your bank) and a **workbench** |
+| Bank (west) | **Banker Moss** behind the counter: your bank |
+| Market (east) | the **scrap dealer**, **tailor**, **medic**, **armorer** and **gunsmith**, and Foreman Kade, who has jobs |
+| Hub (the middle) | Radio Ruth, who'll tell you how things work up top |
+| The way out (south) | the **ladder** to the surface: press **E** to go on a raid |
+
+**Raids.** Pick where to go at the ladder:
+
+| Raid | Size | Zombie levels | Ways out |
+| --- | --- | --- | --- |
+| The Outskirts | 128 x 128 m | 1-7 | 3 |
+| The Wildlands | 256 x 256 m | 2-14 | 4 |
+| The Blacksite | 400 x 400 m | 5-22 | 4 |
+
+Every raid is a new random map, with loot containers, barrels and ore. Zombies are tougher towards
+the middle, and they keep climbing out of the ground around you for as long as you stay, a few more
+every couple of minutes. The top left of the HUD shows the nearest **way out**, how far it is and
+which way to turn; each one has a green flare and a blue ring. Stand inside the ring for 8 seconds to
+**extract**: you're back in the hideout with everything you carried, plus XP for getting out.
+
+Any map you build with **extraction points** (editor, Zones tab) shows up at the ladder as a raid too.
+
+**Dying up there costs you your kit:** everything you wore and carried and the weapons you had stay
+where you fell, and you wake up in the hideout in a T-shirt and jeans with the starting weapons.
+Quitting the game in the middle of a raid counts as dying, and so does **GIVE UP** in the pause menu.
+What's always safe: your **bank**, your **coins**, and your **level and skills**.
+
+**The bank.** Talk to the banker or open your stash box. The bank is a 10 x 8 grid next to your own
+grids: drag things in and out, or DEPOSIT ALL. Weapons go in too, with their upgrades and attachments.
+Your **coins** live in your bank account (you never carry them).
+
+Coins that zombies drop go into your account when you pick them up.
+
+**Merchants** work with the bank. What you buy goes on you (clothes go straight on if that slot is
+free) or into the bank when you're out of room. You can sell from your inventory or straight from the
+bank. Merchants pay 40% of what they sell things for.
+
+| Merchant | Sells | Buys |
+| --- | --- | --- |
+| Scrap dealer | springs, pipes, gears, rope, cloth, tarp, sheet metal, gun bodies, ingots | scrap parts, resources, trade goods |
+| Tailor | clothes, rigs and backpacks | clothes, cloth, rope, tarp, hides |
+| Medic | bandages, medkits, surgical kits, food | medical and food |
+| Armorer | helmets and vests | armor and sheet metal |
+| Gunsmith | guns, upgrades, attachments and camos (the old shop) | |
+
+Prices are in `blockhold/data/merchants.py`, raids in `blockhold/data/raids.py`.
+
+**Make the hideout your own:** it's an ordinary map, `maps/hideout.json`. Open it from the MAPS tab
+and change anything: it's built from the editor's Hideout pieces (halls, tunnels, pillars, doors,
+lamps...). Keep a player start, the exit ladder and a stash box. `python -m blockhold.hideout`
+builds a fresh one.
 
 ## Maps and the map editor
 
@@ -271,7 +327,8 @@ by sending the file.
 
 ## Zombies
 
-Eleven kinds of zombie (plus a secret one), each new one joining the waves a little later:
+Eleven kinds of zombie (plus a secret one). The tougher kinds only show up where zombies are a
+higher level: in a raid, a zone's zombie level x 1.6 counts as the "wave" in this table.
 
 | Zombie | From wave | What it does |
 | --- | --- | --- |
@@ -302,8 +359,9 @@ has its own column in the skill tree:
 | Medic | bandages and kits 40% faster, +1 health per second | **Field Heal**: heal 40 now and 6/s for 6 s, heal allies, get downed ones up |
 | Engineer | barricades and turrets +50% health | **Sentry**: drop an auto-turret that fights for 25 s |
 
-**Levels.** Kills give XP (a shambler 10, a brute 40, a boss 500+; knocked-down kills +5), every
-cleared wave gives 25 x the wave number, and NPC jobs 150. Each level is a **skill point**. The
+**Levels.** Kills give XP (a shambler 10, a brute 40, a boss 500+; knocked-down kills +5; higher-level
+zombies more), getting out of a raid alive 120 plus 10 for every minute you were up there, and NPC
+jobs 150. Each level is a **skill point**. The
 level badge next to your health shows your level, the thin gold bar under the health your XP, and a
 **K** appears when you have points to spend. Your level, XP and skills are **saved** and carry over
 to every game. Skills in another class's column stay learned but only work while you play that
@@ -352,7 +410,7 @@ The Blaster and Blaster Repeater use real 3D models from Kenney's
 [Starter Kit FPS](https://github.com/KenneyNL/Starter-Kit-FPS) (MIT License, see
 `assets/models/`). The rest are built in code in `blockhold/data/gun_models.py`.
 
-Between waves, the shop's **Weapons** tab lets you buy guns and upgrade each one separately:
+The **gunsmith** in the hideout's market sells guns and upgrades each one separately:
 damage, fire rate, magazine size and reload speed (melee weapons get reach instead). The
 **Player** tab has the upgrades that affect everything: health, power, speed, regen, armor
 and more.
@@ -374,7 +432,8 @@ every gun.
 
 ### Allies
 
-The **ALLIES** tab in the shop hires survivors who follow you and shoot zombies:
+*(Allies were part of the old wave mode and can't be hired in the hideout yet.)* The **ALLIES**
+tab in the old shop hires survivors who follow you and shoot zombies:
 the Rookie (pistol), Gunner (AR-15), Medic (MP5, heals you when you're close) and Heavy
 (M249). You can have 3 at a time. When one goes down, stand next to them and hold **E**
 to get them back up. Everyone gets back up at the end of a wave. Their kills earn you coins.
@@ -529,7 +588,8 @@ preview shows where it goes (green = fits, red = it says why not). **Left click*
 
 ### Power-ups
 
-Now and then a zombie drops a floating power-up. Walk into it and it works for the whole team:
+*(Power-ups only drop in the old wave mode.)* Now and then a zombie drops a floating power-up.
+Walk into it and it works for the whole team:
 
 | Power-up | What it does |
 | --- | --- |
@@ -719,7 +779,10 @@ are drawn in code in `blockhold/textures.py`. Change the colours there, or add a
 | File | What it does |
 | --- | --- |
 | `main.py` | starts the game |
-| `blockhold/game.py` | main loop, input, waves, shop, saving |
+| `blockhold/game.py` | main loop, input, screens, saving |
+| `blockhold/raid.py` | the hideout and raids: extraction, the zombies up top, your kit and the bank |
+| `blockhold/hideout.py` | builds the hideout map out of tunnel and hall pieces |
+| `blockhold/trader_ui.py` | the merchant screen and the raid picker |
 | `blockhold/world.py` | builds the arena from a map (or at random); collisions and line-of-sight |
 | `blockhold/editor.py` | the map editor |
 | `blockhold/npc_editor.py` | the editor's EDIT NPC panel |

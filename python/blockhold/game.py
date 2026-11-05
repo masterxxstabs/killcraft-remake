@@ -21,6 +21,7 @@ from .pickups import Pickups
 from .powerups import PowerUps
 from .mining import Mining
 from .loot import Loot
+from .raid import Raids
 from .barricades import Barricades
 from .drops import WeaponDrops
 from .animals import Animals
@@ -36,7 +37,7 @@ from .render import col, hex_rgb, node, set_fog
 from .sounds import Sounds
 from .updater import Updater, restart
 from .ui import UI, apply_style, apply_theme
-from .data.items import HAND_SLOTS
+from .data.items import HAND_SLOTS, hand_slot
 from .data.themes import DEFAULT_STYLE, DEFAULT_THEME, STYLES, THEMES, default_hud
 from .weapons import Weapons
 from .world import MAX_SIZE, MIN_SIZE, World
@@ -151,6 +152,7 @@ class Game(Entity):
         self.healing = Healing(self)            # bandages, medkits and food take time to use
         self.progress = Progression(self)       # XP, levels, skills and your class
         self.encounters = Encounters(self)      # random encounter zones from the map
+        self.raids = Raids(self)                # the hideout, raids, extraction, your kit and the bank
         self.build_kind = None       # build mode: which barricade is being placed (None = not building)
         self.build_rot = 0
         self.build_spot = None
@@ -225,6 +227,7 @@ class Game(Entity):
     def quit(self):
         if self.state in ('playing', 'paused', 'dead'):
             self.progress.store(self.player)
+            self.raids.leave()                    # (quitting in the middle of a raid loses your kit)
         application.quit()
 
     # ── flow ─────────────────────────────────────────────────────────────────
@@ -255,13 +258,15 @@ class Game(Entity):
         self.arena_size = half
         self.save_settings()
 
-    def start_game(self, map_data=None, from_editor=False):
-        """Start a run on map_data, or on the map picked in the menu (None = random arena)."""
-        if map_data is None and not from_editor and self.map_stem:
-            try:
-                map_data = maps.load_map(self.map_stem)
-            except Exception as e:
-                print('could not load map', self.map_stem, e)
+    def start_game(self, map_data=None, from_editor=False, mode=None, raid=None):
+        """Go somewhere: mode 'hideout' (map_data is the hideout), 'raid' (map_data, or None for a generated
+        raid), or an editor play test (from_editor: map_data as a raid where nothing is saved or lost).
+        With no mode (PLAY in the menu) you go to the hideout."""
+        if mode is None and not from_editor:
+            self.raids.enter_hideout()
+            return
+        if from_editor:
+            mode = 'raid'
         self.from_editor = map_data if from_editor else None
         self.atmosphere_override = None
         for screen in (self.ui.menu, self.ui.dead, self.ui.pause, self.ui.shop):
@@ -282,10 +287,15 @@ class Game(Entity):
         self.npcs.clear()
         self.encounters.clear()
         self.world.destroy()
-        self.world = World(map_data=map_data, size=self.arena_size)
+        size = getattr(self, 'arena_size_override', None) or self.arena_size
+        self.arena_size_override = None
+        self.world = World(map_data=map_data, size=size)
         self.sky_dome.set_arena(self.world.half)
         self.lighting.clear()
-        self.start_quest()
+        if mode == 'raid':
+            self.start_quest()
+        else:
+            self.end_quest()
         self.player.reset()
         self.progress.start(self.player, self.class_id)
         self.player.position = Vec3(self.world.player_spawn)
@@ -300,12 +310,15 @@ class Game(Entity):
         self.shop_open = False
         self.god_mode = False
         self.state = 'playing'
-        self.begin_intermission(8)
-        self.ui.banner('GET READY', '#ffe066', 3, 'Survive as many waves as you can')
+        self.phase = mode
+        self.raids.begin(mode, raid, practice=from_editor)
         self.show_cursor(False)
 
     def to_menu(self):
         self.progress.store(self.player)            # keep the XP earned since the last level-up
+        self.raids.leave()
+        self.raids.mode = None
+        self.atmosphere_override = None
         self.close_shop()
         self.clear_allies()
         self.powerups.clear()
@@ -421,10 +434,16 @@ class Game(Entity):
         self.begin_intermission()
 
     # ── shop ─────────────────────────────────────────────────────────────────
-    def open_shop(self):
+    def open_shop(self, gunsmith=False):
         if self.player.downed:
             return
-        if self.phase != 'intermission':
+        if self.raids.mode and not gunsmith:
+            self.ui.banner('NO SHOP UP HERE', '#d9912b', 1.6, 'The gunsmith in the hideout sells guns and upgrades')
+            return
+        if self.shop_open and gunsmith:                     # (from the talk window)
+            self.ui.talk.close()
+            self.shop_open = False
+        if self.phase not in ('intermission', 'hideout'):
             self.ui.banner('SHOP CLOSED', '#ff7070', 1.2, 'The shop opens between waves')
             return
         self.exit_build()
@@ -443,6 +462,8 @@ class Game(Entity):
             return
         self.ui.bag.close()            # the backpack / furnace screen (drops whatever you were dragging back in)
         self.ui.talk.close()
+        self.ui.trader.close()
+        self.ui.raid_menu.close()
         self.ui.skills.close()
         self.shop_open = False
         self.craft_open = False
@@ -450,8 +471,61 @@ class Game(Entity):
         self.ui.craft.enabled = False
         self.ui.hud.enabled = True
         self.show_cursor(False)
+        if self.raids.mode == 'hideout':
+            self.raids.save_kit()             # trades, bank moves and crafting in the hideout are kept for good
 
     # ── crafting ─────────────────────────────────────────────────────────────
+    def near_station(self, player=None, reach=2.2):
+        """'raid' (the exit ladder) or 'stash' if you're next to one, else None."""
+        p = player or self.player
+        for pos, kind in self.world.stations:
+            if kind == 'raid' and self.raids.mode != 'hideout':
+                continue
+            if math.hypot(pos.x - p.position.x, pos.z - p.position.z) < reach:
+                return kind
+        return None
+
+    def open_screen(self):
+        """Pause the game behind a menu screen (cursor on, HUD off)."""
+        self.exit_build()
+        self.shop_open = True
+        self.aiming = False
+        camera.fov = self.fov
+        self.ui.scope.enabled = False
+        self.weapons.trigger(False)
+        self.ui.hud.enabled = False
+        self.show_cursor(True)
+
+    def open_bank(self):
+        if self.player.downed or self.player.dead:
+            return
+        if self.ui.talk.active or self.ui.trader.active:      # (from the banker or a merchant's screen)
+            self.ui.talk.close()
+            self.ui.trader.close()
+            self.shop_open = False
+        if self.shop_open:
+            return
+        self.open_bag(container=self.raids.bank())
+
+    def open_trader(self, npc):
+        if self.ui.talk.active:
+            self.ui.talk.close()
+            self.shop_open = False
+        self.open_screen()
+        self.ui.trader.open(npc)
+
+    def open_raid_menu(self):
+        if self.shop_open or self.player.downed:
+            return
+        self.open_screen()
+        self.ui.raid_menu.open()
+
+    def give_up(self):
+        """Pause menu in a raid: leave it the hard way (you lose your kit)."""
+        self.ui.pause.enabled = False
+        self.raids.lost()
+        self.raids.enter_hideout(('RAID ABANDONED', 'You left everything you carried up there.'))
+
     def near_bench(self, player=None, reach=2.8):
         p = player or self.player
         return any((Vec3(b.x - p.position.x, 0, b.z - p.position.z)).length() < reach for b in self.world.benches)
@@ -584,8 +658,21 @@ class Game(Entity):
         if self.weapons.owns(wid) or self.coins < d['price']:
             self.sounds.play('deny')
             return
+        w = self.weapons
+        if self.raids.mode == 'hideout' and w.slots.get(hand_slot(d)) is not None and \
+                self.player.inventory.free_spot('w_' + wid) is None:          # no room on you: to the bank
+            from .inventory import new_pile
+            it = new_pile('w_' + wid)
+            it['pack'] = dict(wid=wid, state=dict(ammo=w.stat(d, 'mag')), levels={}, attach={}, owned_att=[],
+                              camo='factory')
+            if not self.raids.bank_grid().put(it):
+                self.ui.banner('NO ROOM', '#d9912b', 1.6, 'No room on you or in your bank')
+                self.sounds.play('deny')
+                return
+            self.ui.banner('SENT TO YOUR BANK', '#4fd8ff', 1.6, f"No room on you: the {d['name']} is in your bank")
+        else:
+            w.give(wid)
         self.coins -= d['price']
-        self.weapons.give(wid)
         self.ui.shop_sel = wid
         self.sounds.play('buy')
         self.ui.refresh_shop()
@@ -695,6 +782,10 @@ class Game(Entity):
             if a is not near:
                 a.revive_progress = 0
         if near is None:
+            ext = self.raids.prompt()
+            if ext:
+                self.ui.set_prompt(*ext)
+                return
             drop_msg = self.drops.prompt(p)
             if drop_msg:
                 self.ui.set_prompt(drop_msg)
@@ -709,6 +800,11 @@ class Game(Entity):
                 return
             if self.near_bench():
                 self.ui.set_prompt('Press E to use the workbench')
+                return
+            st = self.near_station()
+            if st:
+                self.ui.set_prompt({'raid': 'Press E to climb up and go on a raid',
+                                    'stash': 'Press E to open your stash (your bank)'}.get(st, ''))
                 return
             msg, progress = self.barricades.interact(p, inp.use, dt)
             self.ui.set_prompt(msg or '', progress)
@@ -776,6 +872,7 @@ class Game(Entity):
         self.progress.store(player or self.player)     # your level and XP are kept
         if player is not None and not player.is_local:
             return                       # (multiplayer: a team-mate went down)
+        self.raids.lost()                # what you carried stays up there
         self.close_shop()                # the workbench can be open mid-wave
         self.weapons.trigger(False)
         self.aiming = False
@@ -783,7 +880,8 @@ class Game(Entity):
         self.state = 'dead'
         self.sounds.play('game_over')
         s = self.save
-        stats = dict(wave=self.wave_number, kills=self.kills, score=self.score, time=self.time)
+        stats = dict(wave=self.wave_number, kills=self.kills, score=self.score, time=self.time,
+                     raid=self.raids.raid['name'] if self.raids.raid else self.world.name)
         record = self.score > s['best_score'] or self.wave_number > s['best_wave']
         s['best_wave'] = max(s['best_wave'], self.wave_number)
         s['best_score'] = max(s['best_score'], self.score)
@@ -961,6 +1059,7 @@ class Game(Entity):
                 return
             if key in ('b', 'escape') or (key == 'e' and self.craft_open) or \
                     (key in ('i', 'e', 'tab') and self.ui.bag.active) or (key == 'e' and self.ui.talk.active) or \
+                    (key == 'e' and (self.ui.trader.active or self.ui.raid_menu.active)) or \
                     (key == 'k' and self.ui.skills.active):
                 self.close_shop()
             return
@@ -1001,6 +1100,13 @@ class Game(Entity):
             return
         if key == 'e' and self.near_bench() and not self.player.downed:
             self.open_craft()
+            return
+        st = self.near_station() if key == 'e' and not self.player.downed else None
+        if st == 'raid':
+            self.open_raid_menu()
+            return
+        if st == 'stash':
+            self.open_bank()
             return
         if key == 'g':
             self.toggle_build()
@@ -1177,5 +1283,6 @@ class Game(Entity):
             self.npcs.update(dt)
             self.healing.update(dt)
             self.encounters.update(dt)
+            self.raids.update(dt)
         self.drops.update(dt)
         self.ui.update(dt)

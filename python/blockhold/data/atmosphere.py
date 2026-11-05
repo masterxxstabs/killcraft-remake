@@ -23,6 +23,10 @@ ATMOSPHERES = {
     'day': dict(name='Day', sky='#6fb6ea', fog='#a9d6f2', fog_near=30, fog_far=110,
                 ambient=(1.0, 1.0, 1.0), clouds='#ffffff', cloud_amt=0.65, stars=0.0,
                 torch=0.0, torch_radius=0, lights=0.35, mod_dim=1.0),
+    # the hideout, deep underground: dark, lit by its lamps
+    'hideout': dict(name='Hideout', sky='#08080a', fog='#121214', fog_near=10, fog_far=48,
+                    ambient=(0.3, 0.29, 0.28), clouds='#101012', cloud_amt=0.0, stars=0.0,
+                    torch=0.55, torch_radius=9, lights=1.45, mod_dim=0.3, hidden=True),
     # the map editor: bright and clear
     'editor': dict(name='Editor', sky='#6fb6ea', fog='#a9d6f2', fog_near=150, fog_far=320,
                    ambient=(1.0, 1.0, 1.0), clouds='#ffffff', cloud_amt=0.5, stars=0.0,

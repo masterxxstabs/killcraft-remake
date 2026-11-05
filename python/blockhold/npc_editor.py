@@ -168,10 +168,17 @@ class NpcEditor:
         self.field(b, 'name', d['name'], x + 0.13, y + 0.004, 0.42, limit=24)
         y -= 0.06
         U.text(b, 'Role', x, y - 0.012, 0.85, 'MUTED')
-        self.choice_row(b, x + 0.13, y + 0.002, ROLES, d.get('role'), self.set_role, w=0.17)
+        self.choice_row(b, x + 0.13, y + 0.002, ROLES, d.get('role'), self.set_role, w=0.105, size=0.6)
         y -= 0.06
-        U.text(b, 'The NPC on the right changes as you pick. In a game, players walk up and press E to talk.',
-               x + 0.6, y - 0.005, 0.72, 'MUTED', wordwrap=30)
+        if d.get('role') == 'merchant':                  # what they deal in (data/merchants.py)
+            from .data.merchants import MERCHANTS
+            U.text(b, 'Sells', x, y - 0.012, 0.85, 'MUTED')
+            self.choice_row(b, x + 0.13, y + 0.002, [(k, m['name'].upper()) for k, m in MERCHANTS.items()],
+                            d.get('shop'), lambda v: self.set('shop', v), w=0.105, size=0.55)
+            y -= 0.06
+        else:
+            U.text(b, 'The NPC on the right changes as you pick. In a game, players walk up and press E to talk.',
+                   x + 0.6, y - 0.005, 0.72, 'MUTED', wordwrap=30)
         rows = (('Skin', 'skin', SKIN_COLOURS), ('Shirt', 'shirt', CLOTH_COLOURS), ('Trousers', 'pants', CLOTH_COLOURS),
                 ('Hair', 'hair', HAIR_COLOURS))
         for name, key, choices in rows:
@@ -189,11 +196,13 @@ class NpcEditor:
                          lambda k=key, v=on: self.set(k, not v, model=True), fill='TEAL' if on else 'SLATE',
                          edge='INK', size=0.72)
         y -= 0.075
+        if d.get('role') == 'merchant':                  # (no room for the ready-made NPCs under the Sells row)
+            return
         U.text(b, 'Start over from a ready-made NPC (keeps the name):', x, y, 0.75, 'MUTED')
         y -= 0.03
         for i, (role, name) in enumerate(ROLES):
-            U.FlatButton(b, f"{PRESETS[role]['name']}  ({name.lower()})", x + i * 0.27, y, 0.26, 0.04,
-                         lambda r=role: self.use_preset(r), fill='SLATE', edge='INK', size=0.68)
+            U.FlatButton(b, f"{PRESETS[role]['name']}  ({name.lower()})", x + (i % 3) * 0.27, y - (i // 3) * 0.046,
+                         0.26, 0.04, lambda r=role: self.use_preset(r), fill='SLATE', edge='INK', size=0.68)
 
 
     def tab_dialogue(self, b, x, y):

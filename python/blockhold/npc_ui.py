@@ -115,7 +115,10 @@ class TalkScreen:
         b = self.body = Entity(parent=self.win.body)
         g, n, win = self.game, self.npc, self.win
         d = n.data
-        role = dict(trader='TRADER', quest='QUEST GIVER', talker='').get(d.get('role'), '')
+        role = dict(trader='TRADER', quest='QUEST GIVER', talker='', banker='BANKER', merchant='MERCHANT',
+                    gunsmith='GUNSMITH').get(d.get('role'), '')
+        if d.get('role') == 'banker':
+            role = f'{g.coins} coins in your account'
         win.title.text = n.name
         win.right.text = f'{g.coins} coins' if self.mode == 'trade' else role
         x0, y = win.left, win.top
@@ -130,6 +133,12 @@ class TalkScreen:
             tabs.append(('TRADE', lambda: self.show('trade')))
         if d.get('role') == 'quest' and d.get('quest'):
             tabs.append(('JOB', lambda: self.show('job')))
+        if d.get('role') == 'banker':
+            tabs.append(('BANK', g.open_bank))
+        if d.get('role') == 'merchant':
+            tabs.append(('TRADE', lambda: g.open_trader(n)))
+        if d.get('role') == 'gunsmith':
+            tabs.append(('GUNS', lambda: g.open_shop(gunsmith=True)))
         tabs.append(('BYE  (E)', g.close_shop))
         bw = (inner - 0.015 * (len(tabs) - 1)) / len(tabs)
         for i, (label, fn) in enumerate(tabs):

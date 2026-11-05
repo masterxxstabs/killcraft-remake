@@ -9,6 +9,9 @@
 #    role        'trader'  has a TRADE button: swaps your items / coins for theirs
 #                'quest'   gives you a job, rewards you when it's done
 #                'talker'  just has things to say
+#                'banker'  opens your BANK (items and coins, shared by every merchant)
+#                'merchant' buys and sells for coins: `shop` picks what (data/merchants.py)
+#                'gunsmith' sells guns, upgrades, attachments and camos
 #    skin, shirt, pants, hair, eyes    colours
 #    hat         None, 'cap', 'helmet', 'cowboy', 'beanie', 'hood'
 #    beard, goggles, apron             True / False
@@ -27,7 +30,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 import copy
 
-ROLES = [('trader', 'Trader'), ('quest', 'Quest giver'), ('talker', 'Talker')]
+ROLES = [('trader', 'Trader'), ('quest', 'Quest giver'), ('talker', 'Talker'), ('banker', 'Banker'),
+         ('merchant', 'Merchant'), ('gunsmith', 'Gunsmith')]
 HATS = [None, 'cap', 'helmet', 'cowboy', 'beanie', 'hood']
 QUEST_KINDS = [('bring', 'Bring items'), ('kill', 'Kill zombies'), ('hunt', 'Hunt animals')]
 HUNT_TARGETS = ['any', 'deer', 'pig', 'chicken']
@@ -80,6 +84,38 @@ PRESETS = {
         trades=[], quest=None),
 }
 
+PRESETS['banker'] = dict(
+    name='Banker Moss', role='banker',
+    skin='#c68f63', shirt='#2a4a6a', pants='#1d1e22', hair='#1d1e22', eyes='#3a2a1a',
+    hat=None, beard=False, goggles=True, apron=False,
+    greeting="Your account, your business. What can I keep safe for you?",
+    lines=["Coins and kit in the vault never leave it. Not even if you do.",
+           "Every merchant down here deals through me. Buy something with no room on your back, it comes here.",
+           "Your stash box in the quarters opens the same account."],
+    farewell="Come back alive.",
+    trades=[], quest=None)
+PRESETS['merchant'] = dict(
+    name='Scrap dealer', role='merchant', shop='scrapper',
+    skin='#e0b08a', shirt='#6b4a2b', pants='#3a3d42', hair='#6b4a2b', eyes='#3a2a1a',
+    hat='cap', beard=True, goggles=False, apron=True,
+    greeting="Buying, selling. Mostly buying.",
+    lines=["Everything goes through the bank. Saves me counting coins."],
+    farewell="Bring me something good.",
+    trades=[], quest=None)
+PRESETS['gunsmith'] = dict(
+    name='Gunsmith Varga', role='gunsmith',
+    skin='#a8714a', shirt='#3e4530', pants='#3a3d42', hair='#a8a8a8', eyes='#1d1e22',
+    hat=None, beard=True, goggles=True, apron=True,
+    greeting="Guns, parts, paint. Coins up front.",
+    lines=["A gun you lose up top is a gun you buy twice.",
+           "Upgrades stay with the gun. Look after it."],
+    farewell="Shoot straight.",
+    trades=[], quest=None)
+
+# what each merchant is called and looks like (shop -> name, shirt, hat)
+MERCHANT_LOOKS = {'scrapper': ('Scrap dealer Ivo', '#6b4a2b', 'cap'), 'tailor': ('Tailor Wen', '#6a3a7a', 'beanie'),
+                  'medic': ('Doc Amari', '#e8e8e4', None), 'armorer': ('Armorer Bosk', '#4f5a3a', 'helmet')}
+
 DEFAULT_QUEST = dict(kind='bring', item='raw_meat', animal='any', n=5, reward_coins=150, reward_item=None,
                      reward_n=0, repeat=True,
                      offer="Bring me 5 raw meat and I'll make it worth your while.",
@@ -94,6 +130,9 @@ def fill_npc(data):
     out = copy.deepcopy(PRESETS.get(role, PRESETS['trader']))
     for k, v in (data or {}).items():
         out[k] = copy.deepcopy(v)
+    if out.get('role') == 'merchant' and 'name' not in (data or {}):
+        name, shirt, hat = MERCHANT_LOOKS.get(out.get('shop'), (out['name'], out['shirt'], out['hat']))
+        out.update(name=name, shirt=shirt, hat=hat)
     if out.get('quest') is not None:
         q = copy.deepcopy(DEFAULT_QUEST)
         q.update(out['quest'])

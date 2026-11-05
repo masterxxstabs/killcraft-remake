@@ -29,6 +29,8 @@ GEAR_BOXES = {'head': (0.0, 0.0, 0.12, 0.11), 'body': (0.0, 0.13, 0.12, 0.16),
               'rig': (0.29, 0.0, 0.13, 0.13), 'backpack': (0.29, 0.15, 0.15, 0.14),
               'tool': (0.0, 0.34, 0.08, 0.12), 'handgun': (0.1, 0.34, 0.14, 0.08), 'primary': (0.26, 0.34, 0.24, 0.08)}
 HANDS_DY, STATS_DY = 0.34, 0.48
+BANK_BOXES = {'tool': (0.0, 0.51, 0.07, 0.085), 'handgun': (0.09, 0.51, 0.14, 0.06),   # your hands, under the bank
+              'primary': (0.25, 0.51, 0.24, 0.06)}
 FURNACE_BOXES = {'inp': (0.08, 0.04, 0.12, 0.12), 'fuel': (0.08, 0.28, 0.12, 0.12), 'out': (0.36, 0.13, 0.15, 0.15)}
 WEAR = [k for k, _ in SLOTS + CLOTHING_SLOTS]
 HANDS = [k for k, _ in HAND_SLOTS]
@@ -232,9 +234,60 @@ class BagScreen:
 
     # ── geometry ─────────────────────────────────────────────────────────────
     def boxes(self):
+        if self.is_bank():
+            return BANK_BOXES
         if self.container is not None:
             return {}
         return FURNACE_BOXES if self.furnace is not None else GEAR_BOXES
+
+    def is_bank(self):
+        return self.container is not None and self.container.get('bank')
+
+    def bank_weapon_in(self, it):
+        """A weapon going into the bank takes everything about it along (ammo, upgrades, attachments, camo)."""
+        w = self.game.weapons
+        d = w.get_def(ITEMS[it['id']]['weapon'])
+        pack = w.take_out(d)
+        pack['owned_att'] = sorted(pack.get('owned_att', ()))
+        it['pack'] = pack
+        return it
+
+    def bank_weapon_out(self, it):
+        """Take a weapon out of the bank: into its hand slot if that's free, else your grids."""
+        w, inv = self.game.weapons, self.inv
+        wid = it['pack']['wid']
+        d = w.get_def(wid)
+        if d is None:
+            return False
+        if w.owns(wid):
+            self.ui.banner('ALREADY GOT ONE', '#d9912b', 1.4, f"You already have a {d['name']}")
+            return False
+        if w.slots.get(hand_slot(d)) is not None and inv.free_spot('w_' + wid) is None:
+            self.ui.banner('NO ROOM', '#d9912b', 1.4, 'Make room for it first')
+            return False
+        w.put_back(it['pack'], equip=False)
+        inv.changed()
+        return True
+
+    def deposit_all(self):
+        """Bank: put everything in your grids (not weapons) into the bank."""
+        bank = self.loot_grid()
+        moved = 0
+        for g in self.inv.grids():
+            for it in list(g.items):
+                if ITEMS[it['id']]['kind'] == 'weapon':
+                    continue
+                g.items.remove(it)
+                if bank.put(it):
+                    moved += 1
+                else:
+                    g.items.append(it)
+        if moved:
+            self.game.sounds.play('equip', volume=0.7)
+        else:
+            self.ui.banner('BANK FULL', '#d9912b', 1.2, 'No room left in the bank')
+        self.inv.changed()
+        self.refresh()
 
     def loot_grid(self):
         return self.game.loot.grid(self.container) if self.container is not None else None
@@ -367,6 +420,10 @@ class BagScreen:
 
     def to_ground(self, it):
         it.pop('_g', None)
+        if 'pack' in it:                                  # a weapon out of the bank
+            p = self.player
+            self.game.drops.spawn(it['pack'], p.position, p.yaw + 70, p)
+            return
         if ITEMS[it['id']]['kind'] == 'weapon':           # weapons keep their upgrades on the ground
             w = self.game.weapons
             pack = w.take_out(w.get_def(ITEMS[it['id']]['weapon']))
@@ -430,8 +487,8 @@ class BagScreen:
     def refresh(self):
         if not self.active:
             return
-        if self.container is not None and self.container not in self.game.loot.list:     # it rotted away
-            self.container = None
+        if self.container is not None and not self.is_bank() and self.container not in self.game.loot.list:
+            self.container = None                                                   # it rotted away
         if self.tiles is not None:
             destroy(self.tiles)
         t = self.tiles = Entity(parent=self.win.body)
@@ -444,6 +501,16 @@ class BagScreen:
         if self.furnace is not None:          # at a furnace: its slots take the place of your gear
             U.FlatButton(t, 'CLOSE  (E)', self.win.left, self.win.btn_y, 0.26, U.BTN_H, self.game.close_shop)
             self.refresh_furnace()
+            return
+        if self.is_bank():                    # the bank: its grid takes the place of your gear
+            U.text(t, 'IN YOUR HANDS', self.sx, self.sy - 0.485, 0.6, U.MUTED)
+            for key in BANK_BOXES:
+                self.slot_box(t, key)
+            U.text(t, f'Safe whatever happens up top. Merchants sell from it and deliver to it.  '
+                      f'{self.game.coins} coins.', self.sx, self.sy - 0.6, 0.55, U.MUTED, wordwrap=64)
+            U.FlatButton(t, 'DEPOSIT ALL', self.win.left + 0.3, self.win.btn_y, 0.22, U.BTN_H, self.deposit_all,
+                         fill='GREEN', edge='INK', size=0.85)
+            U.FlatButton(t, 'CLOSE  (E)', self.win.left, self.win.btn_y, 0.26, U.BTN_H, self.game.close_shop)
             return
         if self.container is not None:        # searching a container: its grid takes the place of your gear
             n = len(self.container['items'])
@@ -578,6 +645,12 @@ class BagScreen:
             g = c[0]
             home = (g.key, it['x'], it['y'], it['rot'])
             kind = ITEMS[it['id']]['kind']
+            if g.key == 'loot' and 'pack' in it:         # a weapon out of the bank
+                g.items.remove(it)
+                if not self.bank_weapon_out(it):
+                    g.place(it, *home[1:])
+                self.refresh()
+                return
             if g.key == 'loot':                          # out of the container
                 g.items.remove(it)
                 slot = inv.slot_for(it['id'])
@@ -591,11 +664,16 @@ class BagScreen:
                 self.refresh()
                 return
             if self.container is not None:              # into the container
-                if kind == 'weapon':
+                if kind == 'weapon' and not self.is_bank():
                     return
                 g.items.remove(it)
+                if kind == 'weapon':
+                    self.bank_weapon_in(it)
                 if not self.loot_grid().put(it):
-                    g.place(it, *home[1:])
+                    if 'pack' in it:
+                        self.game.weapons.put_back(it.pop('pack'), equip=False)
+                    else:
+                        g.place(it, *home[1:])
                 inv.changed()
                 self.game.sounds.play('equip', volume=0.7)
                 self.refresh()
@@ -661,7 +739,7 @@ class BagScreen:
         if self.furnace is not None and self.drag is None and self.fur_t <= 0:
             self.fur_t = 0.25
             self.refresh_furnace()
-        if self.container is not None and self.container not in self.game.loot.list:
+        if self.container is not None and not self.is_bank() and self.container not in self.game.loot.list:
             self.game.close_shop()
             return
         if self.drag is None:
@@ -695,8 +773,8 @@ class BagScreen:
             g = self.grid(t[1])
             if g is None or not g.can_hold(it['id'], it):
                 return False
-            if t[1] == 'loot' and ITEMS[it['id']]['kind'] == 'weapon':     # guns stay with you (or on the ground)
-                return False
+            if t[1] == 'loot' and ITEMS[it['id']]['kind'] == 'weapon' and not self.is_bank():
+                return False                                       # guns stay with you (or on the ground, or in the bank)
             other = g.item_at(t[2], t[3])
             if other is not None and other['id'] == it['id'] and ITEMS[it['id']]['stack'] > 1:
                 return True
@@ -712,6 +790,14 @@ class BagScreen:
         home = d['src'][1] if d['src'][0] == 'grid' else None
         if t is None:
             self.return_home(d)
+        elif t[0] == 'grid' and self.is_bank() and ITEMS[it['id']]['kind'] == 'weapon' and \
+                (t[1] == 'loot') != ('pack' in it):          # a weapon going into / out of the bank
+            if t[1] == 'loot':
+                self.bank_weapon_in(it)
+                if not self.grid('loot').place(it, t[2], t[3], it['rot']):
+                    self.game.weapons.put_back(it.pop('pack'), equip=False)
+            elif not self.bank_weapon_out(it):
+                self.return_home(d)
         elif t[0] == 'grid':
             if not self.grid(t[1]).place(it, t[2], t[3], it['rot']) and it['n'] > 0:
                 self.to_bag(it, near=home)             # merged part of a pile: the rest goes back

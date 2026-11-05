@@ -95,6 +95,7 @@ class World:
         self.ore_spawns = []              # (position, ore kind or 'random') from map markers
         self.benches = []                 # workbench positions
         self.loot_spots = []              # loot container props (toolboxes, crates...: loot.py fills them)
+        self.stations = []                # (position, kind) for props you use with E: 'stash', 'raid'
         self.animal_spawns = []           # (position, animal kind or 'random') from spawner markers
         self.npcs = []                    # NPC props (their 'data' says who they are; npcs.py brings them to life)
         self.zones = {}                   # zone kind ('level', 'encounter', 'safe', 'extraction') -> [props]
@@ -150,6 +151,7 @@ class World:
             if p['np'] is not None:
                 p['np'].wrtReparentTo(region(p['x'], p['z']))
         self.props_root.removeNode()
+        self.props_root = self.root.attachNewNode('late_props')     # props added during play (extraction flares)
         for key, r in self.regions.items():
             r.flattenStrong()
             r.setPythonTag('centre', Vec3((key[0] + 0.5) * REGION - self.half, 0, (key[1] + 0.5) * REGION - self.half))
@@ -309,7 +311,7 @@ class World:
             self.npcs.append(p)
         if a.get('zone'):
             self.zones.setdefault(a['zone'], []).append(p)
-            if self.editor or a['zone'] == 'safe':        # (safe zones show their edge in the game too)
+            if self.editor or a['zone'] in ('safe', 'extraction'):    # (these show their edge in the game too)
                 self.draw_ring(p)
         if a.get('spawn') == 'zombie':
             self.graves.append(p)
@@ -317,6 +319,8 @@ class World:
             self.benches.append(Vec3(x, 0, z))
         if a.get('loot'):
             self.loot_spots.append(p)
+        if a.get('station') and a['station'] != 'workbench':
+            self.stations.append((Vec3(x, 0, z), a['station']))
         if a.get('light') and not self.editor:
             self.prop_lights.append((p, a['light']))
         return p
@@ -353,6 +357,7 @@ class World:
             self.benches = [b for b in self.benches if (b.x, b.z) != (p['x'], p['z'])]
         if p in self.loot_spots:
             self.loot_spots.remove(p)
+        self.stations = [s for s in self.stations if (s[0].x, s[0].z) != (p['x'], p['z'])]
         self.prop_lights = [pl for pl in self.prop_lights if pl[0] is not p]
 
     # ── zones ────────────────────────────────────────────────────────────────

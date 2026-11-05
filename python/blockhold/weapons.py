@@ -417,6 +417,37 @@ class Weapons:
         gun.flattenStrong()
 
     # ── dropping and picking up ──────────────────────────────────────────────
+    def pack_of(self, wid):
+        """Everything about weapon wid (like take_out, but it stays yours), in a form that saves to JSON."""
+        return dict(wid=wid, state=dict(self.state.get(wid, {})), levels=dict(self.levels.get(wid, {})),
+                    attach=dict(self.attach.get(wid, {})), owned_att=sorted(self.owned_att.get(wid, set())),
+                    camo=self.camo.get(wid, 'factory'))
+
+    def restore(self, packs, hands, held=None):
+        """Own exactly these weapons (packs from pack_of), with these in your hands {slot: weapon id}."""
+        self.slots = {s: None for s, _ in HAND_SLOTS}
+        for table in (self.state, self.levels, self.attach, self.owned_att, self.camo):
+            table.clear()
+        self.held = None
+        for wid, pack in packs.items():
+            d = self.get_def(wid)
+            if d is None:
+                continue
+            self.state[wid] = dict(pack.get('state') or {}) or dict(ammo=self.stat(d, 'mag'))
+            self.levels[wid] = dict(pack.get('levels') or {})
+            self.attach[wid] = dict(pack.get('attach') or {})
+            self.owned_att[wid] = set(pack.get('owned_att') or ())
+            self.camo[wid] = pack.get('camo', 'factory')
+        for slot, wid in hands.items():
+            if wid in self.state and slot in self.slots:
+                self.slots[slot] = self.get_def(wid)
+        if not self.owned:                              # never empty-handed: the free starting weapons
+            for d in self.defs:
+                if d['price'] == 0 and not d.get('hidden') and d['id'] not in self.state:
+                    self.give(d['id'], equip=False)
+        names = [d['id'] for d in self.owned]
+        self.equip(names.index(held) if held in names else min(1, len(names) - 1), force=True)
+
     def take_out(self, d):
         """Remove weapon d and return everything about it (ammo, upgrades, attachments, camo)."""
         wid = d['id']
